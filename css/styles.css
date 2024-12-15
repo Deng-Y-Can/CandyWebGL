@@ -1,0 +1,45 @@
+/* 整体容器，设置为弹性布局，实现横向排列 */
+.dropdown-container {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background-color: #f4f4f4;
+    padding: 10px;
+}
+
+/* 水平排列的下拉菜单通用样式 */
+.horizontal-dropdown {
+    padding: 8px 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 16px;
+    margin-right: 10px; /* 每个下拉菜单之间添加一点间距 */
+}
+
+/* details标签创建的下拉组件的样式调整 */
+.details-dropdown summary {
+    padding: 8px 15px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background-color: white;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.details-dropdown ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0;
+}
+
+.details-dropdown li a {
+    display: block;
+    padding: 5px 10px;
+    text-decoration: none;
+    color: #333;
+}
+
+.details-dropdown li a:hover {
+    background-color: #f9f9f9;
+}

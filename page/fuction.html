@@ -5,9 +5,6 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Function Plotter with WebGL</title>
-   <link rel="stylesheet" href="css/styles.css"> 
-   
-</head>
   <style>
     body {
       margin: 0;
@@ -55,33 +52,14 @@
 </head>
 
 <body>
-      <div class="dropdown-container">
-         
-        <select class="horizontal-dropdown" id="menu1">
-		    <option value="index.html">主页</option>
-            <option value="page/fuction.html">函数</option>        
-        </select>      
-        <select class="horizontal-dropdown" id="menu2">
-            <option value="index.html">主页</option> 
-        </select>      
-        <details class="horizontal-dropdown details-dropdown" >
-            <summary>更多选项</summary>
-            <ul>
-                <li><a href="index.html">主页</a></li>              
-            </ul>
-        </details>
-     </div>
-
-
-   
   <div id="input-section">
     <input type="text" id="functionInput" placeholder="请输入函数，如 x*x">
     <button id="plotButton">绘制函数图像</button>
   </div>
+
   <canvas id="glcanvas" width="600" height="600"></canvas>
-   <script src="js/script.js"></script>
-   <script src="js/menuscript.js"></script>
-   
+
+  <script src="script.js"></script>
 </body>
 
 </html>
