@@ -1,0 +1,151 @@
+<html>
+
+<head>
+<title>Rectangular frame</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<style>
+@import url("./candy.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+</style>
+
+<script src="./candy.js"></script>
+</head>
+
+<body >
+
+    <canvas id="candy"></canvas>
+    <script type="text/javascript">
+
+   "use strict";
+//顶点着色器
+var vertexShaderSource = `#version 300 es
+
+in vec4 a_position;
+void main() {
+
+  gl_Position = a_position;
+}
+`;
+
+//几何着色器
+var fragmentShaderSource = `#version 300 es
+
+precision highp float;
+out vec4 outColor;
+
+void main() {
+  
+  outColor = vec4(0.8, 0, 1, 1);
+}
+`;
+
+//创建着色器
+function createShader(gl, type, source) {
+  var shader = gl.createShader(type);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  var success = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+  if (success) {
+    return shader;
+  }
+
+  console.log(gl.getShaderInfoLog(shader));  
+  gl.deleteShader(shader);
+  return undefined;
+}
+
+//创建程序
+function createProgram(gl, vertexShader, fragmentShader) {
+  var program = gl.createProgram();
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  var success = gl.getProgramParameter(program, gl.LINK_STATUS);
+  if (success) {
+    return program;
+  }
+
+  console.log(gl.getProgramInfoLog(program));  
+  gl.deleteProgram(program);
+  return undefined;
+}
+
+function main() {
+  
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl2");
+  if (!gl) {
+    return;
+  }
+  
+  var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertexShaderSource);
+  var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+  
+  var program = createProgram(gl, vertexShader, fragmentShader);
+  var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
+
+  //绑定VBO
+  var positionBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+
+  var positions = [
+    0, 0,
+    0, 0.5,
+    0.7, 0.5,
+    0.7, 0
+  ];
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+  
+  //绑定VAO
+  var vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  gl.enableVertexAttribArray(positionAttributeLocation);
+
+  var size = 2;  //长度        
+  var type = gl.FLOAT;   
+  var normalize = false; //是否标准化
+  var stride = 0;   //起始位     
+  var offset = 0; //偏移量       
+  gl.vertexAttribPointer(
+      positionAttributeLocation, size, type, normalize, stride, offset);
+
+  webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+
+  gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.useProgram(program);
+
+  gl.bindVertexArray(vao);
+  //图元类型
+  <!-- gl.POINTS: 绘制一系列点。 -->
+  <!-- gl.LINE_STRIP: 绘制一个线条。即，绘制一系列线段，上一点连接下一点。 -->
+  <!-- gl.LINE_LOOP: 绘制一个线圈。即，绘制一系列线段，上一点连接下一点，并且最后一点与第一个点相连。 -->
+  <!-- gl.LINES: 绘制一系列单独线段。每两个点作为端点，线段之间不连接。 -->
+  <!-- gl.TRIANGLE_STRIP：绘制一个三角带。 -->
+  <!-- gl.TRIANGLE_FAN：绘制一个三角扇。 -->
+  <!-- gl.TRIANGLES: 绘制一系列三角形。每三个点作为顶点。 -->
+  var primitiveType = gl.LINE_LOOP;
+  var offset = 0;
+  var count = 4;
+  //绘制图元 
+  gl.drawArrays(primitiveType, offset, count);
+}
+
+main();
+
+</script>
+</body>
+
+</html>
