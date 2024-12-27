@@ -25,7 +25,7 @@ canvas {
     <script type="text/javascript">
 
    "use strict";
-//顶点着色器
+//?????
 var vertexShaderSource = `#version 300 es
 
 in vec4 a_position;
@@ -35,7 +35,7 @@ void main() {
 }
 `;
 
-//几何着色器
+//?????
 var fragmentShaderSource = `#version 300 es
 
 precision highp float;
@@ -47,7 +47,7 @@ void main() {
 }
 `;
 
-//创建着色器
+//?????
 function createShader(gl, type, source) {
   var shader = gl.createShader(type);
   gl.shaderSource(shader, source);
@@ -62,7 +62,7 @@ function createShader(gl, type, source) {
   return undefined;
 }
 
-//创建程序
+//????
 function createProgram(gl, vertexShader, fragmentShader) {
   var program = gl.createProgram();
   gl.attachShader(program, vertexShader);
@@ -93,7 +93,7 @@ function main() {
   var program = createProgram(gl, vertexShader, fragmentShader);
   var positionAttributeLocation = gl.getAttribLocation(program, "a_position");
 
-  //绑定VBO
+  //??VBO
   var positionBuffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
 
@@ -105,16 +105,16 @@ function main() {
   ];
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
   
-  //绑定VAO
+  //??VAO
   var vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
   gl.enableVertexAttribArray(positionAttributeLocation);
 
-  var size = 2;  //长度        
+  var size = 2;  //??        
   var type = gl.FLOAT;   
-  var normalize = false; //是否标准化
-  var stride = 0;   //起始位     
-  var offset = 0; //偏移量       
+  var normalize = false; //?????
+  var stride = 0;   //???     
+  var offset = 0; //???     
   gl.vertexAttribPointer(
       positionAttributeLocation, size, type, normalize, stride, offset);
 
@@ -128,18 +128,18 @@ function main() {
   gl.useProgram(program);
 
   gl.bindVertexArray(vao);
-  //图元类型
-  <!-- gl.POINTS: 绘制一系列点。 -->
-  <!-- gl.LINE_STRIP: 绘制一个线条。即，绘制一系列线段，上一点连接下一点。 -->
-  <!-- gl.LINE_LOOP: 绘制一个线圈。即，绘制一系列线段，上一点连接下一点，并且最后一点与第一个点相连。 -->
-  <!-- gl.LINES: 绘制一系列单独线段。每两个点作为端点，线段之间不连接。 -->
-  <!-- gl.TRIANGLE_STRIP：绘制一个三角带。 -->
-  <!-- gl.TRIANGLE_FAN：绘制一个三角扇。 -->
-  <!-- gl.TRIANGLES: 绘制一系列三角形。每三个点作为顶点。 -->
+  //????
+  <!-- gl.POINTS:  -->
+  <!-- gl.LINE_STRIP  -->
+  <!-- gl.LINE_LOOP -->
+  <!-- gl.LINES: -->
+  <!-- gl.TRIANGLE_STRIP -->
+  <!-- gl.TRIANGLE_FAN -->
+  <!-- gl.TRIANGLES-->
   var primitiveType = gl.LINE_LOOP;
   var offset = 0;
   var count = 4;
-  //绘制图元 
+  //????
   gl.drawArrays(primitiveType, offset, count);
 }
 
