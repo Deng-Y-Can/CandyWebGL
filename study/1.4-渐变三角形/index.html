@@ -1,0 +1,160 @@
+<html>
+
+<head>
+<title>Gradient triangle</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<style>
+@import url("candy.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+</style>
+
+</head>
+
+<body >
+
+   <canvas id="candy"></canvas>
+<div id="uiContainer">
+  <div id="ui">
+    <div id="x"></div>
+    <div id="y"></div>
+    <div id="angle"></div>
+    <div id="scaleX"></div>
+    <div id="scaleY"></div>
+  </div>
+</div>
+
+<script src="candy.js"></script>
+<script src="candy_ui.js"></script>
+<script src="candy_m.js"></script>
+<script>
+"use strict";
+//?????,???????????????
+var vs = `#version 300 es
+in vec2 a_position;
+uniform mat3 u_matrix;
+out vec4 v_color;
+void main() {
+  
+  gl_Position = vec4((u_matrix * vec3(a_position, 1)).xy, 0, 1);
+  v_color = gl_Position * 0.5 + 0.5;
+}
+`;
+
+var fs = `#version 300 es
+precision highp float;
+in vec4 v_color;
+out vec4 outColor;
+void main() {
+  outColor = v_color;
+}
+`;
+
+function main() {
+
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl2");
+  if (!gl) {
+    return;
+  }
+
+  var program = webglUtils.createProgramFromSources(gl, [vs, fs]);
+  
+  var matrixLocation = gl.getUniformLocation(program, "u_matrix");
+  var positionLocation = gl.getAttribLocation(program, "a_position");
+
+ 
+  var buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  setGeometry(gl);
+  
+  var vao = gl.createVertexArray();
+  gl.bindVertexArray(vao);
+  
+  gl.enableVertexAttribArray(positionLocation);
+  var size = 2;
+  var type = gl.FLOAT;
+  var normalize = false;
+  var stride = 0;
+  var offset = 0;
+  gl.vertexAttribPointer(positionLocation, size, type, normalize, stride, offset);
+
+  var translation = [200, 150];
+  var angleInRadians = 0;
+  var scale = [1, 1];
+
+  drawScene();
+
+  webglLessonsUI.setupSlider("#x",      {value: translation[0], slide: updatePosition(0), max: gl.canvas.width });
+  webglLessonsUI.setupSlider("#y",      {value: translation[1], slide: updatePosition(1), max: gl.canvas.height});
+  webglLessonsUI.setupSlider("#angle",  {slide: updateAngle, max: 360});
+  webglLessonsUI.setupSlider("#scaleX", {value: scale[0], slide: updateScale(0), min: -5, max: 5, step: 0.01, precision: 2});
+  webglLessonsUI.setupSlider("#scaleY", {value: scale[1], slide: updateScale(1), min: -5, max: 5, step: 0.01, precision: 2});
+
+  function updatePosition(index) {
+    return function(event, ui) {
+      translation[index] = ui.value;
+      drawScene();
+    };
+  }
+
+  function updateAngle(event, ui) {
+    var angleInDegrees = 360 - ui.value;
+    angleInRadians = angleInDegrees * Math.PI / 180;
+    drawScene();
+  }
+
+  function updateScale(index) {
+    return function(event, ui) {
+      scale[index] = ui.value;
+      drawScene();
+    };
+  }
+
+
+  function drawScene() {
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var matrix = m3.projection(gl.canvas.clientWidth, gl.canvas.clientHeight);
+    matrix = m3.translate(matrix, translation[0], translation[1]);
+    matrix = m3.rotate(matrix, angleInRadians);
+    matrix = m3.scale(matrix, scale[0], scale[1]);
+
+    gl.useProgram(program);
+    gl.bindVertexArray(vao);
+    gl.uniformMatrix3fv(matrixLocation, false, matrix);
+
+    var offset = 0;
+    var count = 3;
+    gl.drawArrays(gl.TRIANGLES, offset, count);
+  }
+}
+
+function setGeometry(gl) {
+  gl.bufferData(
+      gl.ARRAY_BUFFER,
+      new Float32Array([
+             0, -100,
+           150,  125,
+          -175,  100,
+      ]),
+      gl.STATIC_DRAW);
+}
+
+main();
+
+</script>
+</body>
+
+</html>
