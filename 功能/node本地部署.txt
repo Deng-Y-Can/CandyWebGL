@@ -1,0 +1,74 @@
+第一种：node.js+Express
+a.准备工作
+确保 Node.js 安装成功：
+首先要在你的服务器或者本地开发环境安装 Node.js。可以从官方网站（https://nodejs.org/）下载适合你操作系统的版本进行安装。
+安装完成后，可以在命令行中输入node -v来检查是否安装成功，它会显示已安装的 Node.js 版本号。
+
+b.创建项目文件夹结构：
+为你的 WebGL 项目创建一个文件夹，例如webgl - project。在这个文件夹中，创建一个子文件夹public，用于存放 HTML 文件、JavaScript 文件、CSS 文件以及 WebGL 相关的资源（如纹理图片等）。
+
+c.使用 Express 框架（推荐）
+安装 Express 框架：
+在项目文件夹（webgl - project）的根目录下，打开命令行工具（如 Windows 的命令提示符或 macOS/Linux 的终端），输入npm init -y来初始化一个npm（Node Package Manager）项目。
+这会创建一个package.json文件，用于管理项目的依赖。
+接着，安装 Express 框架，输入npm install express。Express 是一个简洁而灵活的 Node.js web 应用框架，它可以帮助你快速搭建服务器并部署 WebGL 应用。
+
+d.创建服务器脚本：
+在项目根目录下创建一个名为server.js（文件名可以自定义）的文件，内容如下：
+javascript
+const express = require('express');
+const path = require('path');
+const app = express();
+// 设置静态文件目录，这里将'public'文件夹设置为静态资源目录
+app.use(express.static(path.join(__dirname, 'public')));
+
+// 监听端口，这里使用3000端口，你可以根据需要修改
+const port = 3000;
+app.listen(port, () => {
+    console.log(`服务器在端口 ${port} 上运行`);
+});
+
+e.将 WebGL 文件放入public文件夹：
+把你的html文件（包含 WebGL 代码）、相关的 JavaScript 文件和纹理图片等资源都放入public文件夹。
+例如，假设你的 HTML 文件名为index.html，在index.html文件中，引用其他资源（如 JavaScript 文件和纹理图片）时，要使用相对路径。
+例如，引用一个名为script.js的 JavaScript 文件可以这样写<script src="script.js"></script>，
+引用一个位于textures文件夹下的纹理图片texture.jpg可以这样写<img src="textures/texture.jpg" />（如果是在 WebGL 代码中加载纹理，路径也要相应地使用相对路径）。
+启动服务器并访问应用：
+在项目根目录下的命令行中，输入node server.js来启动服务器。
+然后在浏览器中输入http://localhost:3000/[html文件名]（如果 HTML 文件名为index.html，则输入http://localhost:3000/index.html）来访问你的 WebGL 应用。
+
+第二种：node.js
+a.使用原生 Node.js 的 http 模块（基础方法）
+创建服务器脚本：
+在项目根目录下创建一个名为server.js的文件，内容如下：
+javascript
+const http = require('http');
+const fs = require('fs');
+const path = require('path');
+
+const port = 3000;
+const server = http.createServer((req, res) => {
+    // 假设HTML文件名为'index.html'，根据实际情况修改
+    const filePath = path.join(__dirname, 'public', 'index.html');
+    fs.readFile(filePath, 'utf8', (err, data) => {
+        if (err) {
+            res.writeHead(500);
+            res.end('服务器错误');
+        } else {
+            res.writeHead(200, { 'Content - Type': 'text/html' });
+            res.end(data);
+        }
+    });
+});
+
+server.listen(port, () => {
+    console.log(`服务器在端口 ${port} 上运行`);
+});
+
+b.处理其他资源（如 JavaScript 文件和纹理图片）：
+上面的代码只是简单地处理了 HTML 文件的请求。
+对于其他资源（如 JavaScript 文件、CSS 文件和纹理图片），你需要在http.createServer函数中的回调函数里添加更多的逻辑来根据请求的文件类型和路径进行相应的处理。
+例如，对于 JavaScript 文件，你可能需要设置Content - Type为application/javascript，对于图片文件，需要根据图片的格式（如image/jpeg、image/png等）来设置Content - Type。
+将 WebGL 文件放入public文件夹并启动服务器：
+同样，把 WebGL 相关的文件都放入public文件夹，然后在项目根目录下的命令行中输入node server.js来启动服务器。
+在浏览器中通过http://localhost:3000/[html文件名]来访问你的 WebGL 应用。这种方法相对 Express 框架来说更底层，需要自己处理更多的细节，但可以让你更好地理解服务器的工作原理。
