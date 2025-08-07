@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced PLY Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        #glCanvas {
+            width: 100%;
+            height: 600px;
+            background: #1a1a1a;
+            border: 1px solid #333;
+        }
+        .controls {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        @media (max-width: 768px) {
+            .controls {
+                grid-template-columns: 1fr;
+            }
+        }
+        .control-group {
+            margin: 5px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-radius: 5px;
+        }
+        .control-group h3 {
+            margin-top: 0;
+            font-size: 16px;
+            color: #333;
+        }
+        #status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 5px;
+            background: #e8f4f8;
+        }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+        }
+        .info {
+            color: #0c5460;
+        }
+        button {
+            margin: 0 5px 5px 0;
+            padding: 5px 10px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            transition: background 0.3s;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .translation-controls {
+            display: inline-block;
+            margin: 5px 0;
+        }
+        .translation-controls button {
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            margin: 0;
+        }
+        input[type="color"] {
+            width: 40px;
+            height: 30px;
+            border: none;
+            cursor: pointer;
+            vertical-align: middle;
+        }
+        input[type="range"] {
+            vertical-align: middle;
+            width: 100px;
+        }
+        .info-panel {
+            margin-top: 10px;
+            padding: 10px;
+            background: white;
+            border-radius: 5px;
+            display: grid;
+            grid-template-columns: auto auto;
+            gap: 20px;
+        }
+        .display-mode-btn.active {
+            background: #2E7D32;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <h1>Enhanced PLY Viewer</h1>
+        
+        <div class="controls">
+            <div>
+                <div class="control-group">
+                    <h3>File & View</h3>
+                    <input type="file" id="fileInput" accept=".ply">
+                    <button id="resetBtn">Reset View</button>
+                    <p>Click and drag to rotate | Shift + drag to pan</p>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Display Mode</h3>
+                    <button id="showFaces" class="display-mode-btn active">Faces</button>
+                    <button id="showVertices" class="display-mode-btn">Vertices</button>
+                    <button id="showBoth" class="display-mode-btn">Both</button>
+                    <br>
+                    <label>Vertex Size: </label>
+                    <input type="range" id="pointSize" min="1" max="10" value="3">
+                    <span id="pointSizeValue">3</span>
+                </div>
+            </div>
+            
+            <div>
+                <div class="control-group">
+                    <h3>Transformations</h3>
+                    <button id="zoomIn">Zoom In</button>
+                    <button id="zoomOut">Zoom Out</button>
+                    
+                    <div class="translation-controls">
+                        <p>Translation:</p>
+                        <div>
+                            <button id="translateUp" title="Up">&#8593;</button>
+                        </div>
+                        <div>
+                            <button id="translateLeft" title="Left">&#8592;</button>
+                            <button id="translateDown" title="Down">&#8595;</button>
+                            <button id="translateRight" title="Right">&#8594;</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <h3>Color Settings</h3>
+                    <label>Model Color: </label>
+                    <input type="color" id="modelColor" value="#808080">
+                    <br>
+                    <label>Use Original Colors: </label>
+                    <input type="checkbox" id="useOriginalColors" checked>
+                    <br>
+                    <label>Background Color: </label>
+                    <input type="color" id="bgColor" value="#1a1a1a">
+                </div>
+            </div>
+        </div>
+        
+        <canvas id="glCanvas"></canvas>
+        
+        <div id="status" class="info">
+            Status: Ready. Please upload an ASCII PLY file.
+        </div>
+        
+        <div class="info-panel">
+            <div>
+                <p>Vertices: <span id="vertexCount">-</span></p>
+                <p>Faces: <span id="faceCount">-</span></p>
+            </div>
+            <div>
+                <p>Current Mode: <span id="currentMode">Faces</span></p>
+                <p>Zoom Level: <span id="zoomLevel">100%</span></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 内置矩阵操作函数 - 不依赖外部库
+        const mat4 = {
+            create: function() {
+                return new Float32Array([
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ]);
+            },
+            
+            perspective: function(out, fovy, aspect, near, far) {
+                const f = 1.0 / Math.tan(fovy / 2);
+                const nf = 1.0 / (near - far);
+                
+                out[0] = f / aspect;
+                out[1] = 0;
+                out[2] = 0;
+                out[3] = 0;
+                
+                out[4] = 0;
+                out[5] = f;
+                out[6] = 0;
+                out[7] = 0;
+                
+                out[8] = 0;
+                out[9] = 0;
+                out[10] = (far + near) * nf;
+                out[11] = -1;
+                
+                out[12] = 0;
+                out[13] = 0;
+                out[14] = 2 * far * near * nf;
+                out[15] = 0;
+                
+                return out;
+            },
+            
+            translate: function(out, a, v) {
+                let x = v[0], y = v[1], z = v[2];
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                let a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+                
+                if (a === out) {
+                    out[12] = a00 * x + a10 * y + a20 * z + a30;
+                    out[13] = a01 * x + a11 * y + a21 * z + a31;
+                    out[14] = a02 * x + a12 * y + a22 * z + a32;
+                    out[15] = a03 * x + a13 * y + a23 * z + a33;
+                } else {
+                    out[0] = a00;
+                    out[1] = a01;
+                    out[2] = a02;
+                    out[3] = a03;
+                    
+                    out[4] = a10;
+                    out[5] = a11;
+                    out[6] = a12;
+                    out[7] = a13;
+                    
+                    out[8] = a20;
+                    out[9] = a21;
+                    out[10] = a22;
+                    out[11] = a23;
+                    
+                    out[12] = a00 * x + a10 * y + a20 * z + a30;
+                    out[13] = a01 * x + a11 * y + a21 * z + a31;
+                    out[14] = a02 * x + a12 * y + a22 * z + a32;
+                    out[15] = a03 * x + a13 * y + a23 * z + a33;
+                }
+                
+                return out;
+            },
+            
+            rotateX: function(out, a, rad) {
+                let cos = Math.cos(rad);
+                let sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                
+                if (a !== out) {
+                    out[0] = a00;
+                    out[1] = a01;
+                    out[2] = a02;
+                    out[3] = a03;
+                }
+                
+                out[4] = a10 * cos + a20 * sin;
+                out[5] = a11 * cos + a21 * sin;
+                out[6] = a12 * cos + a22 * sin;
+                out[7] = a13 * cos + a23 * sin;
+                
+                out[8] = a10 * (-sin) + a20 * cos;
+                out[9] = a11 * (-sin) + a21 * cos;
+                out[10] = a12 * (-sin) + a22 * cos;
+                out[11] = a13 * (-sin) + a23 * cos;
+                
+                if (a !== out) {
+                    out[12] = a[12];
+                    out[13] = a[13];
+                    out[14] = a[14];
+                    out[15] = a[15];
+                }
+                
+                return out;
+            },
+            
+            rotateY: function(out, a, rad) {
+                let cos = Math.cos(rad);
+                let sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                
+                if (a !== out) {
+                    out[4] = a10;
+                    out[5] = a11;
+                    out[6] = a12;
+                    out[7] = a13;
+                }
+                
+                out[0] = a00 * cos + a20 * (-sin);
+                out[1] = a01 * cos + a21 * (-sin);
+                out[2] = a02 * cos + a22 * (-sin);
+                out[3] = a03 * cos + a23 * (-sin);
+                
+                out[8] = a00 * sin + a20 * cos;
+                out[9] = a01 * sin + a21 * cos;
+                out[10] = a02 * sin + a22 * cos;
+                out[11] = a03 * sin + a23 * cos;
+                
+                if (a !== out) {
+                    out[12] = a[12];
+                    out[13] = a[13];
+                    out[14] = a[14];
+                    out[15] = a[15];
+                }
+                
+                return out;
+            },
+            
+            scale: function(out, a, v) {
+                let x = v[0], y = v[1], z = v[2];
+                
+                out[0] = a[0] * x;
+                out[1] = a[1] * x;
+                out[2] = a[2] * x;
+                out[3] = a[3] * x;
+                
+                out[4] = a[4] * y;
+                out[5] = a[5] * y;
+                out[6] = a[6] * y;
+                out[7] = a[7] * y;
+                
+                out[8] = a[8] * z;
+                out[9] = a[9] * z;
+                out[10] = a[10] * z;
+                out[11] = a[11] * z;
+                
+                out[12] = a[12];
+                out[13] = a[13];
+                out[14] = a[14];
+                out[15] = a[15];
+                
+                return out;
+            }
+        };
+
+        // 基础变量
+        let gl;
+        let canvas;
+        let program;
+        let buffers = null;
+        let model = { 
+            vertices: [], 
+            colors: [], 
+            indices: [],
+            originalColors: [] // 存储原始颜色用于恢复
+        };
+        let displayMode = 'faces'; // 'faces', 'vertices', or 'both'
+        let pointSize = 3;
+        let customColor = [0.5, 0.5, 0.5]; // 默认灰色 [r, g, b]
+        let useOriginalColors = true;
+        
+        // 变换变量
+        let scale = 1.0;
+        let rotationX = 0;
+        let rotationY = 0;
+        let translationX = 0;
+        let translationY = 0;
+        
+        // 交互状态
+        let isDragging = false;
+        let lastX = 0;
+        let lastY = 0;
+        let isPanning = false;
+        
+        // DOM元素
+        const statusEl = document.getElementById('status');
+        const vertexCountEl = document.getElementById('vertexCount');
+        const faceCountEl = document.getElementById('faceCount');
+        const currentModeEl = document.getElementById('currentMode');
+        const zoomLevelEl = document.getElementById('zoomLevel');
+        
+        // 显示状态信息
+        function setStatus(text, isError = false) {
+            statusEl.textContent = `Status: ${text}`;
+            statusEl.className = isError ? 'error' : 'info';
+            console.log(text);
+        }
+        
+        // 初始化WebGL
+        function initWebGL() {
+            try {
+                canvas = document.getElementById('glCanvas');
+                gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+                
+                if (!gl) {
+                    throw new Error('WebGL not supported by your browser');
+                }
+                
+                // 设置画布尺寸
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                
+                // 清除颜色和启用深度测试
+                gl.clearColor(0.1, 0.1, 0.15, 1.0);
+                gl.enable(gl.DEPTH_TEST);
+                gl.enable(gl.POINT_SPRITE);
+                
+                setStatus('WebGL initialized');
+                return true;
+            } catch (error) {
+                setStatus(error.message, true);
+                return false;
+            }
+        }
+        
+        // 创建着色器
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const error = gl.getShaderInfoLog(shader);
+                gl.deleteShader(shader);
+                throw new Error(`Shader error: ${error}`);
+            }
+            
+            return shader;
+        }
+        
+        // 初始化着色器程序
+        function initShaders() {
+            try {
+                // 顶点着色器
+                const vertexShaderSource = `
+                    attribute vec3 aPosition;
+                    attribute vec3 aColor;
+                    uniform mat4 uModelViewMatrix;
+                    uniform mat4 uProjectionMatrix;
+                    uniform float uPointSize;
+                    varying vec3 vColor;
+                    void main() {
+                        gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
+                        vColor = aColor;
+                        gl_PointSize = uPointSize;
+                    }
+                `;
+                
+                // 片段着色器
+                const fragmentShaderSource = `
+                    precision mediump float;
+                    varying vec3 vColor;
+                    void main() {
+                        gl_FragColor = vec4(vColor, 1.0);
+                    }
+                `;
+                
+                const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+                const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+                
+                program = gl.createProgram();
+                gl.attachShader(program, vertexShader);
+                gl.attachShader(program, fragmentShader);
+                gl.linkProgram(program);
+                
+                if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                    throw new Error(`Program link error: ${gl.getProgramInfoLog(program)}`);
+                }
+                
+                gl.useProgram(program);
+                
+                // 获取属性和 uniform 位置
+                program.aPosition = gl.getAttribLocation(program, 'aPosition');
+                program.aColor = gl.getAttribLocation(program, 'aColor');
+                program.uModelViewMatrix = gl.getUniformLocation(program, 'uModelViewMatrix');
+                program.uProjectionMatrix = gl.getUniformLocation(program, 'uProjectionMatrix');
+                program.uPointSize = gl.getUniformLocation(program, 'uPointSize');
+                
+                // 设置投影矩阵
+                const projectionMatrix = mat4.create();
+                mat4.perspective(projectionMatrix, 45 * Math.PI / 180, 
+                                canvas.width / canvas.height, 0.1, 1000);
+                gl.uniformMatrix4fv(program.uProjectionMatrix, false, projectionMatrix);
+                
+                // 设置初始点大小
+                gl.uniform1f(program.uPointSize, pointSize);
+                
+                setStatus('Shaders initialized');
+                return true;
+            } catch (error) {
+                setStatus(error.message, true);
+                return false;
+            }
+        }
+        
+        // 创建缓冲区
+        function createBuffers() {
+            try {
+                // 顶点缓冲区
+                const vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+                
+                // 颜色缓冲区
+                const colorBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.colors), gl.STATIC_DRAW);
+                
+                // 索引缓冲区
+                const indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint32Array(model.indices), gl.STATIC_DRAW);
+                
+                return { vertexBuffer, colorBuffer, indexBuffer };
+            } catch (error) {
+                setStatus(error.message, true);
+                return null;
+            }
+        }
+        
+        // 更新颜色缓冲区
+        function updateColorBuffer() {
+            if (!buffers) return;
+            
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.colorBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.colors), gl.STATIC_DRAW);
+        }
+        
+        // 应用颜色变化
+        function applyColorChange() {
+            if (model.originalColors.length === 0) return;
+            
+            if (useOriginalColors) {
+                // 恢复原始颜色
+                model.colors = [...model.originalColors];
+            } else {
+                // 应用自定义颜色
+                model.colors = [];
+                for (let i = 0; i < model.originalColors.length / 3; i++) {
+                    model.colors.push(...customColor);
+                }
+            }
+            
+            updateColorBuffer();
+        }
+        
+        // 绘制场景
+        function drawScene() {
+            if (!buffers || model.vertices.length === 0) {
+                requestAnimationFrame(drawScene);
+                return;
+            }
+            
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            
+            // 设置顶点属性
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.vertexBuffer);
+            gl.enableVertexAttribArray(program.aPosition);
+            gl.vertexAttribPointer(program.aPosition, 3, gl.FLOAT, false, 0, 0);
+            
+            // 设置颜色属性
+            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.colorBuffer);
+            gl.enableVertexAttribArray(program.aColor);
+            gl.vertexAttribPointer(program.aColor, 3, gl.FLOAT, false, 0, 0);
+            
+            // 更新点大小
+            gl.uniform1f(program.uPointSize, pointSize);
+            
+            // 创建模型视图矩阵
+            const modelViewMatrix = mat4.create();
+            mat4.translate(modelViewMatrix, modelViewMatrix, [translationX, translationY, -5]);
+            mat4.rotateX(modelViewMatrix, modelViewMatrix, rotationX);
+            mat4.rotateY(modelViewMatrix, modelViewMatrix, rotationY);
+            mat4.scale(modelViewMatrix, modelViewMatrix, [scale, scale, scale]);
+            
+            gl.uniformMatrix4fv(program.uModelViewMatrix, false, modelViewMatrix);
+            
+            // 更新信息面板
+            zoomLevelEl.textContent = `${Math.round(scale * 100)}%`;
+            
+            // 根据显示模式绘制
+            if (displayMode === 'faces' || displayMode === 'both') {
+                // 绘制面
+                if (model.indices.length > 0) {
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indexBuffer);
+                    gl.drawElements(gl.TRIANGLES, model.indices.length, gl.UNSIGNED_INT, 0);
+                } else if (displayMode === 'faces') {
+                    setStatus('No face data available. Switch to vertices view.', true);
+                }
+            }
+            
+            if (displayMode === 'vertices' || displayMode === 'both') {
+                // 绘制顶点
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, null);
+                const vertexCount = model.vertices.length / 3;
+                gl.drawArrays(gl.POINTS, 0, vertexCount);
+            }
+            
+            // 继续动画循环
+            requestAnimationFrame(drawScene);
+        }
+        
+        // HEX颜色转RGB
+        function hexToRgb(hex) {
+            // 移除#号
+            hex = hex.replace(/^#/, '');
+            
+            // 解析RGB值
+            const bigint = parseInt(hex, 16);
+            const r = (bigint >> 16) & 255;
+            const g = (bigint >> 8) & 255;
+            const b = bigint & 255;
+            
+            // 返回0-1范围的RGB值
+            return {
+                r: r / 255,
+                g: g / 255,
+                b: b / 255
+            };
+        }
+        
+        // HSL到RGB转换
+        function hslToRgb(h, s, l) {
+            let r, g, b;
+
+            if (s === 0) {
+                r = g = b = l; // 灰色
+            } else {
+                function hue2rgb(p, q, t) {
+                    if (t < 0) t += 1;
+                    if (t > 1) t -= 1;
+                    if (t < 1/6) return p + (q - p) * 6 * t;
+                    if (t < 1/2) return q;
+                    if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+                    return p;
+                }
+
+                const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                const p = 2 * l - q;
+
+                r = hue2rgb(p, q, h + 1/3);
+                g = hue2rgb(p, q, h);
+                b = hue2rgb(p, q, h - 1/3);
+            }
+
+            return { r, g, b };
+        }
+        
+        // 解析PLY文件
+        function parsePLY(data) {
+            try {
+                const lines = data.split('\n');
+                let lineIdx = 0;
+                
+                // 重置模型数据
+                model = { 
+                    vertices: [], 
+                    colors: [], 
+                    indices: [],
+                    originalColors: []
+                };
+                let vertexCount = 0;
+                let faceCount = 0;
+                let hasColors = false;
+                
+                // 检查PLY头部
+                if (lines.length === 0 || lines[lineIdx].trim() !== 'ply') {
+                    throw new Error('Not a valid PLY file');
+                }
+                lineIdx++;
+                
+                // 解析头部信息
+                while (lineIdx < lines.length) {
+                    const line = lines[lineIdx].trim();
+                    lineIdx++;
+                    
+                    if (line.startsWith('format ascii')) {
+                        // 只支持ASCII格式
+                    } else if (line.startsWith('element vertex')) {
+                        vertexCount = parseInt(line.split(' ')[2]);
+                        setStatus(`Found ${vertexCount} vertices`);
+                    } else if (line.startsWith('element face')) {
+                        faceCount = parseInt(line.split(' ')[2]);
+                        setStatus(`Found ${faceCount} faces`);
+                    } else if (line.startsWith('property') && 
+                              (line.includes('red') || line.includes('green') || line.includes('blue'))) {
+                        hasColors = true;
+                    } else if (line === 'end_header') {
+                        break;
+                    }
+                }
+                
+                if (vertexCount === 0) {
+                    throw new Error('No vertices found in file');
+                }
+                
+                // 解析顶点
+                let parsedVertices = 0;
+                for (let i = 0; i < vertexCount && lineIdx < lines.length; i++) {
+                    const line = lines[lineIdx].trim();
+                    lineIdx++;
+                    if (!line) continue;
+                    
+                    const parts = line.split(/\s+/).map(Number);
+                    if (parts.length < 3) continue;
+                    
+                    // 添加顶点坐标
+                    model.vertices.push(parts[0], parts[1], parts[2]);
+                    parsedVertices++;
+                    
+                    // 添加颜色 (如果有)
+                    let r, g, b;
+                    if (hasColors && parts.length >= 6) {
+                        r = parts[3]/255;
+                        g = parts[4]/255;
+                        b = parts[5]/255;
+                    } else {
+                        // 为顶点使用不同的颜色以便区分
+                        const hue = (i % 360) / 360;
+                        const rgb = hslToRgb(hue, 0.7, 0.5);
+                        r = rgb.r;
+                        g = rgb.g;
+                        b = rgb.b;
+                    }
+                    
+                    model.colors.push(r, g, b);
+                    model.originalColors.push(r, g, b); // 保存原始颜色
+                }
+                
+                if (parsedVertices === 0) {
+                    throw new Error('Could not parse any vertices');
+                }
+                
+                // 解析面
+                let parsedFaces = 0;
+                for (let i = 0; i < faceCount && lineIdx < lines.length; i++) {
+                    const line = lines[lineIdx].trim();
+                    lineIdx++;
+                    if (!line) continue;
+                    
+                    const parts = line.split(/\s+/).map(Number);
+                    if (parts[0] === 3 && parts.length >= 4) {
+                        model.indices.push(parts[1], parts[2], parts[3]);
+                        parsedFaces++;
+                    }
+                }
+                
+                setStatus(`Parsed ${parsedVertices} vertices and ${parsedFaces} faces`);
+                
+                // 更新显示信息
+                vertexCountEl.textContent = parsedVertices;
+                faceCountEl.textContent = parsedFaces;
+                
+                return true;
+            } catch (error) {
+                setStatus(error.message, true);
+                return false;
+            }
+        }
+        
+        // 加载PLY文件
+        function loadPLY(file) {
+            setStatus('Loading PLY file...');
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                if (parsePLY(e.target.result)) {
+                    buffers = createBuffers();
+                    if (buffers) {
+                        setStatus('File loaded successfully');
+                        // 自动调整模型位置以确保可见
+                        resetView();
+                    }
+                }
+            };
+            reader.onerror = function() {
+                setStatus('Error reading file', true);
+            };
+            reader.readAsText(file);
+        }
+        
+        // 重置视图
+        function resetView() {
+            scale = 1.0;
+            rotationX = 0;
+            rotationY = 0;
+            translationX = 0;
+            translationY = 0;
+            setStatus('View reset');
+        }
+        
+        // 设置事件监听
+        function setupEvents() {
+            // 文件上传
+            document.getElementById('fileInput').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file && file.name.endsWith('.ply')) {
+                    loadPLY(file);
+                } else {
+                    setStatus('Please select a .ply file', true);
+                }
+            });
+            
+            // 视图控制按钮
+            document.getElementById('resetBtn').addEventListener('click', resetView);
+            document.getElementById('zoomIn').addEventListener('click', () => {
+                scale *= 1.1;
+                setStatus(`Zoom in (${Math.round(scale * 100)}%)`);
+            });
+            document.getElementById('zoomOut').addEventListener('click', () => {
+                scale /= 1.1;
+                setStatus(`Zoom out (${Math.round(scale * 100)}%)`);
+            });
+            
+            // 平移控制
+            document.getElementById('translateUp').addEventListener('click', () => {
+                translationY += 0.1;
+                setStatus('Translate up');
+            });
+            document.getElementById('translateDown').addEventListener('click', () => {
+                translationY -= 0.1;
+                setStatus('Translate down');
+            });
+            document.getElementById('translateLeft').addEventListener('click', () => {
+                translationX -= 0.1;
+                setStatus('Translate left');
+            });
+            document.getElementById('translateRight').addEventListener('click', () => {
+                translationX += 0.1;
+                setStatus('Translate right');
+            });
+            
+            // 显示模式切换
+            const modeButtons = document.querySelectorAll('.display-mode-btn');
+            
+            document.getElementById('showFaces').addEventListener('click', () => {
+                displayMode = 'faces';
+                currentModeEl.textContent = 'Faces';
+                setStatus('Displaying faces only');
+                modeButtons.forEach(btn => btn.classList.remove('active'));
+                document.getElementById('showFaces').classList.add('active');
+            });
+            
+            document.getElementById('showVertices').addEventListener('click', () => {
+                displayMode = 'vertices';
+                currentModeEl.textContent = 'Vertices';
+                setStatus('Displaying vertices only');
+                modeButtons.forEach(btn => btn.classList.remove('active'));
+                document.getElementById('showVertices').classList.add('active');
+            });
+            
+            document.getElementById('showBoth').addEventListener('click', () => {
+                displayMode = 'both';
+                currentModeEl.textContent = 'Both';
+                setStatus('Displaying both faces and vertices');
+                modeButtons.forEach(btn => btn.classList.remove('active'));
+                document.getElementById('showBoth').classList.add('active');
+            });
+            
+            // 点大小调整
+            const pointSizeInput = document.getElementById('pointSize');
+            const pointSizeValue = document.getElementById('pointSizeValue');
+            
+            pointSizeInput.addEventListener('input', function(e) {
+                pointSize = parseInt(e.target.value);
+                pointSizeValue.textContent = pointSize;
+                setStatus(`Vertex size set to ${pointSize}`);
+            });
+            
+            // 颜色设置
+            const modelColorInput = document.getElementById('modelColor');
+            modelColorInput.addEventListener('input', function(e) {
+                const rgb = hexToRgb(e.target.value);
+                customColor = [rgb.r, rgb.g, rgb.b];
+                useOriginalColors = false;
+                document.getElementById('useOriginalColors').checked = false;
+                applyColorChange();
+                setStatus('Model color updated');
+            });
+            
+            // 使用原始颜色
+            const useOriginalColorsCheckbox = document.getElementById('useOriginalColors');
+            useOriginalColorsCheckbox.addEventListener('change', function(e) {
+                useOriginalColors = e.target.checked;
+                applyColorChange();
+                if (useOriginalColors) {
+                    setStatus('Using original model colors');
+                } else {
+                    setStatus('Using custom model color');
+                }
+            });
+            
+            // 背景颜色
+            const bgColorInput = document.getElementById('bgColor');
+            bgColorInput.addEventListener('input', function(e) {
+                const rgb = hexToRgb(e.target.value);
+                gl.clearColor(rgb.r, rgb.g, rgb.b, 1.0);
+                setStatus('Background color updated');
+            });
+            
+            // 鼠标事件 - 按下
+            canvas.addEventListener('mousedown', function(e) {
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                isPanning = e.shiftKey;
+                canvas.style.cursor = isPanning ? 'move' : 'grabbing';
+            });
+            
+            // 鼠标事件 - 移动
+            window.addEventListener('mousemove', function(e) {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                
+                if (isPanning) {
+                    translationX += deltaX * 0.01;
+                    translationY -= deltaY * 0.01;
+                } else {
+                    rotationY += deltaX * 0.01;
+                    rotationX += deltaY * 0.01;
+                }
+                
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+            
+            // 鼠标事件 - 释放
+            window.addEventListener('mouseup', function() {
+                isDragging = false;
+                canvas.style.cursor = 'default';
+            });
+            
+            // 鼠标滚轮缩放
+            canvas.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+                scale *= zoomFactor;
+                setStatus(`Zoom level: ${Math.round(scale * 100)}%`);
+            });
+            
+            // 窗口大小改变
+            window.addEventListener('resize', function() {
+                if (!canvas) return;
+                
+                canvas.width = canvas.clientWidth;
+                canvas.height = canvas.clientHeight;
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                
+                // 更新投影矩阵
+                const projectionMatrix = mat4.create();
+                mat4.perspective(projectionMatrix, 45 * Math.PI / 180, 
+                                canvas.width / canvas.height, 0.1, 1000);
+                gl.uniformMatrix4fv(program.uProjectionMatrix, false, projectionMatrix);
+            });
+        }
+        
+        // 初始化程序
+        function init() {
+            if (!initWebGL()) return;
+            if (!initShaders()) return;
+            setupEvents();
+            // 启动渲染循环
+            drawScene();
+        }
+        
+        // 启动应用
+        window.onload = init;
+    </script>
+</body>
+</html>
