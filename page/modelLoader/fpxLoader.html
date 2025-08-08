@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FBX模型查看器</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            height: 100vh;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+        
+        #container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+        
+        #viewer {
+            width: 100%;
+            height: 100%;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            width: 300px;
+            max-height: calc(100% - 20px);
+            overflow-y: auto;
+        }
+        
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .control-group:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+            padding-bottom: 0;
+        }
+        
+        h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+            color: #666;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+        }
+        
+        input[type="color"] {
+            width: 100%;
+            height: 30px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        
+        button {
+            background: #4285f4;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 5px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: #3367d6;
+        }
+        
+        #file-input {
+            display: none;
+        }
+        
+        .file-label {
+            display: block;
+            background: #4285f4;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 4px;
+            text-align: center;
+            cursor: pointer;
+            margin-bottom: 10px;
+        }
+        
+        .file-label:hover {
+            background: #3367d6;
+        }
+        
+        #info {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        #status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 4px;
+            display: none;
+        }
+        
+        .value-display {
+            font-size: 13px;
+            color: #333;
+            margin-top: 3px;
+        }
+
+        #error {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e74c3c;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            display: none;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <canvas id="viewer"></canvas>
+        <div id="controls">
+            <div class="control-group">
+                <h3>模型加载</h3>
+                <label for="file-input" class="file-label">选择FBX文件</label>
+                <input type="file" id="file-input" accept=".fbx">
+                <div id="model-info">未加载模型</div>
+            </div>
+            
+            <div class="control-group">
+                <h3>变换控制</h3>
+                <div class="form-group">
+                    <label>缩放</label>
+                    <input type="range" id="scale" min="0.1" max="5" step="0.1" value="1">
+                    <div class="value-display">当前值: <span id="scale-value">1.0</span></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>旋转 X</label>
+                    <input type="range" id="rotate-x" min="0" max="360" step="1" value="0">
+                    <div class="value-display">当前值: <span id="rotate-x-value">0°</span></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>旋转 Y</label>
+                    <input type="range" id="rotate-y" min="0" max="360" step="1" value="0">
+                    <div class="value-display">当前值: <span id="rotate-y-value">0°</span></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>旋转 Z</label>
+                    <input type="range" id="rotate-z" min="0" max="360" step="1" value="0">
+                    <div class="value-display">当前值: <span id="rotate-z-value">0°</span></div>
+                </div>
+            </div>
+            
+            <div class="control-group">
+                <h3>外观设置</h3>
+                <div class="form-group">
+                    <label>模型颜色</label>
+                    <input type="color" id="model-color" value="#4285f4">
+                </div>
+                
+                <div class="form-group">
+                    <label>环境光强度</label>
+                    <input type="range" id="ambient-intensity" min="0" max="1" step="0.1" value="0.5">
+                    <div class="value-display">当前值: <span id="ambient-intensity-value">0.5</span></div>
+                </div>
+                
+                <div>
+                    <button id="reset-view">重置视图</button>
+                    <button id="toggle-wireframe">线框模式</button>
+                </div>
+            </div>
+        </div>
+        
+        <div id="info">
+            操作提示: 左键旋转 | 滚轮缩放 | 右键平移
+        </div>
+        
+        <div id="status">加载中...</div>
+        <div id="error"></div>
+    </div>
+
+    <!-- 引入Three.js核心库 - 必须首先加载 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/build/three.min.js"></script>
+    <!-- 引入轨道控制器 - 必须在核心库之后加载 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/controls/OrbitControls.js"></script>
+    <!-- 引入FBX加载器 - 必须在核心库之后加载 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/loaders/FBXLoader.js"></script>
+
+    <script>
+        // 初始化变量
+        let scene, camera, renderer, controls;
+        let currentModel = null;
+        let customMaterial = null;
+        let ambientLight, directionalLight;
+        
+        // 显示错误信息
+        function showError(message) {
+            const errorEl = document.getElementById('error');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            
+            // 5秒后自动隐藏
+            setTimeout(() => {
+                errorEl.style.display = 'none';
+            }, 5000);
+        }
+        
+        // 检查Three.js和OrbitControls是否加载成功
+        function checkDependencies() {
+            if (typeof THREE === 'undefined') {
+                showError('Three.js核心库加载失败，请检查网络连接');
+                return false;
+            }
+            
+            if (typeof THREE.OrbitControls === 'undefined') {
+                showError('OrbitControls控制器加载失败，请检查网络连接');
+                return false;
+            }
+            
+            if (typeof THREE.FBXLoader === 'undefined') {
+                showError('FBXLoader加载器加载失败，请检查网络连接');
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // 初始化场景
+        function initScene() {
+            // 再次检查依赖
+            if (!checkDependencies()) {
+                return;
+            }
+            
+            try {
+                // 创建场景
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0xf0f0f0);
+                
+                // 创建相机
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.z = 10;
+                
+                // 创建渲染器
+                const canvas = document.getElementById('viewer');
+                renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.shadowMap.enabled = true;
+                
+                // 添加灯光
+                ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                
+                directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+                directionalLight.position.set(5, 10, 7.5);
+                directionalLight.castShadow = true;
+                scene.add(directionalLight);
+                
+                // 添加辅助网格
+                const gridHelper = new THREE.GridHelper(20, 20, 0xcccccc, 0xeeeeee);
+                scene.add(gridHelper);
+                
+                // 创建控制器 - 这里是之前出错的位置
+                controls = new THREE.OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.1;
+                controls.enableZoom = true;
+                controls.enableRotate = true;
+                
+                // 窗口大小调整事件
+                window.addEventListener('resize', onWindowResize);
+                
+                // 动画循环
+                function animate() {
+                    requestAnimationFrame(animate);
+                    controls.update();
+                    renderer.render(scene, camera);
+                }
+                animate();
+                
+            } catch (error) {
+                console.error('初始化场景错误:', error);
+                showError(`初始化场景失败: ${error.message}`);
+            }
+        }
+        
+        // 窗口大小调整
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 加载FBX模型
+        function loadFBXModel(file) {
+            if (!checkDependencies()) {
+                return;
+            }
+            
+            // 显示加载状态
+            document.getElementById('status').style.display = 'block';
+            document.getElementById('model-info').textContent = `正在加载: ${file.name}`;
+            
+            // 移除当前模型
+            if (currentModel) {
+                scene.remove(currentModel);
+                currentModel = null;
+            }
+            
+            try {
+                // 创建FBX加载器
+                const loader = new THREE.FBXLoader();
+                
+                // 读取文件并加载
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    try {
+                        const arrayBuffer = event.target.result;
+                        const model = loader.parse(arrayBuffer, '');
+                        
+                        // 处理模型
+                        processModel(model);
+                        
+                        // 添加到场景
+                        scene.add(model);
+                        currentModel = model;
+                        
+                        // 创建自定义材质
+                        createCustomMaterial();
+                        applyCustomMaterial(model);
+                        
+                        // 居中模型
+                        centerModel(model);
+                        
+                        // 更新信息
+                        document.getElementById('model-info').textContent = `已加载: ${file.name}`;
+                        
+                    } catch (error) {
+                        console.error('解析FBX模型错误:', error);
+                        document.getElementById('model-info').textContent = `解析失败: ${error.message}`;
+                    } finally {
+                        document.getElementById('status').style.display = 'none';
+                    }
+                };
+                
+                reader.onerror = function() {
+                    console.error('文件读取错误');
+                    document.getElementById('model-info').textContent = '文件读取错误';
+                    document.getElementById('status').style.display = 'none';
+                };
+                
+                reader.readAsArrayBuffer(file);
+                
+            } catch (error) {
+                console.error('加载FBX模型错误:', error);
+                document.getElementById('model-info').textContent = `加载失败: ${error.message}`;
+                document.getElementById('status').style.display = 'none';
+            }
+        }
+        
+        // 处理模型
+        function processModel(model) {
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                    
+                    // 确保几何体有法线
+                    if (!child.geometry.attributes.normal) {
+                        child.geometry.computeVertexNormals();
+                    }
+                }
+            });
+        }
+        
+        // 创建自定义材质
+        function createCustomMaterial() {
+            const colorInput = document.getElementById('model-color');
+            const color = new THREE.Color(colorInput.value);
+            
+            customMaterial = new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.2,
+                roughness: 0.8,
+                wireframe: false
+            });
+        }
+        
+        // 应用自定义材质
+        function applyCustomMaterial(model) {
+            if (!customMaterial || !model) return;
+            
+            model.traverse(function(child) {
+                if (child.isMesh) {
+                    child.material = customMaterial;
+                }
+            });
+        }
+        
+        // 居中模型
+        function centerModel(model) {
+            // 计算模型边界框
+            const box = new THREE.Box3().setFromObject(model);
+            const center = box.getCenter(new THREE.Vector3());
+            
+            // 移动模型到原点
+            model.position.sub(center);
+            
+            // 调整相机位置
+            const size = box.getSize(new THREE.Vector3());
+            const maxDim = Math.max(size.x, size.y, size.z);
+            const fov = camera.fov * (Math.PI / 180);
+            let cameraZ = Math.abs(maxDim / 2 / Math.tan(fov / 2));
+            
+            // 稍微拉远一点
+            cameraZ *= 1.5;
+            camera.position.z = cameraZ;
+            
+            // 重置控制器目标
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+        
+        // 重置控制器
+        function resetControls() {
+            if (!currentModel) return;
+            
+            document.getElementById('scale').value = 1;
+            document.getElementById('rotate-x').value = 0;
+            document.getElementById('rotate-y').value = 0;
+            document.getElementById('rotate-z').value = 0;
+            
+            document.getElementById('scale-value').textContent = '1.0';
+            document.getElementById('rotate-x-value').textContent = '0°';
+            document.getElementById('rotate-y-value').textContent = '0°';
+            document.getElementById('rotate-z-value').textContent = '0°';
+            
+            // 重置模型变换
+            currentModel.scale.set(1, 1, 1);
+            currentModel.rotation.set(0, 0, 0);
+            currentModel.position.set(0, 0, 0);
+            
+            // 重置相机位置
+            controls.reset();
+        }
+        
+        // 设置事件监听
+        function setupEventListeners() {
+            // 文件选择
+            document.getElementById('file-input').addEventListener('change', function(e) {
+                const file = e.target.files[0];
+                if (file) {
+                    loadFBXModel(file);
+                }
+            });
+            
+            // 缩放控制
+            document.getElementById('scale').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                document.getElementById('scale-value').textContent = value.toFixed(1);
+                
+                if (currentModel) {
+                    currentModel.scale.set(value, value, value);
+                }
+            });
+            
+            // 旋转控制
+            document.getElementById('rotate-x').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                document.getElementById('rotate-x-value').textContent = value + '°';
+                
+                if (currentModel) {
+                    currentModel.rotation.x = THREE.MathUtils.degToRad(value);
+                }
+            });
+            
+            document.getElementById('rotate-y').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                document.getElementById('rotate-y-value').textContent = value + '°';
+                
+                if (currentModel) {
+                    currentModel.rotation.y = THREE.MathUtils.degToRad(value);
+                }
+            });
+            
+            document.getElementById('rotate-z').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                document.getElementById('rotate-z-value').textContent = value + '°';
+                
+                if (currentModel) {
+                    currentModel.rotation.z = THREE.MathUtils.degToRad(value);
+                }
+            });
+            
+            // 颜色控制
+            document.getElementById('model-color').addEventListener('input', function(e) {
+                if (customMaterial) {
+                    customMaterial.color.set(new THREE.Color(e.target.value));
+                }
+            });
+            
+            // 环境光控制
+            document.getElementById('ambient-intensity').addEventListener('input', function(e) {
+                const value = parseFloat(e.target.value);
+                document.getElementById('ambient-intensity-value').textContent = value.toFixed(1);
+                ambientLight.intensity = value;
+            });
+            
+            // 按钮控制
+            document.getElementById('reset-view').addEventListener('click', resetControls);
+            
+            document.getElementById('toggle-wireframe').addEventListener('click', function() {
+                if (customMaterial) {
+                    customMaterial.wireframe = !customMaterial.wireframe;
+                }
+            });
+        }
+        
+        // 初始化应用
+        function init() {
+            // 确保依赖加载完成后再初始化场景
+            if (checkDependencies()) {
+                initScene();
+                setupEventListeners();
+            } else {
+                // 尝试重新加载依赖
+                setTimeout(init, 1000);
+            }
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>
