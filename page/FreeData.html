@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D几何图形查看器</title>
+    <title>3D点云数据查看器</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
@@ -13,6 +13,7 @@
             --x-axis: #FF4D4F;
             --y-axis: #52C41A;
             --z-axis: #1890FF;
+            --selected: #FAAD14;
             --bg-light: #F5F7FA;
             --bg-white: #FFFFFF;
             --text-primary: #1F2329;
@@ -20,6 +21,7 @@
             --border-color: #E5E6EB;
             --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
             --transition: all 0.2s ease;
+            --sidebar-width: 380px; /* 默认侧边栏宽度 */
         }
         
         * {
@@ -71,6 +73,7 @@
         #viewer-container {
             flex: 1;
             position: relative;
+            transition: width 0.2s ease;
         }
         
         canvas {
@@ -79,8 +82,12 @@
             display: block;
         }
         
+        .sidebar-container {
+            display: flex;
+        }
+        
         .sidebar {
-            width: 320px;
+            width: var(--sidebar-width);
             background-color: var(--bg-white);
             border-left: 1px solid var(--border-color);
             padding: 24px;
@@ -88,8 +95,20 @@
             display: flex;
             flex-direction: column;
             gap: 28px;
-            transition: transform 0.3s ease;
+            transition: transform 0.3s ease, width 0.2s ease;
             z-index: 5;
+        }
+        
+        .sidebar-resizer {
+            width: 5px;
+            background-color: var(--border-color);
+            cursor: col-resize;
+            transition: background-color 0.2s ease;
+            z-index: 6;
+        }
+        
+        .sidebar-resizer:hover, .sidebar-resizer.dragging {
+            background-color: var(--primary);
         }
         
         @media (max-width: 768px) {
@@ -99,10 +118,15 @@
                 top: 0;
                 height: 100%;
                 transform: translateX(100%);
+                width: 320px !important; /* 移动端固定宽度 */
             }
             
             .sidebar.open {
                 transform: translateX(0);
+            }
+            
+            .sidebar-resizer {
+                display: none;
             }
             
             .menu-toggle {
@@ -173,46 +197,6 @@
             background-color: var(--primary-light);
         }
         
-        .model-buttons {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-        
-        .model-btn {
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 14px 12px;
-            cursor: pointer;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 8px;
-            transition: var(--transition);
-        }
-        
-        .model-btn:hover {
-            background-color: var(--primary-light);
-            border-color: var(--primary);
-        }
-        
-        .model-btn.active {
-            background-color: var(--primary);
-            color: white;
-            border-color: var(--primary);
-        }
-        
-        .model-btn i {
-            font-size: 1.4rem;
-        }
-        
-        .function-input-group {
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-        
         .form-group {
             display: flex;
             flex-direction: column;
@@ -266,6 +250,16 @@
         
         .btn-primary:hover {
             background-color: var(--primary-dark);
+        }
+        
+        .btn-secondary {
+            background-color: var(--bg-light);
+            color: var(--text-primary);
+        }
+        
+        .btn-secondary:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
         }
         
         .controls-info {
@@ -414,14 +408,142 @@
         .x-color { background-color: var(--x-axis); }
         .y-color { background-color: var(--y-axis); }
         .z-color { background-color: var(--z-axis); }
+        .selected-color { background-color: var(--selected); }
         
-        .function-error {
-            color: var(--x-axis);
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
             font-size: 0.9rem;
-            margin-top: 6px;
+            margin-top: 10px;
+            table-layout: fixed; /* 固定表格布局 */
+        }
+        
+        .data-table th, .data-table td {
+            padding: 10px 8px; /* 减少内边距 */
+            text-align: right;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .data-table th:first-child, .data-table td:first-child {
+            text-align: left;
+            width: 40px;
+        }
+        
+        .data-table th:nth-child(2) { width: 30%; } /* X列 */
+        .data-table th:nth-child(3) { width: 30%; } /* Y列 */
+        .data-table th:nth-child(4) { width: 30%; } /* Z列 */
+        
+        .data-table th {
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+        
+        .data-table tr:hover {
+            background-color: var(--primary-light);
+        }
+        
+        .data-table tr.selected {
+            background-color: rgba(250, 173, 20, 0.1);
+        }
+        
+        .data-table tr.selected td {
+            color: var(--selected);
+            font-weight: 500;
+        }
+        
+        .table-container {
+            max-height: 300px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            margin-top: 10px;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .button-group .btn {
+            flex: 1;
+        }
+        
+        .data-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .action-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+        }
+        
+        .action-btn:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
+        }
+        
+        .delete-btn:hover {
+            color: var(--x-axis);
+        }
+        
+        .input-group {
+            display: flex;
+            gap: 8px; /* 减小间距 */
+        }
+        
+        .input-group .form-group {
+            flex: 1;
+        }
+        
+        .file-input-container {
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .file-input-container input[type="file"] {
+            position: absolute;
+            top: 0;
+            right: 0;
+            min-width: 100%;
+            min-height: 100%;
+            font-size: 100px;
+            opacity: 0;
+            cursor: pointer;
+        }
+        
+        .message {
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            margin-top: 10px;
             display: none;
-            padding-left: 2px;
-            line-height: 1.4;
+        }
+        
+        .message.success {
+            background-color: rgba(82, 196, 26, 0.1);
+            color: #52C41A;
+            display: block;
+        }
+        
+        .message.error {
+            background-color: rgba(255, 77, 79, 0.1);
+            color: #FF4D4F;
+            display: block;
         }
         
         .view-controls {
@@ -485,45 +607,62 @@
             align-self: center;
         }
         
-        .visibility-controls {
+        .point-size-control {
             display: flex;
+            align-items: center;
             gap: 10px;
             margin-top: 10px;
         }
         
-        .visibility-btn {
+        .point-size-control input {
             flex: 1;
-            padding: 8px;
-            background-color: var(--bg-white);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            cursor: pointer;
+        }
+        
+        .point-size-value {
             font-size: 0.9rem;
+            color: var(--text-secondary);
+            min-width: 40px;
+            text-align: center;
+        }
+
+        /* 操作提示覆盖层 */
+        .key-hint {
+            position: absolute;
+            bottom: 80px;
+            left: 24px;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 12px 16px;
+            box-shadow: var(--shadow);
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            z-index: 4;
+            display: flex;
+            gap: 15px;
+        }
+
+        .key-hint-item {
             display: flex;
             align-items: center;
-            justify-content: center;
             gap: 6px;
-            transition: var(--transition);
         }
-        
-        .visibility-btn:hover {
-            background-color: var(--primary-light);
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-        
-        .visibility-btn.active {
-            background-color: var(--primary);
-            color: white;
-            border-color: var(--primary);
+
+        .key {
+            display: inline-block;
+            padding: 2px 6px;
+            background-color: var(--bg-light);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
     <header>
         <div class="logo">
-            <i class="fas fa-cube"></i>
-            <span>3D几何图形查看器</span>
+            <i class="fas fa-dot-circle"></i>
+            <span>3D点云数据查看器</span>
         </div>
     </header>
     
@@ -555,6 +694,10 @@
                     <span class="axis-color z-color"></span>
                     <span>Z 轴</span>
                 </div>
+                <div class="axis-item">
+                    <span class="axis-color selected-color"></span>
+                    <span>选中点</span>
+                </div>
             </div>
             
             <div class="view-controls">
@@ -576,151 +719,166 @@
                     <span class="tooltip">侧视图</span>
                 </button>
                 <div class="divider"></div>
-                <button class="view-control-btn" id="toggle-wireframe" title="切换线框模式">
-                    <i class="fas fa-border-all"></i>
-                    <span class="tooltip">线框模式</span>
-                </button>
                 <button class="view-control-btn" id="toggle-axis" title="显示/隐藏坐标轴">
                     <i class="fas fa-compass"></i>
                     <span class="tooltip">显示/隐藏坐标轴</span>
                 </button>
-                <button class="view-control-btn" id="toggle-function" title="显示/隐藏函数图像">
-                    <i class="fas fa-chart-line"></i>
-                    <span class="tooltip">显示/隐藏函数图像</span>
+                <button class="view-control-btn" id="clear-all" title="清除所有点">
+                    <i class="fas fa-trash"></i>
+                    <span class="tooltip">清除所有点</span>
                 </button>
+            </div>
+
+            <!-- 操作提示 -->
+            <div class="key-hint">
+                <div class="key-hint-item">
+                    <span class="key">左键</span>
+                    <span>旋转</span>
+                </div>
+                <div class="key-hint-item">
+                    <span class="key">Shift+左键</span>
+                    <span>平移</span>
+                </div>
+                <div class="key-hint-item">
+                    <span class="key">滚轮</span>
+                    <span>缩放</span>
+                </div>
             </div>
         </div>
         
-        <div class="sidebar" id="sidebar">
-            <div class="panel">
-                <div class="panel-title">
-                    <i class="fas fa-shapes"></i>
-                    基本立体模型
+        <div class="sidebar-container">
+            <div class="sidebar" id="sidebar">
+                <div class="panel">
+                    <div class="panel-title">
+                        <i class="fas fa-plus-circle"></i>
+                        添加点数据
+                    </div>
+                    <div class="input-group">
+                        <div class="form-group">
+                            <label for="x-input">
+                                <i class="fas fa-arrows-alt-h"></i>
+                                X坐标
+                            </label>
+                            <input type="number" id="x-input" placeholder="输入X值" step="any" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="y-input">
+                                <i class="fas fa-arrows-alt-v"></i>
+                                Y坐标
+                            </label>
+                            <input type="number" id="y-input" placeholder="输入Y值" step="any" value="0">
+                        </div>
+                        <div class="form-group">
+                            <label for="z-input">
+                                <i class="fas fa-compress-arrows-alt"></i>
+                                Z坐标
+                            </label>
+                            <input type="number" id="z-input" placeholder="输入Z值" step="any" value="0">
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" id="add-point">
+                        <i class="fas fa-plus"></i>
+                        添加点
+                    </button>
+                    <div class="point-size-control">
+                        <label for="point-size">
+                            <i class="fas fa-dot-circle"></i>
+                            点大小
+                        </label>
+                        <input type="range" id="point-size" min="0.05" max="0.5" step="0.01" value="0.15">
+                        <span class="point-size-value" id="point-size-value">0.15</span>
+                    </div>
                 </div>
-                <div class="model-buttons">
-                    <button class="model-btn" data-model="cube">
-                        <i class="fas fa-cube"></i>
-                        <span>立方体</span>
-                    </button>
-                    <button class="model-btn" data-model="sphere">
-                        <i class="fas fa-circle"></i>
-                        <span>球体</span>
-                    </button>
-                    <button class="model-btn" data-model="cylinder">
-                        <i class="fas fa-wine-bottle"></i>
-                        <span>圆柱体</span>
-                    </button>
-                    <button class="model-btn" data-model="cone">
-                        <i class="fas fa-cone"></i>
-                        <span>圆锥体</span>
-                    </button>
-                    <button class="model-btn" data-model="torus">
-                        <i class="fas fa-doughnut"></i>
-                        <span>圆环体</span>
-                    </button>
-                    <button class="model-btn" data-model="pyramid">
-                        <i class="fas fa-chess-pyramid"></i>
-                        <span>金字塔</span>
-                    </button>
+                
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-table"></i>
+                            点数据列表
+                        </div>
+                        <span id="point-count" class="text-secondary">0 个点</span>
+                    </div>
+                    <div class="table-container">
+                        <table class="data-table" id="data-table">
+                            <thead>
+                                <tr>
+                                    <th>#</th>
+                                    <th>X</th>
+                                    <th>Y</th>
+                                    <th>Z</th>
+                                    <th></th>
+                                </tr>
+                            </thead>
+                            <tbody id="data-table-body">
+                                <!-- 数据行会动态添加 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-title">
+                        <i class="fas fa-file-import"></i>
+                        数据导入/导出
+                    </div>
+                    <div class="button-group">
+                        <div class="file-input-container">
+                            <button class="btn btn-secondary">
+                                <i class="fas fa-file-upload"></i>
+                                导入TXT/Excel
+                            </button>
+                            <input type="file" id="file-import" accept=".txt,.csv,.xlsx,.xls">
+                        </div>
+                        <button class="btn btn-secondary" id="export-txt">
+                            <i class="fas fa-file-export"></i>
+                            导出TXT
+                        </button>
+                    </div>
+                    <div class="message" id="import-export-message"></div>
+                </div>
+                
+                <div class="panel">
+                    <div class="panel-header">
+                        <div class="panel-title">
+                            <i class="fas fa-keyboard"></i>
+                            操作指南
+                        </div>
+                        <button class="toggle-btn" id="toggle-controls">
+                            <i class="fas fa-chevron-up"></i>
+                            <span>收起</span>
+                        </button>
+                    </div>
+                    <div class="controls-info" id="controls-info">
+                        <div class="control-item">
+                            <i class="fas fa-mouse-pointer"></i>
+                            <span><strong>左键拖动:</strong> 旋转视图</span>
+                        </div>
+                        <div class="control-item">
+                            <i class="fas fa-arrows"></i>
+                            <span><strong>Shift+左键拖动:</strong> 平移视图</span>
+                        </div>
+                        <div class="control-item">
+                            <i class="fas fa-search-plus"></i>
+                            <span><strong>鼠标滚轮:</strong> 缩放视图</span>
+                        </div>
+                        <div class="control-item">
+                            <i class="fas fa-redo"></i>
+                            <span><strong>重置按钮:</strong> 恢复初始视图</span>
+                        </div>
+                        <div class="control-item">
+                            <i class="fas fa-table"></i>
+                            <span><strong>点击表格行:</strong> 高亮显示对应点</span>
+                        </div>
+                        <div class="control-item">
+                            <i class="fas fa-file-import"></i>
+                            <span><strong>导入格式:</strong> 第一行为xyz，后续为数据</span>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <i class="fas fa-chart-line"></i>
-                        函数图像绘制
-                    </div>
-                </div>
-                <div class="function-input-group">
-                    <div class="form-group">
-                        <label for="function-input">
-                            <i class="fas fa-formula"></i>
-                            函数表达式 (例如: x*x 或 sin(x))
-                        </label>
-                        <input type="text" id="function-input" placeholder="输入函数，如 x*x" value="x*x">
-                    </div>
-                    <div class="form-group">
-                        <label for="variable-range">
-                            <i class="fas fa-arrows-h"></i>
-                            变量范围
-                        </label>
-                        <select id="variable-range">
-                            <option value="-10,10">-10 到 10</option>
-                            <option value="-5,5" selected>-5 到 5</option>
-                            <option value="-3,3">-3 到 3</option>
-                            <option value="-2,2">-2 到 2</option>
-                            <option value="-1,1">-1 到 1</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="resolution">
-                            <i class="fas fa-th"></i>
-                            分辨率 (点数)
-                        </label>
-                        <select id="resolution">
-                            <option value="20">低 (20×20)</option>
-                            <option value="40" selected>中 (40×40)</option>
-                            <option value="60">高 (60×60)</option>
-                            <option value="80">超高 (80×80)</option>
-                        </select>
-                    </div>
-                    <button class="btn btn-primary" id="plot-function">
-                        <i class="fas fa-pen"></i>
-                        绘制函数图像
-                    </button>
-                    <div class="visibility-controls">
-                        <button class="visibility-btn" id="show-function-btn">
-                            <i class="fas fa-eye"></i>
-                            显示函数
-                        </button>
-                        <button class="visibility-btn" id="hide-function-btn">
-                            <i class="fas fa-eye-slash"></i>
-                            隐藏函数
-                        </button>
-                    </div>
-                    <div class="function-error" id="function-error"></div>
-                </div>
-            </div>
-            
-            <div class="panel">
-                <div class="panel-header">
-                    <div class="panel-title">
-                        <i class="fas fa-keyboard"></i>
-                        操作指南
-                    </div>
-                    <button class="toggle-btn" id="toggle-controls">
-                        <i class="fas fa-chevron-up"></i>
-                        <span>收起</span>
-                    </button>
-                </div>
-                <div class="controls-info" id="controls-info">
-                    <div class="control-item">
-                        <i class="fas fa-mouse-pointer"></i>
-                        <span><strong>左键拖动:</strong> 旋转视图</span>
-                    </div>
-                    <div class="control-item">
-                        <i class="fas fa-search-plus"></i>
-                        <span><strong>鼠标滚轮:</strong> 缩放视图</span>
-                    </div>
-                    <div class="control-item">
-                        <i class="fas fa-hand-paper"></i>
-                        <span><strong>右键拖动:</strong> 平移视图</span>
-                    </div>
-                    <div class="control-item">
-                        <i class="fas fa-redo"></i>
-                        <span><strong>重置按钮:</strong> 恢复初始视图</span>
-                    </div>
-                    <div class="control-item">
-                        <i class="fas fa-cube"></i>
-                        <span><strong>视图按钮:</strong> 切换标准视角</span>
-                    </div>
-                    <div class="control-item">
-                        <i class="fas fa-eye-slash"></i>
-                        <span><strong>显示/隐藏:</strong> 控制元素可见性</span>
-                    </div>
-                </div>
-            </div>
+            <!-- 侧边栏调整器 -->
+            <div class="sidebar-resizer" id="sidebar-resizer"></div>
         </div>
     </main>
 
@@ -737,53 +895,60 @@
         const ERROR = document.getElementById('error');
         const RETRY_BTN = document.getElementById('retry');
         const LOADING = document.getElementById('loading');
-        const MODEL_BUTTONS = document.querySelectorAll('.model-btn');
-        const PLOT_BUTTON = document.getElementById('plot-function');
-        const FUNCTION_INPUT = document.getElementById('function-input');
-        const VARIABLE_RANGE = document.getElementById('variable-range');
-        const RESOLUTION = document.getElementById('resolution');
-        const FUNCTION_ERROR = document.getElementById('function-error');
+        const ADD_POINT_BTN = document.getElementById('add-point');
+        const X_INPUT = document.getElementById('x-input');
+        const Y_INPUT = document.getElementById('y-input');
+        const Z_INPUT = document.getElementById('z-input');
+        const DATA_TABLE_BODY = document.getElementById('data-table-body');
+        const POINT_COUNT = document.getElementById('point-count');
         const RESET_VIEW = document.getElementById('reset-view');
         const TOP_VIEW = document.getElementById('top-view');
         const FRONT_VIEW = document.getElementById('front-view');
         const SIDE_VIEW = document.getElementById('side-view');
-        const TOGGLE_WIREFRAME = document.getElementById('toggle-wireframe');
         const MENU_TOGGLE = document.getElementById('menu-toggle');
         const SIDEBAR = document.getElementById('sidebar');
+        const SIDEBAR_RESIZER = document.getElementById('sidebar-resizer');
         const TOGGLE_CONTROLS = document.getElementById('toggle-controls');
         const CONTROLS_INFO = document.getElementById('controls-info');
         const AXIS_LEGEND = document.getElementById('axis-legend');
         const TOGGLE_AXIS = document.getElementById('toggle-axis');
-        const TOGGLE_FUNCTION = document.getElementById('toggle-function');
-        const SHOW_FUNCTION_BTN = document.getElementById('show-function-btn');
-        const HIDE_FUNCTION_BTN = document.getElementById('hide-function-btn');
+        const CLEAR_ALL = document.getElementById('clear-all');
+        const FILE_IMPORT = document.getElementById('file-import');
+        const EXPORT_TXT = document.getElementById('export-txt');
+        const IMPORT_EXPORT_MESSAGE = document.getElementById('import-export-message');
+        const POINT_SIZE = document.getElementById('point-size');
+        const POINT_SIZE_VALUE = document.getElementById('point-size-value');
         
         let currentUrlIndex = 0;
         let scene, camera, renderer;
-        let currentObject = null;
-        let functionObject = null; // 单独存储函数对象
+        let pointsGeometry, pointsMaterial, pointsObject;
         let axisObjects = []; // 存储坐标轴对象以便控制显示/隐藏
-        let isWireframe = false;
-        let controlsCollapsed = false;
         let axisVisible = true;
-        let functionVisible = true;
+        let controlsCollapsed = false;
+        let pointSize = 0.15;
+        let isResizing = false; // 侧边栏是否正在调整大小
+        
+        // 点数据管理
+        let pointData = []; // 存储所有点的数据 {x, y, z, id}
+        let selectedPointId = null;
+        let nextPointId = 1;
         
         // 视图配置
         const views = {
             default: {
-                position: { x: 5, y: 5, z: 5 },
+                position: { x: 10, y: 10, z: 10 },
                 rotation: { x: -0.9, y: 0.5 }
             },
             top: {
-                position: { x: 0, y: 10, z: 0 },
+                position: { x: 0, y: 20, z: 0 },
                 rotation: { x: -Math.PI/2, y: 0 }
             },
             front: {
-                position: { x: 10, y: 0, z: 0 },
+                position: { x: 20, y: 0, z: 0 },
                 rotation: { x: 0, y: 0 }
             },
             side: {
-                position: { x: 0, y: 0, z: 10 },
+                position: { x: 0, y: 0, z: 20 },
                 rotation: { x: 0, y: Math.PI/2 }
             }
         };
@@ -792,8 +957,9 @@
         const interactionState = {
             isRotating: false,
             isPanning: false,
+            isShiftDown: false, // 记录Shift键是否按下
             previousMousePosition: { x: 0, y: 0 },
-            targetPosition: { x: 0, y: 0, z: 5 },
+            targetPosition: { x: 0, y: 0, z: 10 },
             targetRotation: { x: 0, y: 0 },
             initialState: null,
             smoothness: 0.12  // 平滑系数
@@ -812,6 +978,17 @@
             ERROR.style.display = 'none';
             RETRY_BTN.style.display = 'none';
             STATUS.style.display = 'block';
+        }
+        
+        // 显示导入导出消息
+        function showMessage(text, isSuccess = true) {
+            IMPORT_EXPORT_MESSAGE.textContent = text;
+            IMPORT_EXPORT_MESSAGE.className = isSuccess ? 'message success' : 'message error';
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                IMPORT_EXPORT_MESSAGE.className = 'message';
+            }, 3000);
         }
         
         // 尝试加载Three.js
@@ -903,17 +1080,17 @@
             addColoredAxes();
             
             // 添加网格
-            const gridHelper = new THREE.GridHelper(10, 10, 0xe5e6eb, 0xf0f2f5);
+            const gridHelper = new THREE.GridHelper(20, 20, 0xe5e6eb, 0xf0f2f5);
             scene.add(gridHelper);
+            
+            // 初始化点云
+            initPointCloud();
             
             // 初始化交互控制
             initInteraction();
             
             // 窗口大小调整
             window.addEventListener('resize', onWindowResize);
-            
-            // 默认显示立方体
-            createModel('cube');
             
             // 动画循环
             function animate() {
@@ -923,6 +1100,65 @@
             }
             
             animate();
+        }
+        
+        // 初始化点云
+        function initPointCloud() {
+            // 创建点几何体
+            pointsGeometry = new THREE.BufferGeometry();
+            
+            // 创建点材质 - 使用顶点颜色
+            pointsMaterial = new THREE.PointsMaterial({
+                size: pointSize,
+                vertexColors: THREE.VertexColors,
+                sizeAttenuation: true
+            });
+            
+            // 创建点对象并添加到场景
+            pointsObject = new THREE.Points(pointsGeometry, pointsMaterial);
+            scene.add(pointsObject);
+        }
+        
+        // 更新点云数据 - 修复了attributes赋值方式
+        function updatePointCloud() {
+            if (pointData.length === 0) {
+                pointsGeometry.dispose();
+                pointsGeometry = new THREE.BufferGeometry();
+                pointsObject.geometry = pointsGeometry;
+                return;
+            }
+            
+            // 准备位置和颜色数据
+            const positions = new Float32Array(pointData.length * 3);
+            const colors = new Float32Array(pointData.length * 3);
+            const defaultColor = new THREE.Color(0x165DFF); // 默认蓝色
+            const selectedColor = new THREE.Color(0xFAAD14); // 选中点的颜色(金色)
+            
+            // 填充数据
+            for (let i = 0; i < pointData.length; i++) {
+                const point = pointData[i];
+                const index = i * 3;
+                
+                // 设置位置
+                positions[index] = point.x;
+                positions[index + 1] = point.y;
+                positions[index + 2] = point.z;
+                
+                // 设置颜色
+                const color = point.id === selectedPointId ? selectedColor : defaultColor;
+                colors[index] = color.r;
+                colors[index + 1] = color.g;
+                colors[index + 2] = color.b;
+            }
+            
+            // 更新几何体 - 使用setAttribute替代addAttribute，兼容不同Three.js版本
+            pointsGeometry.dispose();
+            pointsGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            pointsGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            pointsObject.geometry = pointsGeometry;
+            
+            // 更新点大小
+            pointsMaterial.size = pointSize;
         }
         
         // 添加带颜色的坐标轴
@@ -938,8 +1174,8 @@
             
             // X轴
             const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(3, 0, 0)
+                new THREE.Vector3(-10, 0, 0),
+                new THREE.Vector3(10, 0, 0)
             ]);
             const xAxis = new THREE.Line(xAxisGeometry, xMaterial);
             scene.add(xAxis);
@@ -948,7 +1184,7 @@
             // X轴箭头
             const xArrow = createArrow(
                 getComputedStyle(document.documentElement).getPropertyValue('--x-axis'),
-                new THREE.Vector3(3, 0, 0),
+                new THREE.Vector3(10, 0, 0),
                 new THREE.Vector3(1, 0, 0)
             );
             scene.add(xArrow);
@@ -956,8 +1192,8 @@
             
             // Y轴
             const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 3, 0)
+                new THREE.Vector3(0, -10, 0),
+                new THREE.Vector3(0, 10, 0)
             ]);
             const yAxis = new THREE.Line(yAxisGeometry, yMaterial);
             scene.add(yAxis);
@@ -966,7 +1202,7 @@
             // Y轴箭头
             const yArrow = createArrow(
                 getComputedStyle(document.documentElement).getPropertyValue('--y-axis'),
-                new THREE.Vector3(0, 3, 0),
+                new THREE.Vector3(0, 10, 0),
                 new THREE.Vector3(0, 1, 0)
             );
             scene.add(yArrow);
@@ -974,8 +1210,8 @@
             
             // Z轴
             const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
-                new THREE.Vector3(0, 0, 0),
-                new THREE.Vector3(0, 0, 3)
+                new THREE.Vector3(0, 0, -10),
+                new THREE.Vector3(0, 0, 10)
             ]);
             const zAxis = new THREE.Line(zAxisGeometry, zMaterial);
             scene.add(zAxis);
@@ -984,7 +1220,7 @@
             // Z轴箭头
             const zArrow = createArrow(
                 getComputedStyle(document.documentElement).getPropertyValue('--z-axis'),
-                new THREE.Vector3(0, 0, 3),
+                new THREE.Vector3(0, 0, 10),
                 new THREE.Vector3(0, 0, 1)
             );
             scene.add(zArrow);
@@ -993,7 +1229,7 @@
         
         // 创建箭头辅助函数
         function createArrow(color, position, direction) {
-            const arrowGeometry = new THREE.ConeGeometry(0.12, 0.35, 16);
+            const arrowGeometry = new THREE.ConeGeometry(0.2, 0.5, 16);
             const arrowMaterial = new THREE.MeshBasicMaterial({ color: color });
             const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
             
@@ -1017,11 +1253,18 @@
             
             // 鼠标按下事件
             canvas.addEventListener('mousedown', (e) => {
-                if (e.button === 0) { // 左键 - 旋转
-                    interactionState.isRotating = true;
-                } else if (e.button === 2) { // 右键 - 平移
-                    interactionState.isPanning = true;
+                // 如果正在调整侧边栏大小，不处理鼠标事件
+                if (isResizing) return;
+                
+                // 左键操作 - 根据Shift键状态决定是旋转还是平移
+                if (e.button === 0) { 
+                    if (interactionState.isShiftDown) {
+                        interactionState.isPanning = true;
+                    } else {
+                        interactionState.isRotating = true;
+                    }
                 }
+                
                 interactionState.previousMousePosition = {
                     x: e.clientX,
                     y: e.clientY
@@ -1031,6 +1274,9 @@
             
             // 鼠标移动事件
             window.addEventListener('mousemove', (e) => {
+                // 如果正在调整侧边栏大小，不处理视图交互
+                if (isResizing) return;
+                
                 if (!interactionState.isRotating && !interactionState.isPanning) return;
                 
                 const deltaX = e.clientX - interactionState.previousMousePosition.x;
@@ -1075,12 +1321,15 @@
             
             // 滚轮缩放事件
             canvas.addEventListener('wheel', (e) => {
+                // 如果正在调整侧边栏大小，不处理滚轮事件
+                if (isResizing) return;
+                
                 // 缩放速度与当前距离相关
                 const zoomFactor = 1 - e.deltaY * 0.0005;
                 interactionState.targetPosition.z *= zoomFactor;
                 
                 // 限制缩放范围
-                interactionState.targetPosition.z = Math.max(1, Math.min(20, interactionState.targetPosition.z));
+                interactionState.targetPosition.z = Math.max(1, Math.min(50, interactionState.targetPosition.z));
                 e.preventDefault();
             });
             
@@ -1092,6 +1341,29 @@
             // 双击重置视图
             canvas.addEventListener('dblclick', () => {
                 resetView();
+            });
+            
+            // 键盘事件 - 监听Shift键
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Shift') {
+                    interactionState.isShiftDown = true;
+                    // 如果正在拖动，根据Shift状态切换操作模式
+                    if (interactionState.isRotating) {
+                        interactionState.isRotating = false;
+                        interactionState.isPanning = true;
+                    }
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'Shift') {
+                    interactionState.isShiftDown = false;
+                    // 如果正在拖动，根据Shift状态切换操作模式
+                    if (interactionState.isPanning) {
+                        interactionState.isPanning = false;
+                        interactionState.isRotating = true;
+                    }
+                }
             });
         }
         
@@ -1129,78 +1401,155 @@
             renderer.setSize(canvas.clientWidth, canvas.clientHeight);
         }
         
-        // 创建3D模型
-        function createModel(type) {
-            // 移除当前对象
-            if (currentObject) {
-                scene.remove(currentObject);
-                currentObject = null;
+        // 添加点
+        function addPoint(x, y, z) {
+            // 验证输入
+            if (isNaN(x) || isNaN(y) || isNaN(z)) {
+                showMessage('请输入有效的数值', false);
+                return;
             }
             
-            // 隐藏函数对象
-            if (functionObject) {
-                functionObject.visible = false;
-            }
+            // 创建新点
+            const newPoint = {
+                id: nextPointId++,
+                x: parseFloat(x),
+                y: parseFloat(y),
+                z: parseFloat(z)
+            };
             
-            // 重置视图
-            resetView();
+            // 添加到数据数组
+            pointData.push(newPoint);
             
-            // 取消所有按钮的活跃状态
-            MODEL_BUTTONS.forEach(btn => btn.classList.remove('active'));
-            // 设置当前按钮为活跃状态
-            document.querySelector(`.model-btn[data-model="${type}"]`).classList.add('active');
+            // 更新点云和表格
+            updatePointCloud();
+            updateTable();
+            updatePointCount();
             
-            let geometry, material;
+            // 自动选中新添加的点
+            selectPoint(newPoint.id);
             
-            // 创建基础材质
-            material = new THREE.MeshStandardMaterial({
-                color: 0x165DFF,
-                wireframe: isWireframe,
-                transparent: true,
-                opacity: 0.9,
-                metalness: 0.1,
-                roughness: 0.7
-            });
-            
-            // 根据类型创建不同的几何体
-            switch(type) {
-                case 'cube':
-                    geometry = new THREE.BoxGeometry(2, 2, 2);
-                    break;
-                case 'sphere':
-                    geometry = new THREE.SphereGeometry(1.5, 32, 32);
-                    break;
-                case 'cylinder':
-                    geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
-                    break;
-                case 'cone':
-                    geometry = new THREE.ConeGeometry(1, 2, 32);
-                    break;
-                case 'torus':
-                    geometry = new THREE.TorusGeometry(1, 0.4, 16, 100);
-                    break;
-                case 'pyramid':
-                    geometry = new THREE.ConeGeometry(1.5, 2, 4);
-                    break;
-            }
-            
-            currentObject = new THREE.Mesh(geometry, material);
-            scene.add(currentObject);
-            
-            // 确保函数显示状态正确
-            if (functionObject) {
-                functionObject.visible = functionVisible;
-            }
+            showMessage('点已添加成功');
         }
         
-        // 切换线框模式
-        function toggleWireframe() {
-            isWireframe = !isWireframe;
-            if (currentObject && currentObject.material) {
-                currentObject.material.wireframe = isWireframe;
+        // 删除点
+        function deletePoint(id) {
+            // 找到点的索引
+            const index = pointData.findIndex(point => point.id === id);
+            if (index === -1) return;
+            
+            // 如果删除的是选中的点，清除选中状态
+            if (id === selectedPointId) {
+                selectedPointId = null;
             }
-            if (functionObject && functionObject.material) {
-                functionObject.material.wireframe = isWireframe;
+            
+            // 从数据数组中删除
+            pointData.splice(index, 1);
+            
+            // 更新点云和表格
+            updatePointCloud();
+            updateTable();
+            updatePointCount();
+            
+            showMessage('点已删除');
+        }
+        
+        // 选择点
+        function selectPoint(id) {
+            selectedPointId = id;
+            
+            // 更新点云颜色
+            updatePointCloud();
+            
+            // 更新表格选中状态
+            updateTableSelection();
+        }
+        
+        // 更新表格
+        function updateTable() {
+            // 清空表格
+            DATA_TABLE_BODY.innerHTML = '';
+            
+            // 添加所有点
+            pointData.forEach((point, index) => {
+                const row = document.createElement('tr');
+                row.dataset.id = point.id;
+                
+                // 如果是选中的点，添加选中类
+                if (point.id === selectedPointId) {
+                    row.classList.add('selected');
+                }
+                
+                // 行点击事件 - 选择点
+                row.addEventListener('click', (e) => {
+                    // 如果点击的是操作按钮，不触发选择
+                    if (e.target.closest('.data-actions')) return;
+                    selectPoint(point.id);
+                });
+                
+                // 创建表格单元格
+                row.innerHTML = `
+                    <td>${index + 1}</td>
+                    <td>${point.x.toFixed(4)}</td>
+                    <td>${point.y.toFixed(4)}</td>
+                    <td>${point.z.toFixed(4)}</td>
+                    <td>
+                        <div class="data-actions">
+                            <button class="action-btn delete-btn" data-id="${point.id}" title="删除">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </td>
+                `;
+                
+                DATA_TABLE_BODY.appendChild(row);
+            });
+            
+            // 添加删除按钮事件监听
+            document.querySelectorAll('.delete-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation(); // 阻止事件冒泡到行
+                    const id = parseInt(btn.dataset.id);
+                    deletePoint(id);
+                });
+            });
+        }
+        
+        // 更新表格选中状态
+        function updateTableSelection() {
+            // 移除所有选中类
+            document.querySelectorAll('#data-table-body tr').forEach(row => {
+                row.classList.remove('selected');
+                
+                // 为选中的点添加选中类
+                if (parseInt(row.dataset.id) === selectedPointId) {
+                    row.classList.add('selected');
+                }
+            });
+        }
+        
+        // 更新点计数
+        function updatePointCount() {
+            POINT_COUNT.textContent = `${pointData.length} 个点`;
+        }
+        
+        // 清除所有点
+        function clearAllPoints() {
+            if (pointData.length === 0) {
+                showMessage('没有可清除的点', false);
+                return;
+            }
+            
+            if (confirm(`确定要清除所有 ${pointData.length} 个点吗？`)) {
+                // 清空点数据
+                pointData = [];
+                selectedPointId = null;
+                
+                // 更新点云和表格
+                updatePointCloud();
+                updateTable();
+                updatePointCount();
+                
+                showMessage('所有点已清除');
             }
         }
         
@@ -1211,44 +1560,6 @@
                 obj.visible = axisVisible;
             });
             AXIS_LEGEND.classList.toggle('hidden', !axisVisible);
-        }
-        
-        // 切换函数图像显示
-        function toggleFunction() {
-            functionVisible = !functionVisible;
-            if (functionObject) {
-                functionObject.visible = functionVisible;
-            }
-            updateFunctionVisibilityButtons();
-        }
-        
-        // 更新函数可见性按钮状态
-        function updateFunctionVisibilityButtons() {
-            if (functionVisible) {
-                SHOW_FUNCTION_BTN.classList.add('active');
-                HIDE_FUNCTION_BTN.classList.remove('active');
-            } else {
-                SHOW_FUNCTION_BTN.classList.remove('active');
-                HIDE_FUNCTION_BTN.classList.add('active');
-            }
-        }
-        
-        // 显示函数图像
-        function showFunction() {
-            functionVisible = true;
-            if (functionObject) {
-                functionObject.visible = true;
-            }
-            updateFunctionVisibilityButtons();
-        }
-        
-        // 隐藏函数图像
-        function hideFunction() {
-            functionVisible = false;
-            if (functionObject) {
-                functionObject.visible = false;
-            }
-            updateFunctionVisibilityButtons();
         }
         
         // 切换操作指南显示
@@ -1263,176 +1574,161 @@
             }
         }
         
-        // 绘制函数图像
-        function plotFunction() {
-            const funcStr = FUNCTION_INPUT.value.trim();
-            if (!funcStr) {
-                showFunctionError('请输入函数表达式');
+        // 导入文件
+        function importFile(file) {
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const content = e.target.result;
+                    const lines = content.split(/\r?\n/).filter(line => line.trim() !== '');
+                    
+                    // 验证文件格式 - 第一行应为xyz
+                    if (lines.length === 0 || lines[0].trim().toLowerCase() !== 'xyz') {
+                        throw new Error('文件格式不正确，第一行必须为"xyz"');
+                    }
+                    
+                    // 解析数据行
+                    const newPoints = [];
+                    
+                    for (let i = 1; i < lines.length; i++) {
+                        const line = lines[i].trim();
+                        if (!line) continue;
+                        
+                        // 用空格或逗号分隔
+                        const values = line.split(/[\s,]+/).map(v => parseFloat(v));
+                        
+                        if (values.length !== 3 || values.some(isNaN)) {
+                            throw new Error(`第 ${i+1} 行数据格式不正确`);
+                        }
+                        
+                        newPoints.push({
+                            id: nextPointId++,
+                            x: values[0],
+                            y: values[1],
+                            z: values[2]
+                        });
+                    }
+                    
+                    if (newPoints.length === 0) {
+                        showMessage('文件中没有有效数据', false);
+                        return;
+                    }
+                    
+                    // 添加新点
+                    pointData = [...pointData, ...newPoints];
+                    
+                    // 更新界面
+                    updatePointCloud();
+                    updateTable();
+                    updatePointCount();
+                    
+                    showMessage(`成功导入 ${newPoints.length} 个点`);
+                    
+                } catch (error) {
+                    showMessage(`导入失败: ${error.message}`, false);
+                    console.error('导入错误:', error);
+                }
+            };
+            
+            reader.onerror = function() {
+                showMessage('文件读取失败', false);
+            };
+            
+            // 根据文件类型读取
+            if (file.name.toLowerCase().endsWith('.txt') || file.name.toLowerCase().endsWith('.csv')) {
+                reader.readAsText(file);
+            } else {
+                showMessage('不支持的文件类型，请导入TXT或CSV文件', false);
+            }
+        }
+        
+        // 导出为TXT
+        function exportToTxt() {
+            if (pointData.length === 0) {
+                showMessage('没有可导出的数据', false);
                 return;
             }
             
-            // 移除当前函数对象
-            if (functionObject) {
-                scene.remove(functionObject);
-                functionObject = null;
-            }
+            // 构建文件内容
+            let content = 'xyz\n'; // 第一行为xyz
             
-            // 隐藏模型对象
-            if (currentObject) {
-                currentObject.visible = false;
-            }
-            
-            // 取消所有模型按钮的活跃状态
-            MODEL_BUTTONS.forEach(btn => btn.classList.remove('active'));
-            
-            // 重置视图
-            resetView();
-            
-            try {
-                // 解析变量范围
-                const [minVal, maxVal] = VARIABLE_RANGE.value.split(',').map(Number);
-                const resolution = parseInt(RESOLUTION.value);
-                
-                // 创建函数评估器
-                const safeMath = {
-                    sin: Math.sin,
-                    cos: Math.cos,
-                    tan: Math.tan,
-                    asin: Math.asin,
-                    acos: Math.acos,
-                    atan: Math.atan,
-                    sinh: Math.sinh,
-                    cosh: Math.cosh,
-                    tanh: Math.tanh,
-                    sqrt: Math.sqrt,
-                    exp: Math.exp,
-                    log: Math.log,
-                    log10: Math.log10,
-                    abs: Math.abs,
-                    pow: Math.pow,
-                    PI: Math.PI,
-                    E: Math.E
-                };
-                
-                // 构建函数字符串
-                const funcCode = `with(safeMath) { return function(x) { return ${funcStr}; } }`;
-                const func = new Function('safeMath', funcCode)(safeMath);
-                
-                // 测试函数是否有效
-                func(0);
-                
-                // 创建函数图像的几何体
-                const geometry = new THREE.PlaneGeometry(
-                    maxVal - minVal, 
-                    maxVal - minVal, 
-                    resolution, 
-                    resolution
-                );
-                
-                // 计算每个点的高度
-                const positions = geometry.attributes.position.array;
-                for (let i = 0; i < positions.length; i += 3) {
-                    // 将平面坐标映射到实际变量范围
-                    const x = (positions[i] / (maxVal - minVal) * (maxVal - minVal)) + minVal;
-                    
-                    // 计算y值（函数值）
-                    let y;
-                    try {
-                        y = func(x);
-                    } catch (e) {
-                        throw new Error(`计算函数值时出错: ${e.message}`);
-                    }
-                    
-                    // 设置y坐标
-                    positions[i + 1] = y;
-                }
-                
-                geometry.computeVertexNormals();
-                
-                // 创建颜色映射材质
-                const material = new THREE.MeshStandardMaterial({
-                    vertexColors: THREE.VertexColors,
-                    wireframe: isWireframe,
-                    side: THREE.DoubleSide,
-                    metalness: 0.1,
-                    roughness: 0.8
-                });
-                
-                // 为每个顶点添加颜色（基于y值）
-                const colors = new Float32Array(positions.length);
-                const color = new THREE.Color();
-                
-                // 找到y值范围用于颜色映射
-                let minY = Infinity, maxY = -Infinity;
-                for (let i = 0; i < positions.length; i += 3) {
-                    const y = positions[i + 1];
-                    minY = Math.min(minY, y);
-                    maxY = Math.max(maxY, y);
-                }
-                
-                // 如果所有y值相同，设置一个默认范围
-                if (minY === maxY) {
-                    minY -= 0.5;
-                    maxY += 0.5;
-                }
-                
-                // 为每个顶点分配颜色
-                for (let i = 0; i < positions.length; i += 3) {
-                    const y = positions[i + 1];
-                    const ratio = (y - minY) / (maxY - minY);
-                    // 使用蓝色到红色的渐变
-                    color.setHSL(0.6 - ratio * 0.6, 0.9, 0.5);
-                    
-                    colors[i] = color.r;
-                    colors[i + 1] = color.g;
-                    colors[i + 2] = color.b;
-                }
-                
-                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-                
-                // 创建网格并添加到场景
-                functionObject = new THREE.Mesh(geometry, material);
-                functionObject.visible = functionVisible; // 应用当前可见性设置
-                // 将平面旋转90度使其垂直
-                functionObject.rotation.x = -Math.PI / 2;
-                scene.add(functionObject);
-                
-                // 更新按钮状态
-                updateFunctionVisibilityButtons();
-                
-                // 隐藏错误信息
-                hideFunctionError();
-                
-            } catch (error) {
-                showFunctionError(`函数错误: ${error.message}`);
-                console.error('函数绘制错误:', error);
-                // 创建一个简单的错误标记
-                createErrorMarker();
-            }
-        }
-        
-        // 显示函数错误
-        function showFunctionError(message) {
-            FUNCTION_ERROR.textContent = message;
-            FUNCTION_ERROR.style.display = 'block';
-        }
-        
-        // 隐藏函数错误
-        function hideFunctionError() {
-            FUNCTION_ERROR.style.display = 'none';
-        }
-        
-        // 创建错误标记
-        function createErrorMarker() {
-            const geometry = new THREE.SphereGeometry(0.5, 16, 16);
-            const material = new THREE.MeshStandardMaterial({ 
-                color: 0xFF4D4F,
-                wireframe: isWireframe
+            // 添加所有点数据
+            pointData.forEach(point => {
+                content += `${point.x.toFixed(6)},${point.y.toFixed(6)},${point.z.toFixed(6)}\n`;
             });
-            functionObject = new THREE.Mesh(geometry, material);
-            functionObject.visible = functionVisible;
-            scene.add(functionObject);
-            updateFunctionVisibilityButtons();
+            
+            // 创建Blob并下载
+            const blob = new Blob([content], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `point_cloud_${new Date().getTime()}.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showMessage(`成功导出 ${pointData.length} 个点`);
+        }
+        
+        // 更新点大小
+        function updatePointSize(value) {
+            pointSize = parseFloat(value);
+            POINT_SIZE_VALUE.textContent = pointSize.toFixed(2);
+            
+            if (pointsMaterial) {
+                pointsMaterial.size = pointSize;
+            }
+        }
+        
+        // 初始化侧边栏调整功能
+        function initSidebarResizer() {
+            const resizer = SIDEBAR_RESIZER;
+            const sidebar = SIDEBAR;
+            let startX, startWidth;
+            
+            // 鼠标按下事件
+            resizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.pageX;
+                startWidth = parseInt(document.defaultView.getComputedStyle(sidebar).width, 10);
+                
+                // 添加鼠标移动和释放事件监听
+                document.addEventListener('mousemove', resize);
+                document.addEventListener('mouseup', stopResize);
+                
+                // 更改鼠标样式
+                document.body.style.cursor = 'col-resize';
+                
+                e.preventDefault();
+            });
+            
+            // 调整大小函数
+            function resize(e) {
+                if (!isResizing) return;
+                
+                // 计算新宽度 (限制最小宽度为200px)
+                const newWidth = Math.max(200, startWidth + (e.pageX - startX));
+                
+                // 设置新宽度
+                sidebar.style.width = `${newWidth}px`;
+                
+                // 触发窗口大小调整事件，更新相机纵横比
+                onWindowResize();
+            }
+            
+            // 停止调整大小
+            function stopResize() {
+                isResizing = false;
+                
+                // 移除事件监听
+                document.removeEventListener('mousemove', resize);
+                document.removeEventListener('mouseup', stopResize);
+                
+                // 恢复鼠标样式
+                document.body.style.cursor = '';
+            }
         }
         
         // 事件监听
@@ -1441,22 +1737,24 @@
             loadThreeJS();
         });
         
-        // 模型按钮点击事件
-        MODEL_BUTTONS.forEach(btn => {
-            btn.addEventListener('click', () => {
-                createModel(btn.dataset.model);
-                hideFunctionError();
-            });
+        // 添加点按钮点击事件
+        ADD_POINT_BTN.addEventListener('click', () => {
+            const x = parseFloat(X_INPUT.value);
+            const y = parseFloat(Y_INPUT.value);
+            const z = parseFloat(Z_INPUT.value);
+            addPoint(x, y, z);
         });
         
-        // 绘制函数按钮点击事件
-        PLOT_BUTTON.addEventListener('click', plotFunction);
-        
-        // 按Enter键绘制函数
-        FUNCTION_INPUT.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                plotFunction();
-            }
+        // 按Enter键添加点
+        [X_INPUT, Y_INPUT, Z_INPUT].forEach(input => {
+            input.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    const x = parseFloat(X_INPUT.value);
+                    const y = parseFloat(Y_INPUT.value);
+                    const z = parseFloat(Z_INPUT.value);
+                    addPoint(x, y, z);
+                }
+            });
         });
         
         // 视图控制按钮
@@ -1464,11 +1762,8 @@
         TOP_VIEW.addEventListener('click', () => setView('top'));
         FRONT_VIEW.addEventListener('click', () => setView('front'));
         SIDE_VIEW.addEventListener('click', () => setView('side'));
-        TOGGLE_WIREFRAME.addEventListener('click', toggleWireframe);
         TOGGLE_AXIS.addEventListener('click', toggleAxis);
-        TOGGLE_FUNCTION.addEventListener('click', toggleFunction);
-        SHOW_FUNCTION_BTN.addEventListener('click', showFunction);
-        HIDE_FUNCTION_BTN.addEventListener('click', hideFunction);
+        CLEAR_ALL.addEventListener('click', clearAllPoints);
         
         // 操作指南展开/收起
         TOGGLE_CONTROLS.addEventListener('click', toggleControls);
@@ -1478,9 +1773,32 @@
             SIDEBAR.classList.toggle('open');
         });
         
+        // 文件导入
+        FILE_IMPORT.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                importFile(file);
+                // 重置文件输入，允许重复选择同一个文件
+                FILE_IMPORT.value = '';
+            }
+        });
+        
+        // 导出TXT
+        EXPORT_TXT.addEventListener('click', exportToTxt);
+        
+        // 点大小调整
+        POINT_SIZE.addEventListener('input', (e) => {
+            updatePointSize(e.target.value);
+        });
+        
+        // 初始化点大小显示
+        updatePointSize(POINT_SIZE.value);
+        
+        // 初始化侧边栏调整功能
+        initSidebarResizer();
+        
         // 开始加载
         loadThreeJS();
     </script>
 </body>
 </html>
-    
