@@ -1,0 +1,1274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>完善版多轴旋转太极图</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        taiji: {
+                            gold: '#d4af37',
+                            red: '#c41e3a',
+                            blue: '#1e3ac4',
+                            green: '#1ec43a',
+                            purple: '#7b1fa2',
+                        }
+                    },
+                    fontFamily: {
+                        song: ['"SimSun"', '"STSong"', 'serif'],
+                        kai: ['"KaiTi"', '"STKaiti"', 'serif']
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .preserve-3d {
+                transform-style: preserve-3d;
+            }
+            .perspective-strong {
+                perspective: 2000px;
+            }
+            .backface-hidden {
+                backface-visibility: hidden;
+            }
+            .cylinder-main {
+                --cylinder-depth: 40px;
+                position: relative;
+                width: 100%;
+                height: 100%;
+                transform-style: preserve-3d;
+                transition: all 0.8s ease;
+            }
+            .axis-indicator {
+                position: absolute;
+                transform-origin: center;
+                z-index: 50;
+                transition: all 0.8s ease;
+            }
+            .base-shadow {
+                position: absolute;
+                bottom: -20%;
+                left: 50%;
+                width: 85%;
+                height: 30%;
+                transform: translateX(-50%) rotateX(90deg);
+                transform-origin: center top;
+                z-index: 5;
+                filter: blur(5px);
+                transition: all 0.8s ease;
+            }
+            .strong-glow {
+                transition: all 0.8s ease;
+            }
+            .energy-field {
+                position: absolute;
+                border-radius: 50%;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                pointer-events: none;
+                z-index: 5;
+                animation: pulse 4s infinite ease-out;
+                transition: all 0.8s ease;
+            }
+            @keyframes pulse {
+                0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0.6; }
+                100% { transform: translate(-50%, -50%) scale(1.4); opacity: 0; }
+            }
+            .zoom-controls {
+                position: fixed;
+                bottom: 20px;
+                right: 20px;
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+                z-index: 100;
+            }
+            .zoom-btn {
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+                cursor: pointer;
+                transition: all 0.3s ease;
+            }
+            .shortcut-hint {
+                position: absolute;
+                bottom: 5px;
+                right: 5px;
+                font-size: 10px;
+            }
+            .rotation-mode-btn.active {
+                transition: all 0.3s ease;
+            }
+            .control-section {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                justify-content: center;
+            }
+            .control-btn {
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                padding: 0.5rem 1rem;
+                border-radius: 0.375rem;
+                transition: all 0.2s ease;
+            }
+            .control-btn i {
+                margin-right: 0.375rem;
+            }
+        }
+    </style>
+    
+    <style>
+        /* 基础样式 */
+        body {
+            transition: background-color 0.5s ease;
+        }
+        
+        /* 坐标轴样式 */
+        .axis-x {
+            width: 100%;
+            height: 2px;
+            top: 50%;
+            left: 0;
+            background: linear-gradient(to right, transparent, var(--axis-color), transparent);
+        }
+        .axis-y {
+            width: 2px;
+            height: 100%;
+            top: 0;
+            left: 50%;
+            background: linear-gradient(to bottom, transparent, var(--axis-color), transparent);
+        }
+        .axis-z {
+            position: absolute;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 12px var(--glow-color);
+            z-index: 55;
+            transition: all 0.8s ease;
+        }
+        
+        /* 太极图容器样式 */
+        .cylinder-top {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.98);
+            border: 1px solid var(--border-color);
+            transform: translateZ(var(--cylinder-depth));
+            z-index: 30;
+            box-shadow: 0 0 40px var(--inner-glow) inset;
+            transition: all 0.8s ease;
+        }
+        .cylinder-side {
+            position: absolute;
+            width: 100%;
+            height: var(--cylinder-depth);
+            background: linear-gradient(90deg, 
+                var(--side-color-1), 
+                var(--side-color-2), 
+                var(--side-color-3));
+            transform-origin: center bottom;
+            transform: translateY(-100%) rotateX(90deg);
+            z-index: 20;
+            border: 1px solid var(--border-color);
+            border-top: none;
+            border-bottom: none;
+            box-shadow: 0 0 15px var(--inner-glow);
+            transition: all 0.8s ease;
+        }
+        .cylinder-bottom {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: rgba(20, 20, 20, 0.98);
+            border: 1px solid var(--border-color);
+            z-index: 10;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5) inset;
+            transition: all 0.8s ease;
+        }
+        
+        /* 八卦符号样式 */
+        .trigram {
+            display: inline-block;
+            width: 45px;
+            height: 36px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+        .trigram-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            left: 0;
+            transition: all 0.8s ease;
+        }
+        .trigram-line.top { top: 0; }
+        .trigram-line.middle { top: 16px; }
+        .trigram-line.bottom { top: 32px; }
+        .broken {
+            background: none;
+        }
+        .broken::before, .broken::after {
+            content: '';
+            position: absolute;
+            width: 18px;
+            height: 3px;
+            transition: all 0.8s ease;
+        }
+        .broken::before { left: 0; }
+        .broken::after { right: 0; }
+        .bagua-item {
+            position: absolute;
+            width: 80px;
+            margin-left: -40px;
+            text-align: center;
+            transform-style: preserve-3d;
+            transition: all 0.3s ease;
+        }
+        .bagua-item:hover {
+            transform: translateZ(30px) scale(1.4) !important;
+            z-index: 40;
+        }
+        
+        /* 顶部高光 */
+        .top-highlight {
+            position: absolute;
+            top: 5%;
+            left: 5%;
+            width: 40%;
+            height: 40%;
+            border-radius: 50%;
+            background: radial-gradient(circle at center, rgba(255,255,255,0.3) 0%, rgba(255,255,255,0) 65%);
+            z-index: 35;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-900 dark:to-gray-800 min-h-screen flex flex-col items-center p-4 transition-colors duration-1000">
+    <div class="max-w-4xl w-full mx-auto">
+        <!-- 标题 -->
+        <header class="text-center my-6 relative z-10">
+            <h1 class="text-[clamp(1.8rem,5vw,3rem)] font-kai font-bold text-transparent bg-clip-text bg-gradient-to-r from-gray-800 to-gray-600 dark:from-white dark:to-gray-300">
+                完善版多轴旋转太极图
+            </h1>
+            <p class="text-gray-600 dark:text-gray-400 mt-2 font-song">
+                全功能按钮 · 快捷键支持 · 流畅交互
+            </p>
+        </header>
+        
+        <!-- 主内容区 -->
+        <div class="perspective-strong w-full max-w-2xl mx-auto mb-8">
+            <div id="rotation-container" class="preserve-3d relative w-full aspect-square transition-transform duration-300 cursor-grab">
+                <!-- 能量场效果 -->
+                <div class="energy-field" style="width: 90%; height: 90%; animation-delay: 0s;"></div>
+                <div class="energy-field" style="width: 80%; height: 80%; animation-delay: 1s;"></div>
+                <div class="energy-field" style="width: 70%; height: 70%; animation-delay: 2s;"></div>
+                
+                <!-- 坐标轴指示器 -->
+                <div class="axis-indicator axis-x"></div>
+                <div class="axis-indicator axis-y"></div>
+                <div class="axis-z"></div>
+                
+                <!-- 底部阴影 -->
+                <div class="base-shadow"></div>
+                
+                <!-- 扁圆柱体容器 -->
+                <div class="cylinder-main" id="cylinder">
+                    <!-- 圆柱顶面 -->
+                    <div class="cylinder-top">
+                        <div class="top-highlight"></div>
+                        
+                        <!-- 太极图主体 -->
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-[70%] h-[70%] relative strong-glow" id="taiji-glow">
+                                <svg class="w-full h-full" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+                                    <!-- 阴鱼 (黑色) 带渐变 -->
+                                    <path fill="url(#yinGradient)" d="M100,0 C155.2,0 200,44.8 200,100 C200,155.2 155.2,200 100,200 C44.8,200 0,155.2 0,100 C0,44.8 44.8,0 100,0 Z M100,50 C77.9,50 60,67.9 60,90 C60,112.1 77.9,130 100,130 C100,130 100,100 100,100 C100,100 100,50 100,50 Z" />
+                                    <!-- 阳鱼 (白色) 带渐变 -->
+                                    <path fill="url(#yangGradient)" d="M100,0 C100,0 100,25 100,50 C100,75 100,100 100,100 C100,100 100,130 100,130 C122.1,130 140,112.1 140,90 C140,67.9 122.1,50 100,50 C100,25 100,0 100,0 Z" />
+                                    <!-- 鱼眼 -->
+                                    <circle cx="100" cy="50" r="10" fill="#fff" />
+                                    <circle cx="100" cy="50" r="3" id="yin-eye-dot" />
+                                    <circle cx="100" cy="150" r="10" fill="#000" />
+                                    <circle cx="100" cy="150" r="3" id="yang-eye-dot" />
+                                    <!-- 渐变定义 -->
+                                    <defs>
+                                        <linearGradient id="yinGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#222" />
+                                            <stop offset="100%" stop-color="#000" />
+                                        </linearGradient>
+                                        <linearGradient id="yangGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                            <stop offset="0%" stop-color="#fff" />
+                                            <stop offset="100%" stop-color="#eee" />
+                                        </linearGradient>
+                                    </defs>
+                                </svg>
+                            </div>
+                        </div>
+                        
+                        <!-- 八卦符号 -->
+                        <div class="absolute inset-0">
+                            <!-- 乾卦 (顶部) -->
+                            <div class="bagua-item" style="top: 10%; left: 50%; transform: translate3d(-50%, 0, 5px);" id="bagua-1">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top"></div>
+                                    <div class="trigram-line middle"></div>
+                                    <div class="trigram-line bottom"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">乾(天)</div>
+                            </div>
+                            
+                            <!-- 兑卦 (右上) -->
+                            <div class="bagua-item" style="top: 25%; left: 82%; transform: translate3d(-50%, 0, 5px);" id="bagua-2">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top"></div>
+                                    <div class="trigram-line middle"></div>
+                                    <div class="trigram-line bottom broken"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">兑(泽)</div>
+                            </div>
+                            
+                            <!-- 离卦 (右中) -->
+                            <div class="bagua-item" style="top: 50%; left: 88%; transform: translate3d(-50%, -50%, 5px);" id="bagua-3">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top"></div>
+                                    <div class="trigram-line middle broken"></div>
+                                    <div class="trigram-line bottom"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">离(火)</div>
+                            </div>
+                            
+                            <!-- 震卦 (右下) -->
+                            <div class="bagua-item" style="top: 75%; left: 82%; transform: translate3d(-50%, 0, 5px);" id="bagua-4">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top broken"></div>
+                                    <div class="trigram-line middle"></div>
+                                    <div class="trigram-line bottom"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">震(雷)</div>
+                            </div>
+                            
+                            <!-- 坤卦 (底部) -->
+                            <div class="bagua-item" style="top: 90%; left: 50%; transform: translate3d(-50%, 0, 5px);" id="bagua-5">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top broken"></div>
+                                    <div class="trigram-line middle broken"></div>
+                                    <div class="trigram-line bottom broken"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">坤(地)</div>
+                            </div>
+                            
+                            <!-- 艮卦 (左下) -->
+                            <div class="bagua-item" style="top: 75%; left: 18%; transform: translate3d(-50%, 0, 5px);" id="bagua-6">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top"></div>
+                                    <div class="trigram-line middle broken"></div>
+                                    <div class="trigram-line bottom broken"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">艮(山)</div>
+                            </div>
+                            
+                            <!-- 坎卦 (左中) -->
+                            <div class="bagua-item" style="top: 50%; left: 12%; transform: translate3d(-50%, -50%, 5px);" id="bagua-7">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top broken"></div>
+                                    <div class="trigram-line middle"></div>
+                                    <div class="trigram-line bottom broken"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">坎(水)</div>
+                            </div>
+                            
+                            <!-- 巽卦 (左上) -->
+                            <div class="bagua-item" style="top: 25%; left: 18%; transform: translate3d(-50%, 0, 5px);" id="bagua-8">
+                                <div class="trigram mx-auto">
+                                    <div class="trigram-line top broken"></div>
+                                    <div class="trigram-line middle broken"></div>
+                                    <div class="trigram-line bottom"></div>
+                                </div>
+                                <div class="mt-1 font-song text-sm">巽(风)</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 圆柱侧面 -->
+                    <div class="cylinder-side"></div>
+                    
+                    <!-- 圆柱底面 -->
+                    <div class="cylinder-bottom backface-hidden">
+                        <div class="absolute inset-0 flex items-center justify-center">
+                            <div class="w-[65%] h-[65%] rounded-full flex items-center justify-center" id="bottom-outer">
+                                <div class="w-[35%] h-[35%] rounded-full" id="bottom-inner"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 快捷功能按钮区 - 新增：为所有快捷键功能添加对应按钮 -->
+        <div class="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-xl p-5 shadow-lg max-w-xl mx-auto mb-6 transition-all duration-500">
+            <h2 class="text-center text-lg font-kai text-gray-800 dark:text-white mb-4">
+                <i class="fa fa-keyboard-o text-taiji-gold mr-2 transition-colors duration-800" id="shortcut-icon"></i>快捷功能
+            </h2>
+            <div class="control-section">
+                <button id="btn-rotate" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-play text-taiji-gold transition-colors duration-800"></i>
+                    <span>旋转</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">空格</kbd>
+                </button>
+                <button id="btn-direction" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-rotate-right text-taiji-gold transition-colors duration-800"></i>
+                    <span>方向</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">D</kbd>
+                </button>
+                <button id="btn-theme" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-moon-o text-taiji-gold transition-colors duration-800"></i>
+                    <span>主题</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">T</kbd>
+                </button>
+                <button id="btn-reset" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-undo text-taiji-gold transition-colors duration-800"></i>
+                    <span>重置</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">R</kbd>
+                </button>
+                <button id="btn-zoom-in" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-search-plus text-taiji-gold transition-colors duration-800"></i>
+                    <span>放大</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">+</kbd>
+                </button>
+                <button id="btn-zoom-out" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-search-minus text-taiji-gold transition-colors duration-800"></i>
+                    <span>缩小</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">-</kbd>
+                </button>
+                <button id="btn-zoom-reset" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-home text-taiji-gold transition-colors duration-800"></i>
+                    <span>原尺寸</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">0</kbd>
+                </button>
+                <button id="btn-tilt-up" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-arrow-up text-taiji-gold transition-colors duration-800"></i>
+                    <span>仰角</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">↑</kbd>
+                </button>
+                <button id="btn-tilt-down" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-arrow-down text-taiji-gold transition-colors duration-800"></i>
+                    <span>俯角</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">↓</kbd>
+                </button>
+                <button id="btn-show-shortcuts" class="control-btn bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600">
+                    <i class="fa fa-question-circle text-taiji-gold transition-colors duration-800"></i>
+                    <span>快捷键</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">?</kbd>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 颜色选择 -->
+        <div class="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-xl p-5 shadow-lg max-w-xl mx-auto mb-6 transition-all duration-500">
+            <h2 class="text-center text-lg font-kai text-gray-800 dark:text-white mb-4">
+                <i class="fa fa-paint-brush text-taiji-gold mr-2 transition-colors duration-800" id="color-icon"></i>颜色主题
+            </h2>
+            <div class="grid grid-cols-5 gap-3">
+                <button data-color="gold" class="color-btn w-full aspect-square rounded-full bg-taiji-gold/20 border-2 border-taiji-gold flex items-center justify-center transition-all duration-300 active">
+                    <i class="fa fa-check text-white"></i>
+                </button>
+                <button data-color="red" class="color-btn w-full aspect-square rounded-full bg-taiji-red/20 border-2 border-transparent hover:border-taiji-red/50 flex items-center justify-center transition-all duration-300">
+                    <i class="fa fa-check text-white opacity-0"></i>
+                </button>
+                <button data-color="blue" class="color-btn w-full aspect-square rounded-full bg-taiji-blue/20 border-2 border-transparent hover:border-taiji-blue/50 flex items-center justify-center transition-all duration-300">
+                    <i class="fa fa-check text-white opacity-0"></i>
+                </button>
+                <button data-color="green" class="color-btn w-full aspect-square rounded-full bg-taiji-green/20 border-2 border-transparent hover:border-taiji-green/50 flex items-center justify-center transition-all duration-300">
+                    <i class="fa fa-check text-white opacity-0"></i>
+                </button>
+                <button data-color="purple" class="color-btn w-full aspect-square rounded-full bg-taiji-purple/20 border-2 border-transparent hover:border-taiji-purple/50 flex items-center justify-center transition-all duration-300">
+                    <i class="fa fa-check text-white opacity-0"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 旋转模式选择 -->
+        <div class="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-xl p-5 shadow-lg max-w-xl mx-auto mb-6 transition-all duration-500">
+            <h2 class="text-center text-lg font-kai text-gray-800 dark:text-white mb-4">
+                <i class="fa fa-refresh text-taiji-gold mr-2 transition-colors duration-800" id="rotate-icon"></i>旋转模式
+            </h2>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <button id="mode-z" class="rotation-mode-btn flex flex-col items-center justify-center p-3 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-300 active">
+                    <i class="fa fa-circle-o text-xl text-taiji-gold mb-1 transition-colors duration-800"></i>
+                    <span class="text-sm">Z轴旋转</span>
+                </button>
+                <button id="mode-x" class="rotation-mode-btn flex flex-col items-center justify-center p-3 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-300">
+                    <i class="fa fa-arrows-h text-xl text-taiji-gold mb-1 transition-colors duration-800"></i>
+                    <span class="text-sm">X轴旋转</span>
+                </button>
+                <button id="mode-y" class="rotation-mode-btn flex flex-col items-center justify-center p-3 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-300">
+                    <i class="fa fa-arrows-v text-xl text-taiji-gold mb-1 transition-colors duration-800"></i>
+                    <span class="text-sm">Y轴旋转</span>
+                </button>
+                <button id="mode-compound" class="rotation-mode-btn flex flex-col items-center justify-center p-3 border border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-all duration-300">
+                    <i class="fa fa-cubes text-xl text-taiji-gold mb-1 transition-colors duration-800"></i>
+                    <span class="text-sm">复合旋转</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 控制按钮 -->
+        <div class="bg-white/60 dark:bg-gray-800/60 backdrop-blur-md rounded-xl p-5 shadow-lg max-w-xl mx-auto mb-8 transition-all duration-500">
+            <h2 class="text-center text-lg font-kai text-gray-800 dark:text-white mb-4">
+                <i class="fa fa-sliders text-taiji-gold mr-2 transition-colors duration-800" id="control-icon"></i>参数调节
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        <i class="fa fa-tachometer text-taiji-gold mr-1 transition-colors duration-800" id="speed-icon"></i>旋转速度
+                    </label>
+                    <input type="range" id="speed-control" min="1" max="10" value="3" 
+                           class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-taiji-gold transition-all duration-800" id="speed-slider">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        <i class="fa fa-search text-taiji-gold mr-1 transition-colors duration-800" id="tilt-icon"></i>视角倾斜度
+                    </label>
+                    <input type="range" id="tilt-control" min="5" max="60" value="25" 
+                           class="w-full h-2 bg-gray-200 dark:bg-gray-700 rounded-lg appearance-none cursor-pointer accent-taiji-gold transition-all duration-800" id="tilt-slider">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 快捷键提示模态框 -->
+    <div id="shortcut-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-500 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-white dark:bg-gray-800 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-kai font-bold text-gray-800 dark:text-white">键盘快捷键</h3>
+                <button id="close-shortcut" class="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300">
+                    <i class="fa fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">空格</span>
+                    <span class="text-gray-600 dark:text-gray-400">开始/暂停旋转</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">D</span>
+                    <span class="text-gray-600 dark:text-gray-400">切换旋转方向</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">T</span>
+                    <span class="text-gray-600 dark:text-gray-400">切换明暗主题</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">R</span>
+                    <span class="text-gray-600 dark:text-gray-400">重置所有设置</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">+</span>
+                    <span class="text-gray-600 dark:text-gray-400">放大视图</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">-</span>
+                    <span class="text-gray-600 dark:text-gray-400">缩小视图</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">0</span>
+                    <span class="text-gray-600 dark:text-gray-400">重置缩放</span>
+                </div>
+                <div class="flex items-center">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">?</span>
+                    <span class="text-gray-600 dark:text-gray-400">显示/隐藏快捷键</span>
+                </div>
+                <div class="flex items-center col-span-2">
+                    <span class="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 text-sm">↑ ↓</span>
+                    <span class="text-gray-600 dark:text-gray-400">调整视角倾斜度</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM元素
+        const rotationContainer = document.getElementById('rotation-container');
+        const rotateToggle = document.getElementById('btn-rotate');
+        const directionToggle = document.getElementById('btn-direction');
+        const themeToggle = document.getElementById('btn-theme');
+        const resetView = document.getElementById('btn-reset');
+        const speedControl = document.getElementById('speed-control');
+        const tiltControl = document.getElementById('tilt-control');
+        const modeButtons = {
+            z: document.getElementById('mode-z'),
+            x: document.getElementById('mode-x'),
+            y: document.getElementById('mode-y'),
+            compound: document.getElementById('mode-compound')
+        };
+        const zoomControls = {
+            in: document.getElementById('btn-zoom-in'),
+            out: document.getElementById('btn-zoom-out'),
+            reset: document.getElementById('btn-zoom-reset')
+        };
+        const tiltButtons = {
+            up: document.getElementById('btn-tilt-up'),
+            down: document.getElementById('btn-tilt-down')
+        };
+        const shortcutButton = document.getElementById('btn-show-shortcuts');
+        const colorButtons = document.querySelectorAll('.color-btn');
+        const shortcutModal = document.getElementById('shortcut-modal');
+        const closeShortcut = document.getElementById('close-shortcut');
+        const body = document.body;
+        const cylinder = document.getElementById('cylinder');
+        const trigramLines = document.querySelectorAll('.trigram-line, .trigram-line::before, .trigram-line::after');
+        
+        // 八卦元素
+        const baguaItems = [
+            document.getElementById('bagua-1'),
+            document.getElementById('bagua-2'),
+            document.getElementById('bagua-3'),
+            document.getElementById('bagua-4'),
+            document.getElementById('bagua-5'),
+            document.getElementById('bagua-6'),
+            document.getElementById('bagua-7'),
+            document.getElementById('bagua-8')
+        ];
+        
+        // 颜色映射
+        const colorMap = {
+            gold: { 
+                primary: '#d4af37',
+                axis: 'rgba(212, 175, 55, 0.6)',
+                glow: 'rgba(212, 175, 55, 0.9)',
+                innerGlow: 'rgba(212, 175, 55, 0.25)',
+                border: 'rgba(212, 175, 55, 0.5)',
+                side1: 'rgba(212, 175, 55, 0.4)',
+                side2: 'rgba(205, 127, 50, 0.25)',
+                side3: 'rgba(212, 175, 55, 0.3)',
+                shadow: 'rgba(212, 175, 55, 0.2)',
+                class: 'text-taiji-gold',
+                energy: '1px solid rgba(212, 175, 55, 0.3)'
+            },
+            red: { 
+                primary: '#c41e3a',
+                axis: 'rgba(196, 30, 58, 0.6)',
+                glow: 'rgba(196, 30, 58, 0.9)',
+                innerGlow: 'rgba(196, 30, 58, 0.25)',
+                border: 'rgba(196, 30, 58, 0.5)',
+                side1: 'rgba(196, 30, 58, 0.4)',
+                side2: 'rgba(166, 25, 50, 0.25)',
+                side3: 'rgba(196, 30, 58, 0.3)',
+                shadow: 'rgba(196, 30, 58, 0.2)',
+                class: 'text-taiji-red',
+                energy: '1px solid rgba(196, 30, 58, 0.3)'
+            },
+            blue: { 
+                primary: '#1e3ac4',
+                axis: 'rgba(30, 58, 196, 0.6)',
+                glow: 'rgba(30, 58, 196, 0.9)',
+                innerGlow: 'rgba(30, 58, 196, 0.25)',
+                border: 'rgba(30, 58, 196, 0.5)',
+                side1: 'rgba(30, 58, 196, 0.4)',
+                side2: 'rgba(25, 50, 166, 0.25)',
+                side3: 'rgba(30, 58, 196, 0.3)',
+                shadow: 'rgba(30, 58, 196, 0.2)',
+                class: 'text-taiji-blue',
+                energy: '1px solid rgba(30, 58, 196, 0.3)'
+            },
+            green: { 
+                primary: '#1ec43a',
+                axis: 'rgba(30, 196, 58, 0.6)',
+                glow: 'rgba(30, 196, 58, 0.9)',
+                innerGlow: 'rgba(30, 196, 58, 0.25)',
+                border: 'rgba(30, 196, 58, 0.5)',
+                side1: 'rgba(30, 196, 58, 0.4)',
+                side2: 'rgba(25, 166, 50, 0.25)',
+                side3: 'rgba(30, 196, 58, 0.3)',
+                shadow: 'rgba(30, 196, 58, 0.2)',
+                class: 'text-taiji-green',
+                energy: '1px solid rgba(30, 196, 58, 0.3)'
+            },
+            purple: { 
+                primary: '#7b1fa2',
+                axis: 'rgba(123, 31, 162, 0.6)',
+                glow: 'rgba(123, 31, 162, 0.9)',
+                innerGlow: 'rgba(123, 31, 162, 0.25)',
+                border: 'rgba(123, 31, 162, 0.5)',
+                side1: 'rgba(123, 31, 162, 0.4)',
+                side2: 'rgba(103, 25, 136, 0.25)',
+                side3: 'rgba(123, 31, 162, 0.3)',
+                shadow: 'rgba(123, 31, 162, 0.2)',
+                class: 'text-taiji-purple',
+                energy: '1px solid rgba(123, 31, 162, 0.3)'
+            }
+        };
+        
+        // 所有需要颜色更新的元素
+        const colorElements = [
+            document.getElementById('color-icon'),
+            document.getElementById('rotate-icon'),
+            document.getElementById('control-icon'),
+            document.getElementById('speed-icon'),
+            document.getElementById('tilt-icon'),
+            document.getElementById('shortcut-icon'),
+            ...document.querySelectorAll('.control-btn i')
+        ];
+        
+        // 能量场元素
+        const energyFields = document.querySelectorAll('.energy-field');
+        
+        // 状态变量
+        let isRotating = false;
+        let rotationInterval;
+        let rotationSpeed = 3;
+        let rotationDirection = 1; // 1: 顺时针, -1: 逆时针
+        let currentRotation = { x: 25, y: 0, z: 0 };
+        let currentScale = 1;
+        let rotationMode = 'z'; // 默认Z轴旋转
+        let currentColor = 'gold';
+        let isDragging = false;
+        let startX, startY;
+        let dragStartRotation;
+        
+        // 应用旋转和缩放
+        function applyTransformations() {
+            if (rotationContainer) {
+                rotationContainer.style.transform = 
+                    `rotateX(${currentRotation.x}deg) rotateY(${currentRotation.y}deg) rotateZ(${currentRotation.z}deg) scale(${currentScale})`;
+            }
+        }
+        
+        // 切换旋转状态
+        function toggleRotation() {
+            if (isRotating) {
+                cancelAnimationFrame(rotationInterval);
+                rotateToggle.innerHTML = `
+                    <i class="fa fa-play text-taiji-gold transition-colors duration-800"></i>
+                    <span>旋转</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">空格</kbd>
+                `;
+            } else {
+                startRotation();
+                rotateToggle.innerHTML = `
+                    <i class="fa fa-pause text-taiji-gold transition-colors duration-800"></i>
+                    <span>暂停</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">空格</kbd>
+                `;
+            }
+            isRotating = !isRotating;
+        }
+        
+        // 开始旋转
+        function startRotation() {
+            let lastTime = 0;
+            
+            function animate(timestamp) {
+                if (!lastTime) lastTime = timestamp;
+                const elapsed = timestamp - lastTime;
+                
+                // 控制动画帧率
+                const interval = 100 - (rotationSpeed * 8);
+                if (elapsed > interval) {
+                    lastTime = timestamp - (elapsed % interval);
+                    
+                    switch(rotationMode) {
+                        case 'x':
+                            currentRotation.x = (currentRotation.x + rotationSpeed * 0.3 * rotationDirection) % 360;
+                            break;
+                        case 'y':
+                            currentRotation.y = (currentRotation.y + rotationSpeed * 0.3 * rotationDirection) % 360;
+                            break;
+                        case 'z':
+                            currentRotation.z = (currentRotation.z + rotationSpeed * 0.5 * rotationDirection) % 360;
+                            break;
+                        case 'compound':
+                            // 复合旋转 - 多轴同时旋转，不同速度
+                            currentRotation.x = (currentRotation.x + rotationSpeed * 0.15 * rotationDirection) % 360;
+                            currentRotation.y = (currentRotation.y + rotationSpeed * 0.2 * -rotationDirection) % 360;
+                            currentRotation.z = (currentRotation.z + rotationSpeed * 0.3 * rotationDirection) % 360;
+                            break;
+                    }
+                    applyTransformations();
+                }
+                
+                if (isRotating) {
+                    rotationInterval = requestAnimationFrame(animate);
+                }
+            }
+            
+            rotationInterval = requestAnimationFrame(animate);
+        }
+        
+        // 切换旋转方向
+        function toggleDirection() {
+            rotationDirection *= -1;
+            
+            directionToggle.innerHTML = `
+                <i class="fa fa-rotate-${rotationDirection === 1 ? 'right' : 'left'} text-taiji-gold transition-colors duration-800"></i>
+                <span>方向</span>
+                <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">D</kbd>
+            `;
+        }
+        
+        // 切换旋转模式
+        function setRotationMode(mode) {
+            // 验证模式有效性
+            if (!modeButtons[mode]) return;
+            
+            // 更新按钮状态
+            Object.keys(modeButtons).forEach(key => {
+                modeButtons[key].classList.remove('active');
+            });
+            modeButtons[mode].classList.add('active');
+            
+            // 更新模式
+            rotationMode = mode;
+            
+            // 如果正在旋转，重启旋转以应用新模式
+            if (isRotating) {
+                cancelAnimationFrame(rotationInterval);
+                startRotation();
+            }
+        }
+        
+        // 调整视角倾斜度
+        function adjustTilt() {
+            currentRotation.x = parseInt(tiltControl.value);
+            applyTransformations();
+        }
+        
+        // 调整倾斜度按钮功能
+        function tiltUp() {
+            currentRotation.x = Math.max(5, currentRotation.x - 5);
+            tiltControl.value = currentRotation.x;
+            applyTransformations();
+        }
+        
+        function tiltDown() {
+            currentRotation.x = Math.min(60, currentRotation.x + 5);
+            tiltControl.value = currentRotation.x;
+            applyTransformations();
+        }
+        
+        // 主题切换
+        function toggleTheme() {
+            const isDark = body.classList.toggle('dark');
+            
+            if (isDark) {
+                themeToggle.innerHTML = `
+                    <i class="fa fa-sun-o text-taiji-gold transition-colors duration-800"></i>
+                    <span>亮色</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">T</kbd>
+                `;
+                // 暗色模式下调整八卦颜色
+                updateBaguaColors('#ccc');
+            } else {
+                themeToggle.innerHTML = `
+                    <i class="fa fa-moon-o text-taiji-gold transition-colors duration-800"></i>
+                    <span>主题</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">T</kbd>
+                `;
+                // 亮色模式下恢复八卦颜色
+                updateBaguaColors('#000');
+            }
+        }
+        
+        // 更新八卦符号颜色
+        function updateBaguaColors(color) {
+            trigramLines.forEach(line => {
+                line.style.backgroundColor = color;
+            });
+            baguaItems.forEach(item => {
+                if (item) item.style.color = color;
+            });
+        }
+        
+        // 更改颜色主题
+        function changeColor(colorName) {
+            if (!colorMap[colorName] || colorName === currentColor) return;
+            
+            // 更新当前颜色
+            currentColor = colorName;
+            const color = colorMap[colorName];
+            
+            // 更新CSS变量
+            document.documentElement.style.setProperty('--axis-color', color.axis);
+            document.documentElement.style.setProperty('--glow-color', color.glow);
+            document.documentElement.style.setProperty('--inner-glow', color.innerGlow);
+            document.documentElement.style.setProperty('--border-color', color.border);
+            document.documentElement.style.setProperty('--side-color-1', color.side1);
+            document.documentElement.style.setProperty('--side-color-2', color.side2);
+            document.documentElement.style.setProperty('--side-color-3', color.side3);
+            
+            // 更新坐标轴颜色
+            document.querySelector('.axis-z').style.backgroundColor = color.primary;
+            
+            // 更新底部阴影
+            document.querySelector('.base-shadow').style.background = `radial-gradient(ellipse at center, ${color.shadow} 0%, rgba(0,0,0,0) 70%)`;
+            
+            // 更新太极图发光效果
+            document.getElementById('taiji-glow').style.filter = `drop-shadow(0 0 15px ${color.innerGlow})`;
+            
+            // 更新鱼眼颜色
+            document.getElementById('yin-eye-dot').style.fill = color.primary;
+            document.getElementById('yang-eye-dot').style.fill = color.primary;
+            
+            // 更新底部圆环
+            document.getElementById('bottom-outer').style.border = `2px solid ${color.border}`;
+            document.getElementById('bottom-inner').style.border = `2px solid ${color.border}`;
+            
+            // 更新能量场
+            energyFields.forEach(field => {
+                field.style.border = color.energy;
+            });
+            
+            // 更新颜色按钮状态
+            colorButtons.forEach(btn => {
+                const btnColor = btn.getAttribute('data-color');
+                const checkIcon = btn.querySelector('i');
+                
+                if (btnColor === colorName) {
+                    btn.classList.add('border-2', `border-taiji-${colorName}`);
+                    btn.classList.remove('border-transparent', `hover:border-taiji-${colorName}/50`);
+                    checkIcon.classList.remove('opacity-0');
+                } else {
+                    btn.classList.remove('border-2', `border-taiji-${btnColor}`);
+                    btn.classList.add('border-transparent', `hover:border-taiji-${btnColor}/50`);
+                    checkIcon.classList.add('opacity-0');
+                }
+            });
+            
+            // 更新所有带颜色的元素
+            colorElements.forEach(el => {
+                if (el) {
+                    // 移除所有颜色类
+                    Object.keys(colorMap).forEach(c => {
+                        el.classList.remove(colorMap[c].class);
+                    });
+                    // 添加当前颜色类
+                    el.classList.add(color.class);
+                }
+            });
+            
+            // 更新控制按钮
+            updateControlButtonStyles(color);
+        }
+        
+        // 更新控制按钮样式
+        function updateControlButtonStyles(color) {
+            if (isRotating) {
+                rotateToggle.innerHTML = `
+                    <i class="fa fa-pause ${color.class} transition-colors duration-800"></i>
+                    <span>暂停</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">空格</kbd>
+                `;
+            } else {
+                rotateToggle.innerHTML = `
+                    <i class="fa fa-play ${color.class} transition-colors duration-800"></i>
+                    <span>旋转</span>
+                    <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">空格</kbd>
+                `;
+            }
+            
+            directionToggle.innerHTML = `
+                <i class="fa fa-rotate-${rotationDirection === 1 ? 'right' : 'left'} ${color.class} transition-colors duration-800"></i>
+                <span>方向</span>
+                <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">D</kbd>
+            `;
+            
+            themeToggle.innerHTML = `
+                <i class="fa fa-${body.classList.contains('dark') ? 'sun-o' : 'moon-o'} ${color.class} transition-colors duration-800"></i>
+                <span>${body.classList.contains('dark') ? '亮色' : '主题'}</span>
+                <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">T</kbd>
+            `;
+        }
+        
+        // 缩放功能
+        function zoomIn() {
+            currentScale = Math.min(currentScale + 0.1, 2.5); // 最大放大到2.5倍
+            applyTransformations();
+        }
+        
+        function zoomOut() {
+            currentScale = Math.max(currentScale - 0.1, 0.5); // 最小缩小到0.5倍
+            applyTransformations();
+        }
+        
+        function zoomReset() {
+            currentScale = 1; // 重置缩放
+            applyTransformations();
+        }
+        
+        // 重置视图
+        function resetViewFunc() {
+            if (isRotating) {
+                toggleRotation();
+            }
+            
+            // 重置旋转状态
+            currentRotation = { x: 25, y: 0, z: 0 };
+            rotationSpeed = 3;
+            rotationDirection = 1;
+            rotationMode = 'z';
+            currentScale = 1;
+            
+            // 更新控件
+            speedControl.value = 3;
+            tiltControl.value = 25;
+            
+            // 应用变换
+            applyTransformations();
+            setRotationMode('z');
+            
+            // 更新按钮状态
+            directionToggle.innerHTML = `
+                <i class="fa fa-rotate-right text-taiji-gold transition-colors duration-800"></i>
+                <span>方向</span>
+                <kbd class="ml-2 px-1.5 py-0.5 bg-gray-200 dark:bg-gray-600 text-xs rounded">D</kbd>
+            `;
+        }
+        
+        // 速度控制
+        function updateSpeed() {
+            rotationSpeed = parseInt(speedControl.value);
+        }
+        
+        // 鼠标拖拽旋转
+        function handleMouseDown(e) {
+            // 防止右键菜单干扰
+            if (e.button !== 0) return;
+            
+            isDragging = true;
+            startX = e.clientX;
+            startY = e.clientY;
+            dragStartRotation = { ...currentRotation };
+            rotationContainer.style.cursor = 'grabbing';
+            
+            // 拖拽时停止自动旋转
+            if (isRotating) {
+                toggleRotation();
+            }
+            
+            // 阻止事件冒泡和默认行为
+            e.stopPropagation();
+            e.preventDefault();
+        }
+        
+        function handleMouseMove(e) {
+            if (!isDragging) return;
+            
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            
+            // 自由旋转 - 同时影响Y轴和X轴
+            currentRotation.y = dragStartRotation.y + deltaX * 0.5;
+            currentRotation.x = dragStartRotation.x - deltaY * 0.5;
+            
+            // 限制X轴旋转角度，避免过度翻转
+            currentRotation.x = Math.max(5, Math.min(60, currentRotation.x));
+            
+            applyTransformations();
+            // 更新倾斜度滑块
+            tiltControl.value = currentRotation.x;
+        }
+        
+        function handleMouseUp() {
+            isDragging = false;
+            rotationContainer.style.cursor = 'grab';
+        }
+        
+        // 快捷键处理
+        function handleKeyDown(e) {
+            // 输入框聚焦时不响应快捷键
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+            
+            switch(e.key) {
+                case ' ': // 空格键控制旋转
+                    e.preventDefault();
+                    toggleRotation();
+                    break;
+                case 'd':
+                case 'D': // 切换方向
+                    toggleDirection();
+                    break;
+                case 't':
+                case 'T': // 切换主题
+                    toggleTheme();
+                    break;
+                case 'r':
+                case 'R': // 重置
+                    resetViewFunc();
+                    break;
+                case '+':
+                case '=': // 放大
+                    zoomIn();
+                    break;
+                case '-':
+                case '_': // 缩小
+                    zoomOut();
+                    break;
+                case '0': // 重置缩放
+                    zoomReset();
+                    break;
+                case '?': // 显示快捷键
+                    toggleShortcutModal();
+                    break;
+                case 'ArrowUp': // 调整倾斜度向上
+                    tiltUp();
+                    e.preventDefault();
+                    break;
+                case 'ArrowDown': // 调整倾斜度向下
+                    tiltDown();
+                    e.preventDefault();
+                    break;
+            }
+        }
+        
+        // 快捷键模态框
+        function toggleShortcutModal() {
+            const isVisible = shortcutModal.classList.contains('opacity-100');
+            
+            if (isVisible) {
+                shortcutModal.classList.remove('opacity-100');
+                shortcutModal.classList.add('opacity-0', 'pointer-events-none');
+                shortcutModal.querySelector('div').classList.remove('scale-100');
+                shortcutModal.querySelector('div').classList.add('scale-95');
+            } else {
+                shortcutModal.classList.remove('opacity-0', 'pointer-events-none');
+                shortcutModal.classList.add('opacity-100');
+                shortcutModal.querySelector('div').classList.remove('scale-95');
+                shortcutModal.querySelector('div').classList.add('scale-100');
+            }
+        }
+        
+        // 初始化颜色主题
+        function initColorTheme() {
+            const color = colorMap[currentColor];
+            
+            // 设置CSS变量
+            document.documentElement.style.setProperty('--axis-color', color.axis);
+            document.documentElement.style.setProperty('--glow-color', color.glow);
+            document.documentElement.style.setProperty('--inner-glow', color.innerGlow);
+            document.documentElement.style.setProperty('--border-color', color.border);
+            document.documentElement.style.setProperty('--side-color-1', color.side1);
+            document.documentElement.style.setProperty('--side-color-2', color.side2);
+            document.documentElement.style.setProperty('--side-color-3', color.side3);
+            
+            // 设置初始颜色
+            document.querySelector('.axis-z').style.backgroundColor = color.primary;
+            document.querySelector('.base-shadow').style.background = `radial-gradient(ellipse at center, ${color.shadow} 0%, rgba(0,0,0,0) 70%)`;
+            document.getElementById('taiji-glow').style.filter = `drop-shadow(0 0 15px ${color.innerGlow})`;
+            document.getElementById('yin-eye-dot').style.fill = color.primary;
+            document.getElementById('yang-eye-dot').style.fill = color.primary;
+            
+            // 设置底部圆环
+            document.getElementById('bottom-outer').style.border = `2px solid ${color.border}`;
+            document.getElementById('bottom-inner').style.border = `2px solid ${color.border}`;
+            
+            // 设置能量场
+            energyFields.forEach(field => {
+                field.style.border = color.energy;
+            });
+            
+            // 设置八卦线条颜色
+            updateBaguaColors('#000');
+        }
+        
+        // 事件监听
+        function setupEventListeners() {
+            if (rotateToggle) rotateToggle.addEventListener('click', toggleRotation);
+            if (directionToggle) directionToggle.addEventListener('click', toggleDirection);
+            if (themeToggle) themeToggle.addEventListener('click', toggleTheme);
+            if (resetView) resetView.addEventListener('click', resetViewFunc);
+            if (speedControl) speedControl.addEventListener('input', updateSpeed);
+            if (tiltControl) tiltControl.addEventListener('input', adjustTilt);
+            if (closeShortcut) closeShortcut.addEventListener('click', toggleShortcutModal);
+            if (shortcutButton) shortcutButton.addEventListener('click', toggleShortcutModal);
+            
+            // 倾斜度按钮
+            if (tiltButtons.up) tiltButtons.up.addEventListener('click', tiltUp);
+            if (tiltButtons.down) tiltButtons.down.addEventListener('click', tiltDown);
+            
+            // 缩放控制
+            if (zoomControls.in) zoomControls.in.addEventListener('click', zoomIn);
+            if (zoomControls.out) zoomControls.out.addEventListener('click', zoomOut);
+            if (zoomControls.reset) zoomControls.reset.addEventListener('click', zoomReset);
+            
+            // 旋转模式按钮
+            if (modeButtons.z) modeButtons.z.addEventListener('click', () => setRotationMode('z'));
+            if (modeButtons.x) modeButtons.x.addEventListener('click', () => setRotationMode('x'));
+            if (modeButtons.y) modeButtons.y.addEventListener('click', () => setRotationMode('y'));
+            if (modeButtons.compound) modeButtons.compound.addEventListener('click', () => setRotationMode('compound'));
+            
+            // 颜色选择按钮
+            colorButtons.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const color = btn.getAttribute('data-color');
+                    changeColor(color);
+                });
+            });
+            
+            // 鼠标拖拽事件
+            if (rotationContainer) {
+                rotationContainer.addEventListener('mousedown', handleMouseDown);
+                rotationContainer.addEventListener('contextmenu', e => e.preventDefault()); // 禁用右键菜单
+            }
+            
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            document.addEventListener('mouseleave', handleMouseUp);
+            
+            // 键盘事件
+            document.addEventListener('keydown', handleKeyDown);
+        }
+        
+        // 初始化
+        window.addEventListener('load', () => {
+            // 初始化颜色主题
+            initColorTheme();
+            
+            // 设置事件监听
+            setupEventListeners();
+            
+            // 初始化样式
+            if (rotationContainer) {
+                rotationContainer.style.cursor = 'grab';
+                applyTransformations();
+                
+                // 初始动画
+                rotationContainer.style.opacity = '0';
+                rotationContainer.style.transform = `rotateX(25deg) rotateY(0deg) rotateZ(0deg) scale(0.9)`;
+                
+                setTimeout(() => {
+                    rotationContainer.style.transition = 'opacity 1.2s ease, transform 1.2s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                    rotationContainer.style.opacity = '1';
+                    rotationContainer.style.transform = `rotateX(25deg) rotateY(0deg) rotateZ(0deg) scale(1)`;
+                }, 200);
+            }
+        });
+    </script>
+</body>
+</html>
