@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated 3D Function Plotter V1</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: sans-serif;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            z-index: 100; /* Ensure it's on top */
+            pointer-events: none; /* So it doesn't interfere with mouse controls */
+        }
+    </style>
+</head>
+<body>
+    <div id="info">Drawing function: z = sin(x) * cos(y)</div>
+
+    <!-- Import Three.js from CDN -->
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111); // Dark background
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 8, 8); // Position the camera
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Add OrbitControls for user interaction (rotate, pan, zoom)
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true; // Smooth camera movement
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x404040, 2); // Soft light
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // --- Axes Helper ---
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // --- Function Definition ---
+        // Define the mathematical function to plot: z = f(x, y)
+        function myFunction(x, y) {
+            // Example: A simple wave pattern
+            return Math.sin(x) * Math.cos(y);
+            // You can try other functions:
+            // return Math.sqrt(x*x + y*y); // Cone-like
+            // return Math.sin(Math.sqrt(x*x + y*y)); // Circular wave
+            // return x*x - y*y; // Saddle
+        }
+
+        // --- Grid Generation ---
+        const GRID_SIZE = 20; // Number of divisions along each axis
+        const GRID_RANGE = 5; // The range of x and y values [-GRID_RANGE, GRID_RANGE]
+
+        // Calculate all vertices upfront
+        const vertices = [];
+        for (let i = 0; i <= GRID_SIZE; i++) {
+            const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+            for (let j = 0; j <= GRID_SIZE; j++) {
+                const y = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                const z = myFunction(x, y);
+                vertices.push(new THREE.Vector3(x, y, z));
+            }
+        }
+
+        // --- Animation Setup ---
+        let currentIndex = 0;
+        const totalLines = GRID_SIZE * (GRID_SIZE + 1) * 2; // Lines in both X and Z directions
+        const group = new THREE.Group(); // Group to hold all animated lines
+        scene.add(group);
+
+        // Create empty Line objects for all potential lines
+        const lines = [];
+        const material = new THREE.LineBasicMaterial({ color: 0x00aaff });
+
+        // Create horizontal lines (along X)
+        for (let j = 0; j <= GRID_SIZE; j++) {
+            for (let i = 0; i < GRID_SIZE; i++) {
+                const geometry = new THREE.BufferGeometry();
+                const line = new THREE.Line(geometry, material.clone()); // Clone material for potential individual control later
+                line.visible = false; // Start invisible
+                lines.push(line);
+                group.add(line);
+            }
+        }
+        // Create vertical lines (along Y/Z)
+        for (let i = 0; i <= GRID_SIZE; i++) {
+            for (let j = 0; j < GRID_SIZE; j++) {
+                const geometry = new THREE.BufferGeometry();
+                const line = new THREE.Line(geometry, material.clone());
+                line.visible = false;
+                lines.push(line);
+                group.add(line);
+            }
+        }
+
+
+        // --- Animation Loop ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Update controls if damping is enabled
+            controls.update();
+
+            // --- Incremental Drawing Logic ---
+            if (currentIndex < totalLines) {
+                // Make the next line visible and set its geometry
+                const lineObject = lines[currentIndex];
+                lineObject.visible = true;
+
+                let startX, startZ, endX, endZ;
+                let baseVertexIndex;
+
+                if (currentIndex < GRID_SIZE * (GRID_SIZE + 1)) {
+                    // Horizontal lines (constant j)
+                    const lineInSet = currentIndex;
+                    const j = Math.floor(lineInSet / GRID_SIZE);
+                    const i = lineInSet % GRID_SIZE;
+                    baseVertexIndex = j * (GRID_SIZE + 1) + i;
+                    startX = vertices[baseVertexIndex].x;
+                    startZ = vertices[baseVertexIndex].z;
+                    endX = vertices[baseVertexIndex + 1].x;
+                    endZ = vertices[baseVertexIndex + 1].z;
+
+                    lineObject.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                        startX, vertices[baseVertexIndex].y, startZ,
+                        endX, vertices[baseVertexIndex + 1].y, endZ
+                    ], 3));
+
+                } else {
+                    // Vertical lines (constant i)
+                    const lineInSet = currentIndex - GRID_SIZE * (GRID_SIZE + 1);
+                    const i = Math.floor(lineInSet / GRID_SIZE);
+                    const j = lineInSet % GRID_SIZE;
+                    baseVertexIndex = j * (GRID_SIZE + 1) + i;
+                    const nextBaseVertexIndex = baseVertexIndex + (GRID_SIZE + 1);
+
+                    startX = vertices[baseVertexIndex].x;
+                    startZ = vertices[baseVertexIndex].z;
+                    endX = vertices[nextBaseVertexIndex].x;
+                    endZ = vertices[nextBaseVertexIndex].z;
+
+                    lineObject.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                        startX, vertices[baseVertexIndex].y, startZ,
+                        endX, vertices[nextBaseVertexIndex].y, endZ
+                    ], 3));
+                }
+
+
+                currentIndex++;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Start the animation loop
+        animate();
+
+    </script>
+</body>
+</html>
