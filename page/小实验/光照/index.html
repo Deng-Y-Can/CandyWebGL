@@ -1,2440 +1,1022 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebGL图元编辑器 - 带摄像机和原点控制</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        primary: '#3B82F6',
-                        secondary: '#10B981',
-                        accent: '#6366F1',
-                        dark: '#1E293B',
-                        light: '#F8FAFC'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                    },
-                }
-            }
+    <title>Interactive 2D Ray Optics Simulator 光照实验V1</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
         }
-    </script>
 
-    <style type="text/tailwindcss">
-        @layer utilities {
-            .content-auto {
-                content-visibility: auto;
-            }
-
-            .panel-shadow {
-                box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            }
-
-            .control-btn {
-                @apply px-3 py-2 rounded-md text-sm font-medium transition-all duration-200;
-            }
-
-            .control-btn-primary {
-                @apply bg-primary text-white hover:bg-primary/90;
-            }
-
-            .control-btn-secondary {
-                @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
-            }
-
-            .form-input {
-                @apply w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary/50;
-            }
-
-            .tool-panel {
-                @apply bg-white rounded-lg panel-shadow p-4 h-full overflow-auto;
-            }
-
-            .primitive-item {
-                @apply p-2 border rounded-md hover:bg-gray-50 transition-colors duration-200 cursor-pointer;
-            }
-
-            .primitive-item-selected {
-                @apply bg-primary/10 border-primary;
-            }
-
-            .primitive-item-hidden {
-                @apply opacity-60 bg-gray-50;
-            }
-
-            .color-picker-container {
-                @apply relative;
-            }
-
-            .color-picker {
-                @apply w-full h-10 cursor-pointer rounded-md overflow-hidden appearance-none p-0 border border-gray-300;
-            }
-
-                .color-picker::-webkit-color-swatch-wrapper {
-                    @apply p-0;
-                }
-
-                .color-picker::-webkit-color-swatch {
-                    @apply border-none;
-                }
-
-            .axis-label {
-                @apply absolute text-xs font-bold pointer-events-none;
-            }
+        #header {
+            background-color: #2d2d30;
+            padding: 10px 15px;
+            border-bottom: 1px solid #3c3c3c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
+
+        #title {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #toolbar {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #3a3d41;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+
+            button:hover {
+                background-color: #4b4e52;
+            }
+
+            button.active {
+                background-color: #094771;
+                border-color: #007acc;
+            }
+
+        #main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 250px;
+            background-color: #252526;
+            padding: 15px;
+            border-right: 1px solid #3c3c3c;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+            .control-group h3 {
+                margin-top: 0;
+                margin-bottom: 10px;
+                font-size: 1em;
+                color: #cccccc;
+            }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+            background-color: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #555;
+        }
+
+        #canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-color: #1e1e1e;
+        }
+
+        #simulationCanvas {
+            background-color: #121212;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            cursor: crosshair;
+        }
+
+        #status-bar {
+            background-color: #007acc;
+            color: white;
+            padding: 5px 10px;
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        .shape-info {
+            background-color: #2d2d30;
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 3px;
+            border: 1px solid #3c3c3c;
+        }
+
+            .shape-info h4 {
+                margin: 0 0 5px 0;
+                font-size: 0.95em;
+            }
+
+            .shape-info p {
+                margin: 2px 0;
+                font-size: 0.85em;
+            }
+
+        #instructions {
+            font-size: 0.8em;
+            color: #aaaaaa;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+            #instructions ul {
+                padding-left: 15px;
+                margin: 5px 0;
+            }
+
+            #instructions li {
+                margin-bottom: 3px;
+            }
     </style>
 </head>
-<body class="bg-gray-100 font-sans text-dark">
-    <div class="flex flex-col h-screen">
-        <!-- 顶部导航 -->
-        <header class="bg-white border-b border-gray-200 py-3 px-4 shadow-sm">
-            <div class="container mx-auto flex justify-between items-center">
-                <div class="flex items-center space-x-2">
-                    <i class="fa fa-cube text-primary text-2xl"></i>
-                    <h1 class="text-xl font-bold">WebGL图元编辑器</h1>
-                </div>
-                <div class="flex space-x-3">
-                    <label for="importJson" class="control-btn control-btn-secondary cursor-pointer flex items-center">
-                        <i class="fa fa-upload mr-1"></i> 导入JSON
-                    </label>
-                    <input type="file" id="importJson" accept=".json" class="hidden">
+<body>
 
-                    <label for="importExcel" class="control-btn control-btn-secondary cursor-pointer flex items-center">
-                        <i class="fa fa-file-excel-o mr-1"></i> 导入Excel
-                    </label>
-                    <input type="file" id="importExcel" accept=".xlsx,.xls" class="hidden">
+    <div id="header">
+        <div id="title">Interactive 2D Ray Optics Simulator</div>
+        <div id="toolbar">
+            <button id="modeLightBtn" class="active">Place Light Source</button>
+            <button id="modeCircleBtn">Place Circle</button>
+            <button id="modeLensBtn">Place Lens</button>
+            <button id="modeMirrorBtn">Place Mirror</button>
+            <button id="clearBtn">Clear All</button>
+            <button id="simulateBtn">Simulate Rays</button>
+        </div>
+    </div>
 
-                    <button id="exportJson" class="control-btn control-btn-secondary flex items-center">
-                        <i class="fa fa-download mr-1"></i> 导出JSON
-                    </button>
-
-                    <button id="exportExcel" class="control-btn control-btn-secondary flex items-center">
-                        <i class="fa fa-file-excel-o mr-1"></i> 导出Excel
-                    </button>
-
-                    <button id="clearAll" class="control-btn bg-red-500 text-white hover:bg-red-600 flex items-center">
-                        <i class="fa fa-trash mr-1"></i> 清空
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <!-- 主内容区 -->
-        <main class="flex flex-1 overflow-hidden">
-            <!-- 左侧工具栏 -->
-            <div class="w-80 border-r border-gray-200 flex-shrink-0">
-                <div class="tool-panel">
-                    <h2 class="text-lg font-semibold mb-4 pb-2 border-b">添加/编辑图元</h2>
-
-                    <!-- 图元类型选择器 -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">图元类型</label>
-                        <select id="primitiveType" class="form-input">
-                            <option value="point">点</option>
-                            <option value="line">线</option>
-                            <option value="triangle">三角形</option>
-                            <option value="rectangle">矩形</option>
-                            <option value="circle">圆形</option>
-                        </select>
-                    </div>
-
-                    <!-- 粗细设置 -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">
-                            <span id="thicknessLabel">点大小</span>
-                        </label>
-                        <input type="number" id="thickness" min="1" step="0.5" value="5" class="form-input">
-                    </div>
-
-                    <!-- 坐标输入区域 -->
-                    <div id="coordinatesContainer" class="space-y-3 mb-4">
-                        <!-- 点坐标 -->
-                        <div id="pointCoordinates">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">坐标 (x, y, z)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="x" step="0.1" value="0" class="form-input">
-                                    <input type="number" id="y" step="0.1" value="0" class="form-input">
-                                    <input type="number" id="z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 线坐标 (默认隐藏) -->
-                        <div id="lineCoordinates" class="hidden">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">起点 (x1, y1, z1)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="x1" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="y1" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="z1" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">终点 (x2, y2, z2)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="x2" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="y2" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="z2" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 三角形坐标 (默认隐藏) -->
-                        <div id="triangleCoordinates" class="hidden">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">顶点1 (x1, y1, z1)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="t1x" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="t1y" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="t1z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">顶点2 (x2, y2, z2)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="t2x" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="t2y" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="t2z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">顶点3 (x3, y3, z3)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="t3x" step="0.1" value="0" class="form-input">
-                                    <input type="number" id="t3y" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="t3z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 矩形坐标 (默认隐藏) -->
-                        <div id="rectangleCoordinates" class="hidden">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">左上角 (x1, y1, z1)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="r1x" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="r1y" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="r1z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">右下角 (x2, y2, z2)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="r2x" step="0.1" value="0.5" class="form-input">
-                                    <input type="number" id="r2y" step="0.1" value="-0.5" class="form-input">
-                                    <input type="number" id="r2z" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 圆形参数 (默认隐藏) -->
-                        <div id="circleCoordinates" class="hidden">
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">圆心 (cx, cy, cz)</label>
-                                <div class="grid grid-cols-3 gap-2">
-                                    <input type="number" id="cx" step="0.1" value="0" class="form-input">
-                                    <input type="number" id="cy" step="0.1" value="0" class="form-input">
-                                    <input type="number" id="cz" step="0.1" value="0" class="form-input">
-                                </div>
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">半径</label>
-                                <input type="number" id="radius" step="0.1" value="0.5" class="form-input">
-                            </div>
-                            <div class="space-y-2">
-                                <label class="block text-sm font-medium text-gray-700">分段数</label>
-                                <input type="number" id="segments" min="3" value="32" class="form-input">
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 颜色选择 -->
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">颜色</label>
-                        <div class="color-picker-container">
-                            <input type="color" id="colorPicker" value="#ff0000" class="color-picker">
-                        </div>
-                        <div class="flex text-xs text-gray-500 mt-1">
-                            <span id="colorValue" class="w-full text-center">RGB: 255, 0, 0</span>
-                        </div>
-                    </div>
-
-                    <div class="flex space-x-2 mb-6">
-                        <button id="addPrimitive" class="flex-1 control-btn control-btn-primary flex items-center justify-center">
-                            <i class="fa fa-plus mr-1"></i> 添加
-                        </button>
-                        <button id="updatePrimitive" class="flex-1 control-btn bg-amber-500 text-white hover:bg-amber-600 flex items-center justify-center" disabled>
-                            <i class="fa fa-pencil mr-1"></i> 更新
-                        </button>
-                    </div>
-
-                    <!-- 模型变换 -->
-                    <h2 class="text-lg font-semibold mb-4 pb-2 border-b">模型变换</h2>
-
-                    <div class="space-y-3 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">旋转 (度)</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="rotateX" step="15" value="0" class="form-input">
-                                <input type="number" id="rotateY" step="15" value="0" class="form-input">
-                                <input type="number" id="rotateZ" step="15" value="0" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">平移</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="translateX" step="0.1" value="0" class="form-input">
-                                <input type="number" id="translateY" step="0.1" value="0" class="form-input">
-                                <input type="number" id="translateZ" step="0.1" value="0" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">缩放</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="scaleX" step="0.1" value="1" min="0.1" class="form-input">
-                                <input type="number" id="scaleY" step="0.1" value="1" min="0.1" class="form-input">
-                                <input type="number" id="scaleZ" step="0.1" value="1" min="0.1" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex space-x-2 mb-6">
-                        <button id="applyTransform" class="flex-1 control-btn control-btn-primary flex items-center justify-center">
-                            <i class="fa fa-refresh mr-1"></i> 应用变换
-                        </button>
-                        <button id="resetTransform" class="flex-1 control-btn control-btn-secondary flex items-center justify-center">
-                            <i class="fa fa-undo mr-1"></i> 重置
-                        </button>
-                    </div>
-
-                    <!-- 原点坐标调整 -->
-                    <h2 class="text-lg font-semibold mb-4 pb-2 border-b">原点坐标</h2>
-
-                    <div class="space-y-3 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">世界原点偏移</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="originX" step="0.1" value="0" class="form-input">
-                                <input type="number" id="originY" step="0.1" value="0" class="form-input">
-                                <input type="number" id="originZ" step="0.1" value="0" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="flex space-x-2 mb-6">
-                        <button id="applyOrigin" class="flex-1 control-btn control-btn-primary flex items-center justify-center">
-                            <i class="fa fa-check mr-1"></i> 应用原点
-                        </button>
-                        <button id="resetOrigin" class="flex-1 control-btn control-btn-secondary flex items-center justify-center">
-                            <i class="fa fa-home mr-1"></i> 重置原点
-                        </button>
-                    </div>
-
-                    <!-- 摄像机控制 -->
-                    <h2 class="text-lg font-semibold mb-4 pb-2 border-b">摄像机设置</h2>
-
-                    <div class="space-y-3 mb-4">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">摄像机位置</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="cameraX" step="0.1" value="0" class="form-input">
-                                <input type="number" id="cameraY" step="0.1" value="0" class="form-input">
-                                <input type="number" id="cameraZ" step="0.1" value="5" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">目标点</label>
-                            <div class="grid grid-cols-3 gap-2">
-                                <input type="number" id="targetX" step="0.1" value="0" class="form-input">
-                                <input type="number" id="targetY" step="0.1" value="0" class="form-input">
-                                <input type="number" id="targetZ" step="0.1" value="0" class="form-input">
-                            </div>
-                            <div class="flex text-xs text-gray-500 mt-1">
-                                <span class="w-1/3 text-center">X</span>
-                                <span class="w-1/3 text-center">Y</span>
-                                <span class="w-1/3 text-center">Z</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">视野角度 (度)</label>
-                            <input type="number" id="fov" min="10" max="170" step="1" value="45" class="form-input">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">近平面距离</label>
-                            <input type="number" id="nearPlane" min="0.1" step="0.1" value="0.1" class="form-input">
-                        </div>
-
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">远平面距离</label>
-                            <input type="number" id="farPlane" min="1" step="1" value="100" class="form-input">
-                        </div>
-                    </div>
-
-                    <div class="flex space-x-2">
-                        <button id="applyCamera" class="flex-1 control-btn control-btn-primary flex items-center justify-center">
-                            <i class="fa fa-camera mr-1"></i> 应用摄像机
-                        </button>
-                        <button id="resetCamera" class="flex-1 control-btn control-btn-secondary flex items-center justify-center">
-                            <i class="fa fa-refresh mr-1"></i> 重置摄像机
-                        </button>
-                    </div>
+    <div id="main-content">
+        <div id="sidebar">
+            <div class="control-group">
+                <h3>Current Tool Settings</h3>
+                <div id="toolSettings">
+                    <!-- Settings will be dynamically inserted here -->
                 </div>
             </div>
 
-            <!-- 中间画布区域 -->
-            <div class="flex-1 relative bg-gray-900">
-                <canvas id="glCanvas" class="w-full h-full"></canvas>
+            <div class="control-group">
+                <h3>Material Properties</h3>
+                <label for="materialType">Material Type:</label>
+                <select id="materialType">
+                    <option value="glass">Glass (n=1.5)</option>
+                    <option value="water">Water (n=1.33)</option>
+                    <option value="diamond">Diamond (n=2.42)</option>
+                    <option value="custom">Custom</option>
+                </select>
 
-                <!-- 坐标指示器 (显示当前视图状态) -->
-                <div class="absolute bottom-4 left-4 bg-black/70 text-white px-3 py-2 rounded-md text-sm backdrop-blur-sm">
-                    <p>摄像机: X: <span id="cameraPosX">0</span>, Y: <span id="cameraPosY">0</span>, Z: <span id="cameraPosZ">5</span></p>
-                    <p>原点: X: <span id="originPosX">0</span>, Y: <span id="originPosY">0</span>, Z: <span id="originPosZ">0</span></p>
-                    <p>缩放: <span id="scaleValue">1.0</span></p>
-                </div>
+                <label for="refractiveIndex">Refractive Index (n):</label>
+                <input type="number" id="refractiveIndex" min="1.0" max="5.0" step="0.01" value="1.5">
 
-                <div class="absolute top-4 left-4 bg-black/70 text-white px-3 py-2 rounded-md text-sm backdrop-blur-sm">
-                    <p>按 <span class="font-bold">H</span> 显示/隐藏帮助</p>
-                </div>
+                <label for="reflectivity">Reflectivity:</label>
+                <input type="range" id="reflectivity" min="0" max="1" step="0.05" value="0.05">
 
-                <!-- 帮助提示 (默认隐藏) -->
-                <div id="helpOverlay" class="absolute inset-0 bg-black/80 text-white p-6 hidden backdrop-blur-sm">
-                    <div class="max-w-2xl mx-auto">
-                        <h2 class="text-2xl font-bold mb-4">使用帮助</h2>
-                        <div class="space-y-4">
-                            <div>
-                                <h3 class="text-lg font-semibold mb-2">图元操作</h3>
-                                <ul class="list-disc pl-5 space-y-1">
-                                    <li>选择图元类型，设置参数，点击"添加"按钮创建新图元</li>
-                                    <li>在图元列表中选择图元进行编辑、删除或显示/隐藏</li>
-                                    <li>编辑参数后点击"更新"按钮保存修改</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold mb-2">视图控制</h3>
-                                <ul class="list-disc pl-5 space-y-1">
-                                    <li>鼠标拖动：旋转视图</li>
-                                    <li>Shift+鼠标拖动：平移视图</li>
-                                    <li>鼠标滚轮：缩放视图</li>
-                                    <li>按 R 键：重置视图</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold mb-2">模型与摄像机</h3>
-                                <ul class="list-disc pl-5 space-y-1">
-                                    <li>使用模型变换控制所有图元的旋转、平移和缩放</li>
-                                    <li>通过摄像机设置调整观察视角、位置和目标点</li>
-                                    <li>可自定义世界坐标系原点位置</li>
-                                </ul>
-                            </div>
-                            <div>
-                                <h3 class="text-lg font-semibold mb-2">数据导入导出</h3>
-                                <ul class="list-disc pl-5 space-y-1">
-                                    <li>支持JSON和Excel格式的导入导出</li>
-                                    <li>点击"清空"按钮删除所有图元</li>
-                                </ul>
-                            </div>
-                        </div>
-                        <button id="closeHelp" class="mt-6 control-btn control-btn-primary">
-                            关闭帮助
-                        </button>
-                    </div>
+                <label for="transparency">Transparency:</label>
+                <input type="range" id="transparency" min="0" max="1" step="0.05" value="0.95">
+
+                <label for="absorptionR">Absorption (R):</label>
+                <input type="range" id="absorptionR" min="0" max="1" step="0.01" value="0.01">
+                <label for="absorptionG">Absorption (G):</label>
+                <input type="range" id="absorptionG" min="0" max="1" step="0.01" value="0.01">
+                <label for="absorptionB">Absorption (B):</label>
+                <input type="range" id="absorptionB" min="0" max="1" step="0.01" value="0.01">
+            </div>
+
+            <div class="control-group">
+                <h3>Simulation Settings</h3>
+                <label for="maxRayDepth">Max Ray Depth:</label>
+                <input type="number" id="maxRayDepth" min="1" max="10" step="1" value="5">
+
+                <label for="numRays">Number of Rays per Source:</label>
+                <input type="number" id="numRays" min="1" max="360" step="1" value="36">
+            </div>
+
+            <div class="control-group">
+                <h3>Scene Objects</h3>
+                <div id="sceneObjectsList">
+                    <!-- Object list will be populated here -->
+                    <p>No objects placed yet.</p>
                 </div>
             </div>
 
-            <!-- 右侧图元列表 -->
-            <div class="w-80 border-l border-gray-200 flex-shrink-0">
-                <div class="tool-panel">
-                    <h2 class="text-lg font-semibold mb-4 pb-2 border-b flex justify-between items-center">
-                        <span>图元列表</span>
-                        <span id="primitiveCount" class="text-sm bg-gray-100 px-2 py-1 rounded">0</span>
-                    </h2>
-
-                    <div id="primitivesList" class="space-y-2 max-h-[calc(100vh-16rem)] overflow-y-auto">
-                        <!-- 图元列表将通过JavaScript动态生成 -->
-                        <div class="text-center text-gray-500 py-8">
-                            <i class="fa fa-cube text-4xl mb-2 opacity-30"></i>
-                            <p>尚未添加图元</p>
-                        </div>
-                    </div>
-                </div>
+            <div id="instructions">
+                <h3>Instructions</h3>
+                <ul>
+                    <li><strong>Select a tool</strong> from the toolbar.</li>
+                    <li><strong>Click and drag</strong> on the canvas to place an object.</li>
+                    <li>For lenses/mirrors, <strong>click once</strong> for start point, then <strong>click again</strong> for end point.</li>
+                    <li>Adjust <strong>Material Properties</strong> before placing a shape.</li>
+                    <li>Click <strong>Simulate Rays</strong> to see the light paths.</li>
+                    <li>Use <strong>Clear All</strong> to reset the scene.</li>
+                </ul>
             </div>
-        </main>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="simulationCanvas" width="800" height="600"></canvas>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        Ready. Select a tool and start placing objects.
     </div>
 
     <script>
-        // 数学工具类 - 提供矩阵运算和辅助函数
-        class MathUtils {
-            // 弧度转换为角度
-            static toRadians(degrees) {
-                return degrees * Math.PI / 180;
-            }
-
-            // 角度转换为弧度
-            static toDegrees(radians) {
-                return radians * 180 / Math.PI;
-            }
-
-            // 创建4x4单位矩阵
-            static createIdentityMatrix() {
-                return new Float32Array([
-                    1, 0, 0, 0,
-                    0, 1, 0, 0,
-                    0, 0, 1, 0,
-                    0, 0, 0, 1
-                ]);
-            }
-
-            // 矩阵乘法
-            static multiplyMatrices(a, b) {
-                var result = new Float32Array(16);
-
-                for (var i = 0; i < 4; i++) {
-                    for (var j = 0; j < 4; j++) {
-                        result[i * 4 + j] =
-                            a[i * 4 + 0] * b[0 * 4 + j] +
-                            a[i * 4 + 1] * b[1 * 4 + j] +
-                            a[i * 4 + 2] * b[2 * 4 + j] +
-                            a[i * 4 + 3] * b[3 * 4 + j];
-                    }
-                }
-
-                return result;
-            }
-
-            // 创建旋转矩阵
-            static createRotationMatrix(xDeg, yDeg, zDeg) {
-                var x = this.toRadians(xDeg);
-                var y = this.toRadians(yDeg);
-                var z = this.toRadians(zDeg);
-
-                // X轴旋转
-                var rx = new Float32Array([
-                    1, 0, 0, 0,
-                    0, Math.cos(x), -Math.sin(x), 0,
-                    0, Math.sin(x), Math.cos(x), 0,
-                    0, 0, 0, 1
-                ]);
-
-                // Y轴旋转
-                var ry = new Float32Array([
-                    Math.cos(y), 0, Math.sin(y), 0,
-                    0, 1, 0, 0,
-                    -Math.sin(y), 0, Math.cos(y), 0,
-                    0, 0, 0, 1
-                ]);
-
-                // Z轴旋转
-                var rz = new Float32Array([
-                    Math.cos(z), -Math.sin(z), 0, 0,
-                    Math.sin(z), Math.cos(z), 0, 0,
-                    0, 0, 1, 0,
-                    0, 0, 0, 1
-                ]);
-
-                // 先绕z轴，再绕x轴，最后绕y轴
-                var rzy = this.multiplyMatrices(rz, ry);
-                return this.multiplyMatrices(rzy, rx);
-            }
-
-            // 创建平移矩阵
-            static createTranslationMatrix(x, y, z) {
-                return new Float32Array([
-                    1, 0, 0, x,
-                    0, 1, 0, y,
-                    0, 0, 1, z,
-                    0, 0, 0, 1
-                ]);
-            }
-
-            // 创建缩放矩阵
-            static createScaleMatrix(x, y, z) {
-                return new Float32Array([
-                    x, 0, 0, 0,
-                    0, y, 0, 0,
-                    0, 0, z, 0,
-                    0, 0, 0, 1
-                ]);
-            }
-
-            // 创建透视投影矩阵
-            static createPerspectiveMatrix(fov, aspect, near, far) {
-                var f = 1.0 / Math.tan(this.toRadians(fov) / 2);
-                var rangeInv = 1.0 / (near - far);
-
-                return new Float32Array([
-                    f / aspect, 0, 0, 0,
-                    0, f, 0, 0,
-                    0, 0, (near + far) * rangeInv, -1,
-                    0, 0, near * far * 2 * rangeInv, 0
-                ]);
-            }
-
-            // 创建LookAt矩阵（摄像机视图矩阵）
-            static createLookAtMatrix(eyeX, eyeY, eyeZ, targetX, targetY, targetZ, upX, upY, upZ) {
-                // 计算摄像机方向向量
-                var fx = targetX - eyeX;
-                var fy = targetY - eyeY;
-                var fz = targetZ - eyeZ;
-
-                // 归一化方向向量
-                var fLength = Math.sqrt(fx * fx + fy * fy + fz * fz);
-                fx /= fLength;
-                fy /= fLength;
-                fz /= fLength;
-
-                // 计算右侧向量
-                var sx = fy * upZ - fz * upY;
-                var sy = fz * upX - fx * upZ;
-                var sz = fx * upY - fy * upX;
-
-                // 归一化右侧向量
-                var sLength = Math.sqrt(sx * sx + sy * sy + sz * sz);
-                sx /= sLength;
-                sy /= sLength;
-                sz /= sLength;
-
-                // 计算上方向向量
-                var ux = sy * fz - sz * fy;
-                var uy = sz * fx - sx * fz;
-                var uz = sx * fy - sy * fx;
-
-                // 创建视图矩阵
-                return new Float32Array([
-                    sx, ux, -fx, 0,
-                    sy, uy, -fy, 0,
-                    sz, uz, -fz, 0,
-                    -(sx * eyeX + sy * eyeY + sz * eyeZ),
-                    -(ux * eyeX + uy * eyeY + uz * eyeZ),
-                    (fx * eyeX + fy * eyeY + fz * eyeZ),
-                    1
-                ]);
-            }
-
-            // 向量减法
-            static subtractVectors(a, b) {
-                return [
-                    a[0] - b[0],
-                    a[1] - b[1],
-                    a[2] - b[2]
-                ];
-            }
-
-            // 向量点积
-            static dotProduct(a, b) {
-                return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-            }
-
-            // 向量叉积
-            static crossProduct(a, b) {
-                return [
-                    a[1] * b[2] - a[2] * b[1],
-                    a[2] * b[0] - a[0] * b[2],
-                    a[0] * b[1] - a[1] * b[0]
-                ];
-            }
-
-            // 向量归一化
-            static normalizeVector(v) {
-                var length = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-                return [
-                    v[0] / length,
-                    v[1] / length,
-                    v[2] / length
-                ];
-            }
+        // --- Utility Functions ---
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
         }
 
-        // 图元管理类 - 负责管理所有图元数据和场景设置
-        class SceneManager {
-            constructor() {
-                this.primitives = [];
-                this.selectedId = null;
+        function vec2(x, y) {
+            return { x: x, y: y };
+        }
 
-                // 模型变换
-                this.transform = {
-                    rotateX: 0,
-                    rotateY: 0,
-                    rotateZ: 0,
-                    translateX: 0,
-                    translateY: 0,
-                    translateZ: 0,
-                    scaleX: 1,
-                    scaleY: 1,
-                    scaleZ: 1
-                };
+        function vec2Add(a, b) {
+            return vec2(a.x + b.x, a.y + b.y);
+        }
 
-                // 世界原点设置
-                this.origin = {
-                    x: 0,
-                    y: 0,
-                    z: 0
-                };
+        function vec2Subtract(a, b) {
+            return vec2(a.x - b.x, a.y - b.y);
+        }
 
-                // 摄像机设置
-                this.camera = {
-                    x: 0,
-                    y: 0,
-                    z: 5,
-                    targetX: 0,
-                    targetY: 0,
-                    targetZ: 0,
-                    fov: 45,
-                    near: 0.1,
-                    far: 100
-                };
+        function vec2Scale(v, s) {
+            return vec2(v.x * s, v.y * s);
+        }
 
-                // 生成唯一ID
-                this.generateId = function () {
-                    return Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
-                };
+        function vec2Dot(a, b) {
+            return a.x * b.x + a.y * b.y;
+        }
+
+        function vec2Length(v) {
+            return Math.sqrt(vec2Dot(v, v));
+        }
+
+        function vec2Normalize(v) {
+            const len = vec2Length(v);
+            if (len > 1e-10) {
+                return vec2Scale(v, 1.0 / len);
             }
+            return vec2(1, 0); // Avoid division by zero
+        }
 
-            // 添加新图元
-            addPrimitive(type, data) {
-                var newPrimitive = {
-                    id: this.generateId(),
-                    type: type,
-                    visible: true,
-                    data: {
-                        ...data,
-                        thickness: parseFloat(data.thickness || 1)
-                    }
-                };
+        function vec2Rotate(v, angleRad) {
+            const cos = Math.cos(angleRad);
+            const sin = Math.sin(angleRad);
+            return vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos);
+        }
 
-                this.primitives.push(newPrimitive);
-                this.selectedId = newPrimitive.id;
-                this.updateListDisplay();
-                return newPrimitive;
-            }
+        function vec2Distance(a, b) {
+            return vec2Length(vec2Subtract(a, b));
+        }
 
-            // 更新图元
-            updatePrimitive(id, data) {
-                var index = this.primitives.findIndex(function (p) { return p.id === id; });
-                if (index !== -1) {
-                    this.primitives[index].data = {
-                        ...this.primitives[index].data,
-                        ...data,
-                        thickness: data.thickness ? parseFloat(data.thickness) : this.primitives[index].data.thickness
-                    };
-                    this.updateListDisplay();
-                    return this.primitives[index];
-                }
-                return null;
-            }
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
 
-            // 删除图元
-            deletePrimitive(id) {
-                this.primitives = this.primitives.filter(function (p) { return p.id !== id; });
-                if (this.selectedId === id) {
-                    this.selectedId = this.primitives.length > 0 ? this.primitives[0].id : null;
-                }
-                this.updateListDisplay();
-            }
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 255,
+                g: parseInt(result[2], 16) / 255,
+                b: parseInt(result[3], 16) / 255
+            } : { r: 1, g: 1, b: 1 };
+        }
 
-            // 切换图元显示/隐藏状态
-            togglePrimitiveVisibility(id) {
-                var primitive = this.getPrimitive(id);
-                if (primitive) {
-                    primitive.visible = !primitive.visible;
-                    this.updateListDisplay();
-                    return primitive.visible;
-                }
-                return false;
-            }
+        // --- Core Simulation Logic ---
 
-            // 清空所有图元
-            clearAll() {
-                this.primitives = [];
-                this.selectedId = null;
-                this.updateListDisplay();
-            }
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusBar = document.getElementById('status-bar');
+        const sceneObjectsList = document.getElementById('sceneObjectsList');
 
-            // 选择图元
-            selectPrimitive(id) {
-                this.selectedId = id;
-                this.updateListDisplay();
-                return this.getPrimitive(id);
-            }
+        let currentMode = 'light'; // 'light', 'circle', 'lens', 'mirror'
+        let isPlacingObject = false;
+        let placementStartPoint = null;
+        let tempPreviewObject = null;
 
-            // 获取当前选中的图元
-            getSelectedPrimitive() {
-                return this.selectedId ? this.getPrimitive(this.selectedId) : null;
-            }
+        const scene = {
+            lights: [],
+            shapes: []
+        };
 
-            // 获取指定ID的图元
-            getPrimitive(id) {
-                return this.primitives.find(function (p) { return p.id === id; }) || null;
-            }
+        const defaultMaterials = {
+            glass: { n: 1.5, reflectivity: 0.05, transparency: 0.95, absorption: { r: 0.01, g: 0.01, b: 0.01 } },
+            water: { n: 1.33, reflectivity: 0.02, transparency: 0.98, absorption: { r: 0.005, g: 0.005, b: 0.005 } },
+            diamond: { n: 2.42, reflectivity: 0.1, transparency: 0.9, absorption: { r: 0.02, g: 0.02, b: 0.02 } },
+            custom: { n: 1.5, reflectivity: 0.05, transparency: 0.95, absorption: { r: 0.01, g: 0.01, b: 0.01 } }
+        };
 
-            // 获取所有图元
-            getAllPrimitives() {
-                return [...this.primitives];
-            }
+        // --- UI Interaction ---
 
-            // 获取可见的图元
-            getVisiblePrimitives() {
-                return this.primitives.filter(function (p) { return p.visible; });
-            }
+        document.getElementById('modeLightBtn').addEventListener('click', () => setMode('light'));
+        document.getElementById('modeCircleBtn').addEventListener('click', () => setMode('circle'));
+        document.getElementById('modeLensBtn').addEventListener('click', () => setMode('lens'));
+        document.getElementById('modeMirrorBtn').addEventListener('click', () => setMode('mirror'));
+        document.getElementById('clearBtn').addEventListener('click', clearScene);
+        document.getElementById('simulateBtn').addEventListener('click', simulateRays);
 
-            // 获取图元数量
-            getCount() {
-                return this.primitives.length;
-            }
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('#toolbar button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`mode${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`).classList.add('active');
+            updateToolSettingsUI(); // Update settings panel when mode changes
+            statusBar.textContent = `Mode: ${mode}. ${mode === 'light' ? 'Click to place a light source.' : 'Click and drag to place a shape.'}`;
+            isPlacingObject = false;
+            placementStartPoint = null;
+            tempPreviewObject = null;
+            redraw();
+        }
 
-            // 更新图元列表显示
-            updateListDisplay() {
-                var listElement = document.getElementById('primitivesList');
-                var countElement = document.getElementById('primitiveCount');
+        function updateToolSettingsUI() {
+            const settingsDiv = document.getElementById('toolSettings');
+            settingsDiv.innerHTML = ''; // Clear previous settings
 
-                countElement.textContent = this.getCount();
-
-                if (this.getCount() === 0) {
-                    listElement.innerHTML = `
-                            <div class="text-center text-gray-500 py-8">
-                                <i class="fa fa-cube text-4xl mb-2 opacity-30"></i>
-                                <p>尚未添加图元</p>
-                            </div>
+            if (currentMode === 'light') {
+                settingsDiv.innerHTML += `
+                            <label for="lightIntensity">Light Intensity:</label>
+                            <input type="range" id="lightIntensity" min="0.1" max="2" step="0.1" value="1">
                         `;
-                    return;
-                }
-
-                listElement.innerHTML = this.primitives.map(function (primitive) {
-                    var isSelected = this.selectedId === primitive.id;
-                    var isVisible = primitive.visible;
-                    var color = primitive.data.color || { r: 255, g: 0, b: 0, a: 255 };
-
-                    // 根据图元类型获取显示名称
-                    var typeNames = {
-                        'point': '点',
-                        'line': '线',
-                        'triangle': '三角形',
-                        'rectangle': '矩形',
-                        'circle': '圆形'
-                    };
-
-                    // 显示/隐藏按钮图标
-                    var visibilityIcon = isVisible ?
-                        '<i class="fa fa-eye"></i>' :
-                        '<i class="fa fa-eye-slash"></i>';
-
-                    return `
-                            <div class="primitive-item ${isSelected ? 'primitive-item-selected' : ''} ${!isVisible ? 'primitive-item-hidden' : ''}" data-id="${primitive.id}">
-                                <div class="flex justify-between items-center">
-                                    <div class="flex items-center">
-                                        <div class="w-3 h-3 rounded-full mr-2" style="background-color: rgba(${color.r}, ${color.g}, ${color.b}, ${color.a / 255})"></div>
-                                        <span>${typeNames[primitive.type]}</span>
-                                    </div>
-                                    <div class="text-xs text-gray-500">
-                                        粗细: ${primitive.data.thickness}
-                                    </div>
-                                </div>
-                                <div class="flex justify-end mt-1 space-x-1">
-                                    <button class="visibility-btn text-xs text-gray-500 hover:text-primary" data-id="${primitive.id}">
-                                        ${visibilityIcon}
-                                    </button>
-                                    <button class="edit-btn text-xs text-blue-500 hover:text-blue-700" data-id="${primitive.id}">
-                                        <i class="fa fa-pencil"></i>
-                                    </button>
-                                    <button class="delete-btn text-xs text-red-500 hover:text-red-700" data-id="${primitive.id}">
-                                        <i class="fa fa-trash"></i>
-                                    </button>
-                                </div>
-                            </div>
+            } else if (currentMode === 'circle') {
+                settingsDiv.innerHTML += `
+                            <label for="circleRadius">Circle Radius:</label>
+                            <input type="range" id="circleRadius" min="10" max="100" step="1" value="30">
                         `;
-                }.bind(this)).join('');
-
-                // 添加事件监听
-                document.querySelectorAll('.primitive-item').forEach(function (item) {
-                    item.addEventListener('click', function (e) {
-                        // 如果点击的是按钮，不触发选择事件
-                        if (e.target.closest('.visibility-btn') ||
-                            e.target.closest('.edit-btn') ||
-                            e.target.closest('.delete-btn')) {
-                            return;
-                        }
-                        this.selectPrimitive(item.dataset.id);
-                        this.loadSelectedToForm();
-                    }.bind(this));
-                }.bind(this));
-
-                // 显示/隐藏按钮事件
-                document.querySelectorAll('.visibility-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        this.togglePrimitiveVisibility(btn.dataset.id);
-                    }.bind(this));
-                }.bind(this));
-
-                document.querySelectorAll('.edit-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        this.selectPrimitive(btn.dataset.id);
-                        this.loadSelectedToForm();
-                    }.bind(this));
-                }.bind(this));
-
-                document.querySelectorAll('.delete-btn').forEach(function (btn) {
-                    btn.addEventListener('click', function (e) {
-                        e.stopPropagation();
-                        if (confirm('确定要删除这个图元吗？')) {
-                            this.deletePrimitive(btn.dataset.id);
-                            document.getElementById('updatePrimitive').disabled = true;
-                        }
-                    }.bind(this));
-                }.bind(this));
-            }
-
-            // 将选中的图元加载到表单中
-            loadSelectedToForm() {
-                var primitive = this.getSelectedPrimitive();
-                if (!primitive) return;
-
-                // 更新表单字段
-                document.getElementById('primitiveType').value = primitive.type;
-                this.updateCoordinatesVisibility(primitive.type);
-
-                document.getElementById('thickness').value = primitive.data.thickness || 1;
-
-                // 设置颜色值
-                var color = primitive.data.color || { r: 255, g: 0, b: 0, a: 255 };
-                // 将RGB转换为十六进制颜色值
-                var hexColor = this.rgbToHex(color.r, color.g, color.b);
-                document.getElementById('colorPicker').value = hexColor;
-                this.updateColorDisplay(hexColor);
-
-                // 根据图元类型设置坐标值
-                switch (primitive.type) {
-                    case 'point':
-                        document.getElementById('x').value = primitive.data.x || 0;
-                        document.getElementById('y').value = primitive.data.y || 0;
-                        document.getElementById('z').value = primitive.data.z || 0;
-                        break;
-                    case 'line':
-                        document.getElementById('x1').value = primitive.data.x1 || -0.5;
-                        document.getElementById('y1').value = primitive.data.y1 || -0.5;
-                        document.getElementById('z1').value = primitive.data.z1 || 0;
-                        document.getElementById('x2').value = primitive.data.x2 || 0.5;
-                        document.getElementById('y2').value = primitive.data.y2 || -0.5;
-                        document.getElementById('z2').value = primitive.data.z2 || 0;
-                        break;
-                    case 'triangle':
-                        document.getElementById('t1x').value = primitive.data.t1x || -0.5;
-                        document.getElementById('t1y').value = primitive.data.t1y || 0.5;
-                        document.getElementById('t1z').value = primitive.data.t1z || 0;
-                        document.getElementById('t2x').value = primitive.data.t2x || 0.5;
-                        document.getElementById('t2y').value = primitive.data.t2y || 0.5;
-                        document.getElementById('t2z').value = primitive.data.t2z || 0;
-                        document.getElementById('t3x').value = primitive.data.t3x || 0;
-                        document.getElementById('t3y').value = primitive.data.t3y || -0.5;
-                        document.getElementById('t3z').value = primitive.data.t3z || 0;
-                        break;
-                    case 'rectangle':
-                        document.getElementById('r1x').value = primitive.data.r1x || -0.5;
-                        document.getElementById('r1y').value = primitive.data.r1y || 0.5;
-                        document.getElementById('r1z').value = primitive.data.r1z || 0;
-                        document.getElementById('r2x').value = primitive.data.r2x || 0.5;
-                        document.getElementById('r2y').value = primitive.data.r2y || -0.5;
-                        document.getElementById('r2z').value = primitive.data.r2z || 0;
-                        break;
-                    case 'circle':
-                        document.getElementById('cx').value = primitive.data.cx || 0;
-                        document.getElementById('cy').value = primitive.data.cy || 0;
-                        document.getElementById('cz').value = primitive.data.cz || 0;
-                        document.getElementById('radius').value = primitive.data.radius || 0.5;
-                        document.getElementById('segments').value = primitive.data.segments || 32;
-                        break;
-                }
-
-                // 启用更新按钮
-                document.getElementById('updatePrimitive').disabled = false;
-
-                // 颜色实时更新 - 当颜色选择器变化时立即更新选中的图元
-                var colorPicker = document.getElementById('colorPicker');
-                var updateSelectedColor = function () {
-                    var primitive = this.getSelectedPrimitive();
-                    if (primitive) {
-                        var hexColor = colorPicker.value;
-                        var rgb = this.hexToRgb(hexColor);
-                        this.updatePrimitive(primitive.id, { color: rgb });
-                    }
-                }.bind(this);
-
-                // 先移除可能存在的事件监听器，避免多次绑定
-                colorPicker.removeEventListener('input', updateSelectedColor);
-                colorPicker.addEventListener('input', updateSelectedColor);
-            }
-
-            // RGB转十六进制
-            rgbToHex(r, g, b) {
-                return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1).padStart(6, '0');
-            }
-
-            // 十六进制转RGB
-            hexToRgb(hex) {
-                // 去掉#号
-                hex = hex.replace(/^#/, '');
-
-                // 解析RGB值
-                var bigint = parseInt(hex, 16);
-                var r = (bigint >> 16) & 255;
-                var g = (bigint >> 8) & 255;
-                var b = bigint & 255;
-
-                return { r: r, g: g, b: b, a: 255 };
-            }
-
-            // 更新颜色显示
-            updateColorDisplay(hexColor) {
-                var rgb = this.hexToRgb(hexColor);
-                document.getElementById('colorValue').textContent = "RGB: " + rgb.r + ", " + rgb.g + ", " + rgb.b;
-            }
-
-            // 根据图元类型更新坐标输入区域的可见性
-            updateCoordinatesVisibility(type) {
-                // 隐藏所有坐标区域
-                document.getElementById('pointCoordinates').classList.add('hidden');
-                document.getElementById('lineCoordinates').classList.add('hidden');
-                document.getElementById('triangleCoordinates').classList.add('hidden');
-                document.getElementById('rectangleCoordinates').classList.add('hidden');
-                document.getElementById('circleCoordinates').classList.add('hidden');
-
-                // 显示当前类型对应的坐标区域
-                switch (type) {
-                    case 'point':
-                        document.getElementById('pointCoordinates').classList.remove('hidden');
-                        document.getElementById('thicknessLabel').textContent = '点大小';
-                        break;
-                    case 'line':
-                        document.getElementById('lineCoordinates').classList.remove('hidden');
-                        document.getElementById('thicknessLabel').textContent = '线宽';
-                        break;
-                    case 'triangle':
-                        document.getElementById('triangleCoordinates').classList.remove('hidden');
-                        document.getElementById('thicknessLabel').textContent = '边框粗细';
-                        break;
-                    case 'rectangle':
-                        document.getElementById('rectangleCoordinates').classList.remove('hidden');
-                        document.getElementById('thicknessLabel').textContent = '边框粗细';
-                        break;
-                    case 'circle':
-                        document.getElementById('circleCoordinates').classList.remove('hidden');
-                        document.getElementById('thicknessLabel').textContent = '边框粗细';
-                        break;
-                }
-            }
-
-            // 从表单获取图元数据
-            getPrimitiveDataFromForm(type) {
-                var colorHex = document.getElementById('colorPicker').value;
-                var color = this.hexToRgb(colorHex);
-
-                var data = {
-                    thickness: parseFloat(document.getElementById('thickness').value),
-                    color: color
-                };
-
-                // 根据图元类型添加坐标数据
-                switch (type) {
-                    case 'point':
-                        data.x = parseFloat(document.getElementById('x').value);
-                        data.y = parseFloat(document.getElementById('y').value);
-                        data.z = parseFloat(document.getElementById('z').value);
-                        break;
-                    case 'line':
-                        data.x1 = parseFloat(document.getElementById('x1').value);
-                        data.y1 = parseFloat(document.getElementById('y1').value);
-                        data.z1 = parseFloat(document.getElementById('z1').value);
-                        data.x2 = parseFloat(document.getElementById('x2').value);
-                        data.y2 = parseFloat(document.getElementById('y2').value);
-                        data.z2 = parseFloat(document.getElementById('z2').value);
-                        break;
-                    case 'triangle':
-                        data.t1x = parseFloat(document.getElementById('t1x').value);
-                        data.t1y = parseFloat(document.getElementById('t1y').value);
-                        data.t1z = parseFloat(document.getElementById('t1z').value);
-                        data.t2x = parseFloat(document.getElementById('t2x').value);
-                        data.t2y = parseFloat(document.getElementById('t2y').value);
-                        data.t2z = parseFloat(document.getElementById('t2z').value);
-                        data.t3x = parseFloat(document.getElementById('t3x').value);
-                        data.t3y = parseFloat(document.getElementById('t3y').value);
-                        data.t3z = parseFloat(document.getElementById('t3z').value);
-                        break;
-                    case 'rectangle':
-                        data.r1x = parseFloat(document.getElementById('r1x').value);
-                        data.r1y = parseFloat(document.getElementById('r1y').value);
-                        data.r1z = parseFloat(document.getElementById('r1z').value);
-                        data.r2x = parseFloat(document.getElementById('r2x').value);
-                        data.r2y = parseFloat(document.getElementById('r2y').value);
-                        data.r2z = parseFloat(document.getElementById('r2z').value);
-                        break;
-                    case 'circle':
-                        data.cx = parseFloat(document.getElementById('cx').value);
-                        data.cy = parseFloat(document.getElementById('cy').value);
-                        data.cz = parseFloat(document.getElementById('cz').value);
-                        data.radius = parseFloat(document.getElementById('radius').value);
-                        data.segments = parseInt(document.getElementById('segments').value);
-                        break;
-                }
-
-                return data;
-            }
-
-            // 应用模型变换
-            applyTransform(transform) {
-                this.transform = { ...transform };
-            }
-
-            // 重置模型变换
-            resetTransform() {
-                this.transform = {
-                    rotateX: 0,
-                    rotateY: 0,
-                    rotateZ: 0,
-                    translateX: 0,
-                    translateY: 0,
-                    translateZ: 0,
-                    scaleX: 1,
-                    scaleY: 1,
-                    scaleZ: 1
-                };
-
-                // 更新表单
-                document.getElementById('rotateX').value = 0;
-                document.getElementById('rotateY').value = 0;
-                document.getElementById('rotateZ').value = 0;
-                document.getElementById('translateX').value = 0;
-                document.getElementById('translateY').value = 0;
-                document.getElementById('translateZ').value = 0;
-                document.getElementById('scaleX').value = 1;
-                document.getElementById('scaleY').value = 1;
-                document.getElementById('scaleZ').value = 1;
-            }
-
-            // 应用原点设置
-            applyOrigin(origin) {
-                this.origin = { ...origin };
-
-                // 更新显示
-                document.getElementById('originPosX').textContent = this.origin.x.toFixed(1);
-                document.getElementById('originPosY').textContent = this.origin.y.toFixed(1);
-                document.getElementById('originPosZ').textContent = this.origin.z.toFixed(1);
-            }
-
-            // 重置原点设置
-            resetOrigin() {
-                this.origin = {
-                    x: 0,
-                    y: 0,
-                    z: 0
-                };
-
-                // 更新表单
-                document.getElementById('originX').value = 0;
-                document.getElementById('originY').value = 0;
-                document.getElementById('originZ').value = 0;
-
-                // 更新显示
-                this.applyOrigin(this.origin);
-            }
-
-            // 应用摄像机设置
-            applyCamera(camera) {
-                this.camera = { ...camera };
-
-                // 更新显示
-                document.getElementById('cameraPosX').textContent = this.camera.x.toFixed(1);
-                document.getElementById('cameraPosY').textContent = this.camera.y.toFixed(1);
-                document.getElementById('cameraPosZ').textContent = this.camera.z.toFixed(1);
-            }
-
-            // 重置摄像机设置
-            resetCamera() {
-                this.camera = {
-                    x: 0,
-                    y: 0,
-                    z: 5,
-                    targetX: 0,
-                    targetY: 0,
-                    targetZ: 0,
-                    fov: 45,
-                    near: 0.1,
-                    far: 100
-                };
-
-                // 更新表单
-                document.getElementById('cameraX').value = 0;
-                document.getElementById('cameraY').value = 0;
-                document.getElementById('cameraZ').value = 5;
-                document.getElementById('targetX').value = 0;
-                document.getElementById('targetY').value = 0;
-                document.getElementById('targetZ').value = 0;
-                document.getElementById('fov').value = 45;
-                document.getElementById('nearPlane').value = 0.1;
-                document.getElementById('farPlane').value = 100;
-
-                // 更新显示
-                this.applyCamera(this.camera);
-            }
-
-            // 获取WebGL渲染所需的数据
-            getWebGLData() {
-                return {
-                    primitives: this.getAllPrimitives(),
-                    visiblePrimitives: this.getVisiblePrimitives(),
-                    selectedId: this.selectedId,
-                    transform: this.transform,
-                    origin: this.origin,
-                    camera: this.camera
-                };
-            }
-
-            // 导入JSON数据
-            importFromJSON(json) {
-                try {
-                    var data = typeof json === 'string' ? JSON.parse(json) : json;
-                    if (Array.isArray(data)) {
-                        this.primitives = data.map(function (p) {
-                            return {
-                                ...p,
-                                id: p.id || this.generateId(),
-                                visible: p.visible !== undefined ? p.visible : true
-                            };
-                        }.bind(this));
-                    } else if (data.primitives && Array.isArray(data.primitives)) {
-                        this.primitives = data.primitives.map(function (p) {
-                            return {
-                                ...p,
-                                id: p.id || this.generateId(),
-                                visible: p.visible !== undefined ? p.visible : true
-                            };
-                        }.bind(this));
-
-                        // 导入场景设置
-                        if (data.transform) this.transform = { ...data.transform };
-                        if (data.origin) this.origin = { ...data.origin };
-                        if (data.camera) this.camera = { ...data.camera };
-
-                        // 更新表单
-                        this.updateSceneForm();
-                    }
-                    this.selectedId = this.primitives.length > 0 ? this.primitives[0].id : null;
-                    this.updateListDisplay();
-                    return true;
-                } catch (error) {
-                    console.error('导入JSON失败:', error);
-                    return false;
-                }
-            }
-
-            // 更新场景表单（变换、原点、摄像机）
-            updateSceneForm() {
-                // 更新变换表单
-                document.getElementById('rotateX').value = this.transform.rotateX || 0;
-                document.getElementById('rotateY').value = this.transform.rotateY || 0;
-                document.getElementById('rotateZ').value = this.transform.rotateZ || 0;
-                document.getElementById('translateX').value = this.transform.translateX || 0;
-                document.getElementById('translateY').value = this.transform.translateY || 0;
-                document.getElementById('translateZ').value = this.transform.translateZ || 0;
-                document.getElementById('scaleX').value = this.transform.scaleX || 1;
-                document.getElementById('scaleY').value = this.transform.scaleY || 1;
-                document.getElementById('scaleZ').value = this.transform.scaleZ || 1;
-
-                // 更新原点表单
-                document.getElementById('originX').value = this.origin.x || 0;
-                document.getElementById('originY').value = this.origin.y || 0;
-                document.getElementById('originZ').value = this.origin.z || 0;
-
-                // 更新摄像机表单
-                document.getElementById('cameraX').value = this.camera.x || 0;
-                document.getElementById('cameraY').value = this.camera.y || 0;
-                document.getElementById('cameraZ').value = this.camera.z || 5;
-                document.getElementById('targetX').value = this.camera.targetX || 0;
-                document.getElementById('targetY').value = this.camera.targetY || 0;
-                document.getElementById('targetZ').value = this.camera.targetZ || 0;
-                document.getElementById('fov').value = this.camera.fov || 45;
-                document.getElementById('nearPlane').value = this.camera.near || 0.1;
-                document.getElementById('farPlane').value = this.camera.far || 100;
-
-                // 更新显示
-                this.applyOrigin(this.origin);
-                this.applyCamera(this.camera);
-            }
-
-            // 导出为JSON
-            exportToJSON() {
-                return JSON.stringify({
-                    primitives: this.primitives,
-                    transform: this.transform,
-                    origin: this.origin,
-                    camera: this.camera
-                }, null, 2);
-            }
-
-            // 导入Excel数据
-            importFromExcel(workbook) {
-                try {
-                    // 简单处理，假设Excel中有一个"primitives"工作表
-                    var worksheet = workbook.Sheets.primitives || workbook.Sheets[workbook.SheetNames[0]];
-                    var jsonData = XLSX.utils.sheet_to_json(worksheet);
-
-                    // 转换Excel数据为我们需要的格式
-                    var primitives = jsonData.map(function (item) {
-                        var type = item.type || 'point';
-                        var data = {
-                            thickness: parseFloat(item.thickness || 1),
-                            color: {
-                                r: parseInt(item.r || 255),
-                                g: parseInt(item.g || 0),
-                                b: parseInt(item.b || 0),
-                                a: parseInt(item.a || 255)
-                            }
-                        };
-
-                        // 根据类型添加相应的坐标数据
-                        if (type === 'point') {
-                            data.x = parseFloat(item.x || 0);
-                            data.y = parseFloat(item.y || 0);
-                            data.z = parseFloat(item.z || 0);
-                        } else if (type === 'line') {
-                            data.x1 = parseFloat(item.x1 || -0.5);
-                            data.y1 = parseFloat(item.y1 || -0.5);
-                            data.z1 = parseFloat(item.z1 || 0);
-                            data.x2 = parseFloat(item.x2 || 0.5);
-                            data.y2 = parseFloat(item.y2 || -0.5);
-                            data.z2 = parseFloat(item.z2 || 0);
-                        } else if (type === 'triangle') {
-                            data.t1x = parseFloat(item.t1x || -0.5);
-                            data.t1y = parseFloat(item.t1y || 0.5);
-                            data.t1z = parseFloat(item.t1z || 0);
-                            data.t2x = parseFloat(item.t2x || 0.5);
-                            data.t2y = parseFloat(item.t2y || 0.5);
-                            data.t2z = parseFloat(item.t2z || 0);
-                            data.t3x = parseFloat(item.t3x || 0);
-                            data.t3y = parseFloat(item.t3y || -0.5);
-                            data.t3z = parseFloat(item.t3z || 0);
-                        } else if (type === 'rectangle') {
-                            data.r1x = parseFloat(item.r1x || -0.5);
-                            data.r1y = parseFloat(item.r1y || 0.5);
-                            data.r1z = parseFloat(item.r1z || 0);
-                            data.r2x = parseFloat(item.r2x || 0.5);
-                            data.r2y = parseFloat(item.r2y || -0.5);
-                            data.r2z = parseFloat(item.r2z || 0);
-                        } else if (type === 'circle') {
-                            data.cx = parseFloat(item.cx || 0);
-                            data.cy = parseFloat(item.cy || 0);
-                            data.cz = parseFloat(item.cz || 0);
-                            data.radius = parseFloat(item.radius || 0.5);
-                            data.segments = parseInt(item.segments || 32);
-                        }
-
-                        return {
-                            id: this.generateId(),
-                            type: type,
-                            visible: item.visible !== undefined ? !!item.visible : true,
-                            data: data
-                        };
-                    }.bind(this));
-
-                    this.primitives = primitives;
-                    this.selectedId = this.primitives.length > 0 ? this.primitives[0].id : null;
-                    this.updateListDisplay();
-                    return true;
-                } catch (error) {
-                    console.error('导入Excel失败:', error);
-                    return false;
-                }
-            }
-
-            // 导出为Excel
-            exportToExcel() {
-                // 准备导出数据
-                var exportData = this.primitives.map(function (p) {
-                    var baseData = {
-                        id: p.id,
-                        type: p.type,
-                        visible: p.visible ? 1 : 0,
-                        thickness: p.data.thickness,
-                        r: p.data.color?.r || 255,
-                        g: p.data.color?.g || 0,
-                        b: p.data.color?.b || 0,
-                        a: p.data.color?.a || 255
-                    };
-
-                    // 根据类型添加相应的坐标数据
-                    if (p.type === 'point') {
-                        return {
-                            ...baseData,
-                            x: p.data.x,
-                            y: p.data.y,
-                            z: p.data.z
-                        };
-                    } else if (p.type === 'line') {
-                        return {
-                            ...baseData,
-                            x1: p.data.x1,
-                            y1: p.data.y1,
-                            z1: p.data.z1,
-                            x2: p.data.x2,
-                            y2: p.data.y2,
-                            z2: p.data.z2
-                        };
-                    } else if (p.type === 'triangle') {
-                        return {
-                            ...baseData,
-                            t1x: p.data.t1x,
-                            t1y: p.data.t1y,
-                            t1z: p.data.t1z,
-                            t2x: p.data.t2x,
-                            t2y: p.data.t2y,
-                            t2z: p.data.t2z,
-                            t3x: p.data.t3x,
-                            t3y: p.data.t3y,
-                            t3z: p.data.t3z
-                        };
-                    } else if (p.type === 'rectangle') {
-                        return {
-                            ...baseData,
-                            r1x: p.data.r1x,
-                            r1y: p.data.r1y,
-                            r1z: p.data.r1z,
-                            r2x: p.data.r2x,
-                            r2y: p.data.r2y,
-                            r2z: p.data.r2z
-                        };
-                    } else if (p.type === 'circle') {
-                        return {
-                            ...baseData,
-                            cx: p.data.cx,
-                            cy: p.data.cy,
-                            cz: p.data.cz,
-                            radius: p.data.radius,
-                            segments: p.data.segments
-                        };
-                    }
-
-                    return baseData;
-                });
-
-                // 创建工作表和工作簿
-                var worksheet = XLSX.utils.json_to_sheet(exportData);
-                var workbook = XLSX.utils.book_new();
-                XLSX.utils.book_append_sheet(workbook, worksheet, 'primitives');
-
-                // 导出文件
-                XLSX.writeFile(workbook, 'webgl_primitives.xlsx');
+            } else if (currentMode === 'lens') {
+                settingsDiv.innerHTML += `
+                            <label for="lensRadius">Lens Radius:</label>
+                            <input type="range" id="lensRadius" min="20" max="150" step="1" value="60">
+                            <label for="lensFocalLength">Lens Focal Length:</label>
+                            <input type="number" id="lensFocalLength" min="-500" max="500" step="1" value="100">
+                        `;
+            } else if (currentMode === 'mirror') {
+                settingsDiv.innerHTML += `
+                            <label for="mirrorLength">Mirror Length:</label>
+                            <input type="range" id="mirrorLength" min="20" max="200" step="1" value="100">
+                        `;
             }
         }
 
-        // WebGL渲染器类 - 负责渲染所有图元
-        class WebGLRenderer {
-            constructor(canvasId) {
-                this.canvas = document.getElementById(canvasId);
-                this.gl = this.canvas.getContext('webgl') || this.canvas.getContext('experimental-webgl');
-
-                if (!this.gl) {
-                    alert('您的浏览器不支持WebGL');
-                    return;
-                }
-
-                // 设置画布尺寸
-                this.resizeCanvas();
-                window.addEventListener('resize', function () { this.resizeCanvas(); }.bind(this));
-
-                // 视图控制变量
-                this.rotation = { x: 0, y: 0 };
-                this.translation = { x: 0, y: 0 };
-                this.scale = 1;
-                this.lastMousePos = { x: 0, y: 0 };
-                this.isDragging = false;
-                this.isPanning = false;
-
-                // 初始化事件监听
-                this.initEventListeners();
-
-                // 初始化着色器和缓冲区
-                this.initShaders();
-                this.initAxisData();  // 先初始化轴数据
-                this.initBuffers();   // 再初始化缓冲区
-
-                // 初始投影矩阵将在render中根据摄像机设置更新
-                this.projectionMatrix = MathUtils.createIdentityMatrix();
-
-                // 渲染循环
-                this.renderLoop();
-            }
-
-            // 初始化坐标轴数据
-            initAxisData() {
-                // X轴(红色)、Y轴(绿色)、Z轴(蓝色)
-                this.axisData = {
-                    positions: new Float32Array([
-                        0, 0, 0, 1, 0, 0,   // X轴
-                        0, 0, 0, 0, 1, 0,   // Y轴
-                        0, 0, 0, 0, 0, 1    // Z轴
-                    ]),
-                    colors: new Float32Array([
-                        1, 0, 0, 1, 1, 0, 0, 1,   // X轴 - 红色
-                        0, 1, 0, 1, 0, 1, 0, 1,   // Y轴 - 绿色
-                        0, 0, 1, 1, 0, 0, 1, 1    // Z轴 - 蓝色
-                    ]),
-                    count: 6,
-                    lineWidth: 2,
-                    drawMode: this.gl.LINES
-                };
-
-                // 轴标签位置 (在轴的末端)
-                this.axisLabels = [
-                    { position: [1.1, 0, 0], text: 'X', color: 'rgb(255, 0, 0)' },
-                    { position: [0, 1.1, 0], text: 'Y', color: 'rgb(0, 255, 0)' },
-                    { position: [0, 0, 1.1], text: 'Z', color: 'rgb(0, 0, 255)' }
-                ];
-
-                // 原点标记
-                this.originMarker = {
-                    positions: new Float32Array([
-                        -0.05, 0, 0, 0.05, 0, 0,  // X轴小标记
-                        0, -0.05, 0, 0, 0.05, 0,  // Y轴小标记
-                        0, 0, -0.05, 0, 0, 0.05   // Z轴小标记
-                    ]),
-                    colors: new Float32Array([
-                        1, 1, 1, 1, 1, 1, 1, 1,   // X轴白色
-                        1, 1, 1, 1, 1, 1, 1, 1,   // Y轴白色
-                        1, 1, 1, 1, 1, 1, 1, 1    // Z轴白色
-                    ]),
-                    count: 6,
-                    lineWidth: 2,
-                    drawMode: this.gl.LINES
-                };
-
-                // 创建用于用于绘制文本的2D画布
-                this.textCanvas = document.createElement('canvas');
-                this.textCanvas.id = 'textCanvas';
-                this.textCanvas.style.position = 'absolute';
-                this.textCanvas.style.top = '0';
-                this.textCanvas.style.left = '0';
-                this.textCanvas.style.pointerEvents = 'none';
-                this.canvas.parentNode.appendChild(this.textCanvas);
-                this.textContext = this.textCanvas.getContext('2d');
-
-                // 确保文本画布大小与WebGL画布一致
-                this.resizeTextCanvas();
-                window.addEventListener('resize', function () { this.resizeTextCanvas(); }.bind(this));
-            }
-
-            // 调整文本画布大小
-            resizeTextCanvas() {
-                var rect = this.canvas.getBoundingClientRect();
-                this.textCanvas.width = rect.width;
-                this.textCanvas.height = rect.height;
-                this.textCanvas.style.width = rect.width + 'px';
-                this.textCanvas.style.height = rect.height + 'px';
-            }
-
-            // 调整画布尺寸
-            resizeCanvas() {
-                var rect = this.canvas.getBoundingClientRect();
-                if (this.canvas.width !== rect.width || this.canvas.height !== rect.height) {
-                    this.canvas.width = rect.width;
-                    this.canvas.height = rect.height;
-
-                    if (this.gl) {
-                        this.gl.viewport(0, 0, this.canvas.width, this.canvas.height);
-                    }
-                }
-            }
-
-            // 初始化事件监听
-            initEventListeners() {
-                // 鼠标按下
-                this.canvas.addEventListener('mousedown', function (e) {
-                    this.lastMousePos = { x: e.clientX, y: e.clientY };
-                    this.isDragging = true;
-                    this.isPanning = e.shiftKey;
-                }.bind(this));
-
-                // 鼠标移动
-                this.canvas.addEventListener('mousemove', function (e) {
-                    if (!this.isDragging) return;
-
-                    var deltaX = e.clientX - this.lastMousePos.x;
-                    var deltaY = e.clientY - this.lastMousePos.y;
-
-                    if (this.isPanning) {
-                        // 平移
-                        this.translation.x += deltaX * 0.003;
-                        this.translation.y -= deltaY * 0.003;
-                    } else {
-                        // 旋转
-                        this.rotation.x += deltaY * 0.2;
-                        this.rotation.y += deltaX * 0.2;
-
-                        // 限制X轴旋转角度，防止翻转
-                        this.rotation.x = Math.max(-85, Math.min(85, this.rotation.x));
-                    }
-
-                    this.lastMousePos = { x: e.clientX, y: e.clientY };
-
-                    // 更新视图状态显示
-                    this.updateViewStatus();
-                }.bind(this));
-
-                // 鼠标释放
-                window.addEventListener('mouseup', function () {
-                    this.isDragging = false;
-                    this.isPanning = false;
-                }.bind(this));
-
-                // 鼠标滚轮
-                this.canvas.addEventListener('wheel', function (e) {
-                    e.preventDefault();
-
-                    // 缩放因子
-                    var scaleFactor = e.deltaY < 0 ? 1.03 : 0.97;
-                    this.scale *= scaleFactor;
-
-                    // 限制缩放范围
-                    this.scale = Math.max(0.2, Math.min(this.scale, 5));
-
-                    // 更新视图状态显示
-                    this.updateViewStatus();
-                }.bind(this));
-
-                // 键盘事件
-                window.addEventListener('keydown', function (e) {
-                    // 按R键重置视图
-                    if (e.key === 'r' || e.key === 'R') {
-                        this.rotation = { x: 0, y: 0 };
-                        this.translation = { x: 0, y: 0 };
-                        this.scale = 1;
-                        this.updateViewStatus();
-                    }
-                    // 按H键显示/隐藏帮助
-                    if (e.key === 'h' || e.key === 'H') {
-                        document.getElementById('helpOverlay').classList.toggle('hidden');
-                    }
-                }.bind(this));
-
-                // 关闭帮助按钮
-                document.getElementById('closeHelp').addEventListener('click', function () {
-                    document.getElementById('helpOverlay').classList.add('hidden');
-                });
-            }
-
-            // 更新视图状态显示
-            updateViewStatus() {
-                document.getElementById('scaleValue').textContent = this.scale.toFixed(1);
-            }
-
-            // 初始化着色器
-            initShaders() {
-                // 顶点着色器源码
-                var vertexShaderSource = `
-                        attribute vec3 aPosition;
-                        attribute vec4 aColor;
-
-                        uniform mat4 uModelViewMatrix;
-                        uniform mat4 uProjectionMatrix;
-
-                        varying lowp vec4 vColor;
-
-                        void main() {
-                            gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-                            vColor = aColor;
-                        }
-                    `;
-
-                // 点的顶点着色器 (单独设置点大小)
-                var pointVertexShaderSource = `
-                        attribute vec3 aPosition;
-                        attribute vec4 aColor;
-
-                        uniform mat4 uModelViewMatrix;
-                        uniform mat4 uProjectionMatrix;
-                        uniform float uPointSize;
-
-                        varying lowp vec4 vColor;
-
-                        void main() {
-                            gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aPosition, 1.0);
-                            gl_PointSize = uPointSize;
-                            vColor = aColor;
-                        }
-                    `;
-
-                // 片段着色器源码
-                var fragmentShaderSource = `
-                        varying lowp vec4 vColor;
-
-                        void main() {
-                            gl_FragColor = vColor;
-                        }
-                    `;
-
-                // 创建和编译着色器
-                var vertexShader = this.compileShader(this.gl.VERTEX_SHADER, vertexShaderSource);
-                var pointVertexShader = this.compileShader(this.gl.VERTEX_SHADER, pointVertexShaderSource);
-                var fragmentShader = this.compileShader(this.gl.FRAGMENT_SHADER, fragmentShaderSource);
-
-                // 创建程序
-                this.program = this.createProgram(vertexShader, fragmentShader);
-                this.pointProgram = this.createProgram(pointVertexShader, fragmentShader);
-
-                // 获取属性和 uniform 位置
-                this.locations = {
-                    // 通用属性
-                    aPosition: this.gl.getAttribLocation(this.program, 'aPosition'),
-                    aColor: this.gl.getAttribLocation(this.program, 'aColor'),
-
-                    // 通用 uniform
-                    uModelViewMatrix: this.gl.getUniformLocation(this.program, 'uModelViewMatrix'),
-                    uProjectionMatrix: this.gl.getUniformLocation(this.program, 'uProjectionMatrix'),
-
-                    // 点特定 uniform
-                    pointProgram: this.pointProgram,
-                    pointAPosition: this.gl.getAttribLocation(this.pointProgram, 'aPosition'),
-                    pointAColor: this.gl.getAttribLocation(this.pointProgram, 'aColor'),
-                    pointUModelViewMatrix: this.gl.getUniformLocation(this.pointProgram, 'uModelViewMatrix'),
-                    pointUProjectionMatrix: this.gl.getUniformLocation(this.pointProgram, 'uProjectionMatrix'),
-                    pointUPointSize: this.gl.getUniformLocation(this.pointProgram, 'uPointSize')
-                };
-            }
-
-            // 编译着色器
-            compileShader(type, source) {
-                var shader = this.gl.createShader(type);
-                this.gl.shaderSource(shader, source);
-                this.gl.compileShader(shader);
-
-                if (!this.gl.getShaderParameter(shader, this.gl.COMPILE_STATUS)) {
-                    console.error('着色器编译失败:', this.gl.getShaderInfoLog(shader));
-                    this.gl.deleteShader(shader);
-                    return null;
-                }
-
-                return shader;
-            }
-
-            // 创建程序
-            createProgram(vertexShader, fragmentShader) {
-                var program = this.gl.createProgram();
-                this.gl.attachShader(program, vertexShader);
-                this.gl.attachShader(program, fragmentShader);
-                this.gl.linkProgram(program);
-
-                if (!this.gl.getProgramParameter(program, this.gl.LINK_STATUS)) {
-                    console.error('程序链接失败:', this.gl.getProgramInfoLog(program));
-                    this.gl.deleteProgram(program);
-                    return null;
-                }
-
-                return program;
-            }
-
-            // 初始化缓冲区
-            initBuffers() {
-                this.positionBuffer = this.gl.createBuffer();
-                this.colorBuffer = this.gl.createBuffer();
-
-                // 初始化坐标轴缓冲区
-                this.axisPositionBuffer = this.gl.createBuffer();
-                this.axisColorBuffer = this.gl.createBuffer();
-
-                // 初始化原点标记缓冲区
-                this.originPositionBuffer = this.gl.createBuffer();
-                this.originColorBuffer = this.gl.createBuffer();
-
-                // 绑定轴数据
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.axisPositionBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, this.axisData.positions, this.gl.STATIC_DRAW);
-
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.axisColorBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, this.axisData.colors, this.gl.STATIC_DRAW);
-
-                // 绑定原点标记数据
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.originPositionBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, this.originMarker.positions, this.gl.STATIC_DRAW);
-
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.originColorBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, this.originMarker.colors, this.gl.STATIC_DRAW);
-            }
-
-            // 准备图元数据
-            preparePrimitiveData(primitive) {
-                var data = primitive.data;
-                var positions = [];
-                var colors = [];
-                var drawMode;
-                var count;
-
-                // 处理颜色 - 隐藏的图元使用灰色调并降低透明度
-                var color;
-                if (primitive.visible) {
-                    color = [
-                        data.color.r / 255,
-                        data.color.g / 255,
-                        data.color.b / 255,
-                        data.color.a / 255
-                    ];
-                } else {
-                    // 隐藏的图元颜色处理 - 降低饱和度和透明度
-                    var gray = (data.color.r * 0.299 + data.color.g * 0.587 + data.color.b * 0.114) / 255;
-                    color = [gray * 0.7, gray * 0.7, gray * 0.7, 0.3];
-                }
-
-                // 根据图元类型生成顶点数据
-                switch (primitive.type) {
-                    case 'point':
-                        positions = [data.x, data.y, data.z];
-                        colors = [...color];
-                        drawMode = this.gl.POINTS;
-                        count = 1;
-                        break;
-
-                    case 'line':
-                        positions = [
-                            data.x1, data.y1, data.z1,
-                            data.x2, data.y2, data.z2
-                        ];
-                        colors = [...color, ...color];
-                        drawMode = this.gl.LINES;
-                        count = 2;
-                        break;
-
-                    case 'triangle':
-                        positions = [
-                            data.t1x, data.t1y, data.t1z,
-                            data.t2x, data.t2y, data.t2z,
-                            data.t3x, data.t3y, data.t3z
-                        ];
-                        colors = [...color, ...color, ...color];
-                        drawMode = this.gl.TRIANGLES;
-                        count = 3;
-                        break;
-
-                    case 'rectangle':
-                        // 矩形由两个三角形组成
-                        positions = [
-                            data.r1x, data.r1y, data.r1z,  // 左上角
-                            data.r2x, data.r1y, data.r1z,  // 右上角
-                            data.r1x, data.r2y, data.r2z,  // 左下角
-                            data.r2x, data.r1y, data.r1z,  // 右上角
-                            data.r2x, data.r2y, data.r2z,  // 右下角
-                            data.r1x, data.r2y, data.r2z   // 左下角
-                        ];
-                        colors = Array(6).fill().flatMap(function () { return color; });
-                        drawMode = this.gl.TRIANGLES;
-                        count = 6;
-                        break;
-
-                    case 'circle':
-                        // 圆形由三角形扇形组成
-                        var segments = Math.max(3, data.segments || 32);
-                        positions = [data.cx, data.cy, data.cz]; // 圆心
-
-                        for (var i = 0; i <= segments; i++) {
-                            var angle = (i / segments) * Math.PI * 2;
-                            positions.push(
-                                data.cx + Math.cos(angle) * data.radius,
-                                data.cy + Math.sin(angle) * data.radius,
-                                data.cz
-                            );
-                        }
-
-                        // 每个顶点都使用相同的颜色
-                        colors = Array(positions.length / 3).fill().flatMap(function () { return color; });
-                        drawMode = this.gl.TRIANGLE_FAN;
-                        count = positions.length / 3;
-                        break;
-                }
-
-                return {
-                    positions: new Float32Array(positions),
-                    colors: new Float32Array(colors),
-                    drawMode: drawMode,
-                    count: count,
-                    thickness: data.thickness || 1
-                };
-            }
-
-            // 绘制图元
-            drawPrimitive(primitiveData, modelViewMatrix) {
-                // 绑定缓冲区并设置属性
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, primitiveData.positions, this.gl.STREAM_DRAW);
-
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
-                this.gl.bufferData(this.gl.ARRAY_BUFFER, primitiveData.colors, this.gl.STREAM_DRAW);
-
-                // 根据图元类型使用不同的程序
-                if (primitiveData.drawMode === this.gl.POINTS) {
-                    // 使用点的程序
-                    this.gl.useProgram(this.locations.pointProgram);
-
-                    // 设置点大小
-                    this.gl.uniform1f(this.locations.pointUPointSize, primitiveData.thickness);
-
-                    // 设置位置属性
-                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-                    this.gl.enableVertexAttribArray(this.locations.pointAPosition);
-                    this.gl.vertexAttribPointer(
-                        this.locations.pointAPosition,
-                        3, // 每个顶点3个分量
-                        this.gl.FLOAT,
-                        false,
-                        0, // 步长
-                        0  // 偏移量
-                    );
-
-                    // 设置颜色属性
-                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
-                    this.gl.enableVertexAttribArray(this.locations.pointAColor);
-                    this.gl.vertexAttribPointer(
-                        this.locations.pointAColor,
-                        4, // 每个颜色4个分量
-                        this.gl.FLOAT,
-                        false,
-                        0, // 步长
-                        0  // 偏移量
-                    );
-
-                    // 设置矩阵
-                    this.gl.uniformMatrix4fv(
-                        this.locations.pointUModelViewMatrix,
-                        false,
-                        modelViewMatrix
-                    );
-                    this.gl.uniformMatrix4fv(
-                        this.locations.pointUProjectionMatrix,
-                        false,
-                        this.projectionMatrix
-                    );
-                } else {
-                    // 使用通用程序
-                    this.gl.useProgram(this.program);
-
-                    // 设置线宽
-                    if (primitiveData.drawMode === this.gl.LINES) {
-                        this.gl.lineWidth(primitiveData.thickness);
-                    }
-
-                    // 设置位置属性
-                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.positionBuffer);
-                    this.gl.enableVertexAttribArray(this.locations.aPosition);
-                    this.gl.vertexAttribPointer(
-                        this.locations.aPosition,
-                        3, // 每个顶点3个分量
-                        this.gl.FLOAT,
-                        false,
-                        0, // 步长
-                        0  // 偏移量
-                    );
-
-                    // 设置颜色属性
-                    this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.colorBuffer);
-                    this.gl.enableVertexAttribArray(this.locations.aColor);
-                    this.gl.vertexAttribPointer(
-                        this.locations.aColor,
-                        4, // 每个颜色4个分量
-                        this.gl.FLOAT,
-                        false,
-                        0, // 步长
-                        0  // 偏移量
-                    );
-
-                    // 设置矩阵
-                    this.gl.uniformMatrix4fv(
-                        this.locations.uModelViewMatrix,
-                        false,
-                        modelViewMatrix
-                    );
-                    this.gl.uniformMatrix4fv(
-                        this.locations.uProjectionMatrix,
-                        false,
-                        this.projectionMatrix
-                    );
-                }
-
-                // 绘制
-                this.gl.drawArrays(primitiveData.drawMode, 0, primitiveData.count);
-            }
-
-            // 绘制坐标轴
-            drawAxis(modelViewMatrix) {
-                this.gl.useProgram(this.program);
-
-                // 设置线宽
-                this.gl.lineWidth(this.axisData.lineWidth);
-
-                // 设置位置属性
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.axisPositionBuffer);
-                this.gl.enableVertexAttribArray(this.locations.aPosition);
-                this.gl.vertexAttribPointer(
-                    this.locations.aPosition,
-                    3, // 每个顶点3个分量
-                    this.gl.FLOAT,
-                    false,
-                    0, // 步长
-                    0  // 偏移量
-                );
-
-                // 设置颜色属性
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.axisColorBuffer);
-                this.gl.enableVertexAttribArray(this.locations.aColor);
-                this.gl.vertexAttribPointer(
-                    this.locations.aColor,
-                    4, // 每个颜色4个分量
-                    this.gl.FLOAT,
-                    false,
-                    0, // 步长
-                    0  // 偏移量
-                );
-
-                // 设置矩阵
-                this.gl.uniformMatrix4fv(
-                    this.locations.uModelViewMatrix,
-                    false,
-                    modelViewMatrix
-                );
-                this.gl.uniformMatrix4fv(
-                    this.locations.uProjectionMatrix,
-                    false,
-                    this.projectionMatrix
-                );
-
-                // 绘制
-                this.gl.drawArrays(this.axisData.drawMode, 0, this.axisData.count);
-
-                // 绘制原点标记
-                this.drawOriginMarker(modelViewMatrix);
-
-                // 绘制轴标签
-                this.drawAxisLabels(modelViewMatrix);
-            }
-
-            // 绘制原点标记
-            drawOriginMarker(modelViewMatrix) {
-                this.gl.useProgram(this.program);
-
-                // 设置线宽
-                this.gl.lineWidth(this.originMarker.lineWidth);
-
-                // 设置位置属性
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.originPositionBuffer);
-                this.gl.enableVertexAttribArray(this.locations.aPosition);
-                this.gl.vertexAttribPointer(
-                    this.locations.aPosition,
-                    3, // 每个顶点3个分量
-                    this.gl.FLOAT,
-                    false,
-                    0, // 步长
-                    0  // 偏移量
-                );
-
-                // 设置颜色属性
-                this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.originColorBuffer);
-                this.gl.enableVertexAttribArray(this.locations.aColor);
-                this.gl.vertexAttribPointer(
-                    this.locations.aColor,
-                    4, // 每个颜色4个分量
-                    this.gl.FLOAT,
-                    false,
-                    0, // 步长
-                    0  // 偏移量
-                );
-
-                // 设置矩阵
-                this.gl.uniformMatrix4fv(
-                    this.locations.uModelViewMatrix,
-                    false,
-                    modelViewMatrix
-                );
-                this.gl.uniformMatrix4fv(
-                    this.locations.uProjectionMatrix,
-                    false,
-                    this.projectionMatrix
-                );
-
-                // 绘制
-                this.gl.drawArrays(this.originMarker.drawMode, 0, this.originMarker.count);
-            }
-
-            // 绘制轴标签
-            drawAxisLabels(modelViewMatrix) {
-                // 清除文本画布
-                this.textContext.clearRect(0, 0, this.textCanvas.width, this.textCanvas.height);
-
-                this.axisLabels.forEach(function (label) {
-                    // 计算标签在屏幕上的位置
-                    var position = [...label.position, 1]; // 齐次坐标
-
-                    // 应用模型视图矩阵
-                    var transformed = [0, 0, 0, 0];
-                    for (var i = 0; i < 4; i++) {
-                        for (var j = 0; j < 4; j++) {
-                            transformed[i] += modelViewMatrix[i * 4 + j] * position[j];
-                        }
-                    }
-
-                    // 应用投影矩阵
-                    var projected = [0, 0, 0, 0];
-                    for (var i = 0; i < 4; i++) {
-                        for (var j = 0; j < 4; j++) {
-                            projected[i] += this.projectionMatrix[i * 4 + j] * transformed[j];
-                        }
-                    }
-
-                    // 透视除法
-                    if (projected[3] === 0) return;
-                    var ndcX = projected[0] / projected[3];
-                    var ndcY = projected[1] / projected[3];
-
-                    // 转换为屏幕坐标
-                    var canvas = this.canvas;
-                    var rect = canvas.getBoundingClientRect();
-                    var x = ((ndcX + 1) / 2) * rect.width;
-                    var y = ((1 - ndcY) / 2) * rect.height;
-
-                    // 绘制文本
-                    this.textContext.font = '14px Arial';
-                    this.textContext.fillStyle = label.color;
-                    this.textContext.fillText(label.text, x, y);
-                }.bind(this));
-            }
-
-            // 渲染场景
-            render(sceneData) {
-                if (!this.gl) return;
-
-                // 清除画布
-                this.gl.clearColor(0.1, 0.1, 0.1, 1.0); // 深灰色背景
-                this.gl.clearDepth(1.0);
-                this.gl.enable(this.gl.DEPTH_TEST);
-                this.gl.depthFunc(this.gl.LEQUAL);
-                this.gl.clear(this.gl.COLOR_BUFFER_BIT | this.gl.DEPTH_BUFFER_BIT);
-
-                // 获取摄像机设置
-                var camera = sceneData.camera;
-
-                // 更新投影矩阵
-                this.projectionMatrix = MathUtils.createPerspectiveMatrix(
-                    camera.fov,
-                    this.canvas.width / this.canvas.height,
-                    camera.near,
-                    camera.far
-                );
-
-                // 创建摄像机视图矩阵 (LookAt)
-                var viewMatrix = MathUtils.createLookAtMatrix(
-                    camera.x, camera.y, camera.z,  // 摄像机位置
-                    camera.targetX, camera.targetY, camera.targetZ,  // 目标点
-                    0, 1, 0  // 上方向
-                );
-
-                // 创建旋转矩阵 (基于用户交互)
-                var rotationMatrix = MathUtils.createRotationMatrix(
-                    this.rotation.x,
-                    this.rotation.y,
-                    0
-                );
-
-                // 创建缩放矩阵
-                var scaleMatrix = MathUtils.createScaleMatrix(this.scale, this.scale, this.scale);
-
-                // 创建平移矩阵
-                var translateMatrix = MathUtils.createTranslationMatrix(
-                    this.translation.x,
-                    this.translation.y,
-                    0
-                );
-
-                // 组合视图变换矩阵 (用户交互)
-                var userTransform = MathUtils.multiplyMatrices(translateMatrix, rotationMatrix);
-                userTransform = MathUtils.multiplyMatrices(userTransform, scaleMatrix);
-
-                // 应用世界原点偏移
-                var originOffset = MathUtils.createTranslationMatrix(
-                    -sceneData.origin.x,
-                    -sceneData.origin.y,
-                    -sceneData.origin.z
-                );
-
-                // 组合完整视图矩阵
-                var viewTransform = MathUtils.multiplyMatrices(viewMatrix, userTransform);
-                var baseModelViewMatrix = MathUtils.multiplyMatrices(viewTransform, originOffset);
-
-                // 应用模型变换
-                var modelTransform = sceneData.transform;
-                var modelRotation = MathUtils.createRotationMatrix(
-                    modelTransform.rotateX,
-                    modelTransform.rotateY,
-                    modelTransform.rotateZ
-                );
-                var modelTranslate = MathUtils.createTranslationMatrix(
-                    modelTransform.translateX,
-                    modelTransform.translateY,
-                    modelTransform.translateZ
-                );
-                var modelScale = MathUtils.createScaleMatrix(
-                    modelTransform.scaleX,
-                    modelTransform.scaleY,
-                    modelTransform.scaleZ
-                );
-
-                // 组合完整的模型视图矩阵
-                var fullModelTransform = MathUtils.multiplyMatrices(modelTranslate, modelRotation);
-                fullModelTransform = MathUtils.multiplyMatrices(fullModelTransform, modelScale);
-                var fullModelViewMatrix = MathUtils.multiplyMatrices(baseModelViewMatrix, fullModelTransform);
-
-                // 绘制坐标轴
-                this.drawAxis(baseModelViewMatrix);
-
-                // 绘制所有图元 (包括隐藏的，但有视觉区分)
-                sceneData.primitives.forEach(function (primitive) {
-                    var primitiveData = this.preparePrimitiveData(primitive);
-                    this.drawPrimitive(primitiveData, fullModelViewMatrix);
-                }.bind(this));
-            }
-
-            // 渲染循环
-            renderLoop() {
-                requestAnimationFrame(function () { this.renderLoop(); }.bind(this));
-                if (this.sceneManager) {
-                    this.render(this.sceneManager.getWebGLData());
-                }
-            }
-
-            // 设置场景管理器
-            setSceneManager(manager) {
-                this.sceneManager = manager;
+        function updateMaterialUIFromPreset() {
+            const preset = document.getElementById('materialType').value;
+            const material = defaultMaterials[preset];
+            if (material) {
+                document.getElementById('refractiveIndex').value = material.n;
+                document.getElementById('reflectivity').value = material.reflectivity;
+                document.getElementById('transparency').value = material.transparency;
+                document.getElementById('absorptionR').value = material.absorption.r;
+                document.getElementById('absorptionG').value = material.absorption.g;
+                document.getElementById('absorptionB').value = material.absorption.b;
             }
         }
 
-        // 初始化应用
-        document.addEventListener('DOMContentLoaded', function () {
-            // 创建场景管理器
-            var sceneManager = new SceneManager();
+        document.getElementById('materialType').addEventListener('change', updateMaterialUIFromPreset);
 
-            // 初始化时就根据默认选中的图元类型显示对应的坐标区域
-            var defaultType = document.getElementById('primitiveType').value;
-            sceneManager.updateCoordinatesVisibility(defaultType);
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
 
-            // 初始化场景表单
-            sceneManager.updateSceneForm();
-
-            // 图元类型选择变化时更新坐标输入区域
-            document.getElementById('primitiveType').addEventListener('change', function (e) {
-                sceneManager.updateCoordinatesVisibility(e.target.value);
-                // 确保更新按钮状态正确
-                document.getElementById('updatePrimitive').disabled = !sceneManager.getSelectedPrimitive();
-            });
-
-            // 创建WebGL渲染器
-            var renderer = new WebGLRenderer('glCanvas');
-            renderer.setSceneManager(sceneManager);
-
-            // 颜色选择器变化时更新显示
-            document.getElementById('colorPicker').addEventListener('input', function (e) {
-                sceneManager.updateColorDisplay(e.target.value);
-            });
-
-            // 添加图元按钮
-            document.getElementById('addPrimitive').addEventListener('click', function () {
-                var type = document.getElementById('primitiveType').value;
-                var data = sceneManager.getPrimitiveDataFromForm(type);
-                sceneManager.addPrimitive(type, data);
-                sceneManager.loadSelectedToForm();
-            });
-
-            // 更新图元按钮
-            document.getElementById('updatePrimitive').addEventListener('click', function () {
-                var primitive = sceneManager.getSelectedPrimitive();
-                if (primitive) {
-                    var data = sceneManager.getPrimitiveDataFromForm(primitive.type);
-                    sceneManager.updatePrimitive(primitive.id, data);
-                }
-            });
-
-            // 应用变换按钮
-            document.getElementById('applyTransform').addEventListener('click', function () {
-                var transform = {
-                    rotateX: parseFloat(document.getElementById('rotateX').value),
-                    rotateY: parseFloat(document.getElementById('rotateY').value),
-                    rotateZ: parseFloat(document.getElementById('rotateZ').value),
-                    translateX: parseFloat(document.getElementById('translateX').value),
-                    translateY: parseFloat(document.getElementById('translateY').value),
-                    translateZ: parseFloat(document.getElementById('translateZ').value),
-                    scaleX: parseFloat(document.getElementById('scaleX').value),
-                    scaleY: parseFloat(document.getElementById('scaleY').value),
-                    scaleZ: parseFloat(document.getElementById('scaleZ').value)
-                };
-                sceneManager.applyTransform(transform);
-            });
-
-            // 重置变换按钮
-            document.getElementById('resetTransform').addEventListener('click', function () {
-                sceneManager.resetTransform();
-            });
-
-            // 应用原点设置
-            document.getElementById('applyOrigin').addEventListener('click', function () {
-                var origin = {
-                    x: parseFloat(document.getElementById('originX').value),
-                    y: parseFloat(document.getElementById('originY').value),
-                    z: parseFloat(document.getElementById('originZ').value)
-                };
-                sceneManager.applyOrigin(origin);
-            });
-
-            // 重置原点设置
-            document.getElementById('resetOrigin').addEventListener('click', function () {
-                sceneManager.resetOrigin();
-            });
-
-            // 应用摄像机设置
-            document.getElementById('applyCamera').addEventListener('click', function () {
-                var camera = {
-                    x: parseFloat(document.getElementById('cameraX').value),
-                    y: parseFloat(document.getElementById('cameraY').value),
-                    z: parseFloat(document.getElementById('cameraZ').value),
-                    targetX: parseFloat(document.getElementById('targetX').value),
-                    targetY: parseFloat(document.getElementById('targetY').value),
-                    targetZ: parseFloat(document.getElementById('targetZ').value),
-                    fov: parseFloat(document.getElementById('fov').value),
-                    near: parseFloat(document.getElementById('nearPlane').value),
-                    far: parseFloat(document.getElementById('farPlane').value)
-                };
-                sceneManager.applyCamera(camera);
-            });
-
-            // 重置摄像机设置
-            document.getElementById('resetCamera').addEventListener('click', function () {
-                sceneManager.resetCamera();
-            });
-
-            // 导入JSON
-            document.getElementById('importJson').addEventListener('change', function (e) {
-                var file = e.target.files[0];
-                if (!file) return;
-
-                var reader = new FileReader();
-                reader.onload = function (event) {
-                    if (sceneManager.importFromJSON(event.target.result)) {
-                        alert('导入成功');
-                    } else {
-                        alert('导入失败，请检查文件格式');
+            if (currentMode === 'light') {
+                const intensitySlider = document.getElementById('lightIntensity');
+                const intensity = intensitySlider ? parseFloat(intensitySlider.value) || 1.0 : 1.0;
+                scene.lights.push({ position: point, intensity: intensity });
+                updateSceneObjectList();
+                redraw();
+            } else {
+                if (!isPlacingObject) {
+                    isPlacingObject = true;
+                    placementStartPoint = point;
+                    if (currentMode === 'circle') {
+                        createTempCircle(point);
+                    } else if (currentMode === 'lens') {
+                        // For lens, we need two points. Start point is set.
+                    } else if (currentMode === 'mirror') {
+                        // For mirror, we need two points. Start point is set.
                     }
-                };
-                reader.readAsText(file);
-
-                // 重置文件输入，允许重复选择同一个文件
-                e.target.value = '';
-            });
-
-            // 导出JSON
-            document.getElementById('exportJson').addEventListener('click', function () {
-                if (sceneManager.getCount() === 0) {
-                    alert('没有可导出的图元');
-                    return;
-                }
-
-                var json = sceneManager.exportToJSON();
-                var blob = new Blob([json], { type: 'application/json' });
-                var url = URL.createObjectURL(blob);
-
-                var a = document.createElement('a');
-                a.href = url;
-                a.download = 'webgl_primitives.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            });
-
-            // 导入Excel
-            document.getElementById('importExcel').addEventListener('change', function (e) {
-                var file = e.target.files[0];
-                if (!file) return;
-
-                var reader = new FileReader();
-                reader.onload = function (event) {
-                    try {
-                        var data = new Uint8Array(event.target.result);
-                        var workbook = XLSX.read(data, { type: 'array' });
-                        if (sceneManager.importFromExcel(workbook)) {
-                            alert('导入成功');
-                        } else {
-                            alert('导入失败，请检查文件格式');
-                        }
-                    } catch (error) {
-                        console.error('Excel导入错误:', error);
-                        alert('导入失败: ' + error.message);
+                } else { // Second click for lens/mirror
+                    if ((currentMode === 'lens' || currentMode === 'mirror') && placementStartPoint) {
+                        finalizeShape(placementStartPoint, point);
+                        isPlacingObject = false;
+                        placementStartPoint = null;
+                        tempPreviewObject = null;
                     }
-                };
-                reader.readAsArrayBuffer(file);
-
-                // 重置文件输入
-                e.target.value = '';
-            });
-
-            // 导出Excel
-            document.getElementById('exportExcel').addEventListener('click', function () {
-                if (sceneManager.getCount() === 0) {
-                    alert('没有可导出的图元');
-                    return;
                 }
-
-                sceneManager.exportToExcel();
-            });
-
-            // 清空所有图元
-            document.getElementById('clearAll').addEventListener('click', function () {
-                if (confirm('确定要删除所有图元吗？')) {
-                    sceneManager.clearAll();
-                    document.getElementById('updatePrimitive').disabled = true;
-                }
-            });
-
-            // 初始化颜色显示
-            sceneManager.updateColorDisplay(document.getElementById('colorPicker').value);
+            }
         });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
+
+            if (isPlacingObject && placementStartPoint) {
+                if (currentMode === 'circle') {
+                    if (tempPreviewObject) {
+                        const radius = vec2Distance(placementStartPoint, point);
+                        tempPreviewObject.radius = radius;
+                    }
+                } else if (currentMode === 'lens' || currentMode === 'mirror') {
+                    // Update temporary line preview
+                    tempPreviewObject = {
+                        type: currentMode,
+                        p1: placementStartPoint,
+                        p2: point
+                    };
+                }
+                redraw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
+
+            if (isPlacingObject && placementStartPoint && (currentMode === 'circle')) {
+                finalizeShape(placementStartPoint, point);
+                isPlacingObject = false;
+                placementStartPoint = null;
+                tempPreviewObject = null;
+            }
+            // For lens/mirror, finalization happens on second mousedown
+        });
+
+
+        function createTempCircle(center) {
+            const radius = 30; // Default or from slider?
+            tempPreviewObject = {
+                type: 'circle',
+                center: center,
+                radius: radius
+            };
+        }
+
+        function getMaterialFromUI() {
+            return {
+                n: parseFloat(document.getElementById('refractiveIndex').value),
+                reflectivity: parseFloat(document.getElementById('reflectivity').value),
+                transparency: parseFloat(document.getElementById('transparency').value),
+                absorption: {
+                    r: parseFloat(document.getElementById('absorptionR').value),
+                    g: parseFloat(document.getElementById('absorptionG').value),
+                    b: parseFloat(document.getElementById('absorptionB').value)
+                }
+            };
+        }
+
+        function finalizeShape(p1, p2) {
+            const material = getMaterialFromUI();
+            let newShape = null;
+
+            if (currentMode === 'circle') {
+                const radius = vec2Distance(p1, p2);
+                newShape = {
+                    type: 'circle',
+                    center: p1,
+                    radius: radius,
+                    material: material
+                };
+            } else if (currentMode === 'lens') {
+                // Simple plano-convex lens representation
+                const center = vec2Scale(vec2Add(p1, p2), 0.5);
+                const axis = vec2Subtract(p2, p1);
+                const length = vec2Length(axis);
+                const rotation = Math.atan2(axis.y, axis.x);
+
+                // --- Fix: Get focal length safely ---
+                const focalLengthInput = document.getElementById('lensFocalLength');
+                const focalLength = focalLengthInput ? parseFloat(focalLengthInput.value) || 100 : 100;
+
+                newShape = {
+                    type: 'lens',
+                    p1: p1,
+                    p2: p2,
+                    center: center,
+                    axis: axis,
+                    length: length,
+                    rotation: rotation,
+                    focalLength: focalLength,
+                    material: material
+                };
+            } else if (currentMode === 'mirror') {
+                const center = vec2Scale(vec2Add(p1, p2), 0.5);
+                const axis = vec2Subtract(p2, p1);
+                const length = vec2Length(axis);
+                const rotation = Math.atan2(axis.y, axis.x);
+
+                newShape = {
+                    type: 'mirror',
+                    p1: p1,
+                    p2: p2,
+                    center: center,
+                    axis: axis,
+                    length: length,
+                    rotation: rotation
+                };
+            }
+
+            if (newShape) {
+                scene.shapes.push(newShape);
+                updateSceneObjectList();
+                redraw();
+            }
+        }
+
+        function clearScene() {
+            scene.lights = [];
+            scene.shapes = [];
+            updateSceneObjectList();
+            redraw();
+            statusBar.textContent = "Scene cleared.";
+        }
+
+        function updateSceneObjectList() {
+            sceneObjectsList.innerHTML = '';
+            if (scene.lights.length === 0 && scene.shapes.length === 0) {
+                sceneObjectsList.innerHTML = '<p>No objects placed yet.</p>';
+                return;
+            }
+
+            scene.lights.forEach((light, index) => {
+                const lightDiv = document.createElement('div');
+                lightDiv.className = 'shape-info';
+                lightDiv.innerHTML = `
+                            <h4>Light Source ${index + 1}</h4>
+                            <p>Pos: (${light.position.x.toFixed(1)}, ${light.position.y.toFixed(1)})</p>
+                            <p>Intensity: ${light.intensity.toFixed(2)}</p>
+                        `;
+                sceneObjectsList.appendChild(lightDiv);
+            });
+
+            scene.shapes.forEach((shape, index) => {
+                const shapeDiv = document.createElement('div');
+                shapeDiv.className = 'shape-info';
+                let info = `<h4>${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} ${index + 1}</h4>`;
+                if (shape.type === 'circle') {
+                    info += `<p>Center: (${shape.center.x.toFixed(1)}, ${shape.center.y.toFixed(1)})</p>`;
+                    info += `<p>Radius: ${shape.radius.toFixed(1)}</p>`;
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    info += `<p>P1: (${shape.p1.x.toFixed(1)}, ${shape.p1.y.toFixed(1)})</p>`;
+                    info += `<p>P2: (${shape.p2.x.toFixed(1)}, ${shape.p2.y.toFixed(1)})</p>`;
+                    if (shape.type === 'lens') {
+                        info += `<p>Focal Length: ${shape.focalLength.toFixed(1)}</p>`;
+                    }
+                }
+                info += `<p>n: ${shape.material ? shape.material.n.toFixed(2) : 'N/A'}</p>`;
+                shapeDiv.innerHTML = info;
+                sceneObjectsList.appendChild(shapeDiv);
+            });
+        }
+
+        // --- Ray Tracing and Physics ---
+
+        function solveQuadratic(a, b, c) {
+            const discriminant = b * b - 4 * a * c;
+            if (discriminant < 0) return [];
+            if (discriminant === 0) return [-b / (2 * a)];
+            const sqrtDiscriminant = Math.sqrt(discriminant);
+            return [(-b + sqrtDiscriminant) / (2 * a), (-b - sqrtDiscriminant) / (2 * a)];
+        }
+
+        function intersectRayCircle(rayOrigin, rayDirection, circleCenter, circleRadius) {
+            const oc = vec2Subtract(rayOrigin, circleCenter);
+            const a = vec2Dot(rayDirection, rayDirection);
+            const b = 2.0 * vec2Dot(oc, rayDirection);
+            const c = vec2Dot(oc, oc) - circleRadius * circleRadius;
+            const ts = solveQuadratic(a, b, c).filter(t => t > 1e-6); // Ignore hits behind the ray or too close
+            if (ts.length === 0) return null;
+            const t = Math.min(...ts);
+            const hitPoint = vec2Add(rayOrigin, vec2Scale(rayDirection, t));
+            const normal = vec2Normalize(vec2Subtract(hitPoint, circleCenter));
+            return { t, hitPoint, normal };
+        }
+
+        function intersectRayLineSegment(rayOrigin, rayDirection, p1, p2) {
+            // Based on Wikipedia's Line-line intersection article
+            const p3 = rayOrigin;
+            const p4 = vec2Add(rayOrigin, rayDirection); // Any point on the ray line
+            const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+
+            if (Math.abs(denom) < 1e-10) {
+                return null; // Lines are parallel
+            }
+
+            const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / denom;
+            const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / denom;
+
+            // Check if intersection is within the segment (t in [0,1]) and on the forward ray (u >= 0)
+            if (t >= 0 && t <= 1 && u >= 1e-6) {
+                const hitPoint = vec2Add(p1, vec2Scale(vec2Subtract(p2, p1), t));
+                // Normal for a line segment (perpendicular, pointing "up" relative to p1->p2)
+                const segmentVec = vec2Subtract(p2, p1);
+                const normal = vec2Normalize(vec2(-segmentVec.y, segmentVec.x));
+                // Ensure normal points towards the ray origin (for correct side detection)
+                // This might need refinement for complex cases, but works for simple reflection/mirror
+                return { t: u, hitPoint, normal };
+            }
+            return null;
+        }
+
+        function findClosestIntersection(rayOrigin, rayDirection, excludeShape = null) {
+            let closestHit = null;
+            let closestT = Infinity;
+            let hitShape = null;
+
+            for (const shape of scene.shapes) {
+                if (shape === excludeShape) continue; // Don't intersect with the shape the ray just left
+
+                let hitResult = null;
+                if (shape.type === 'circle') {
+                    hitResult = intersectRayCircle(rayOrigin, rayDirection, shape.center, shape.radius);
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    // Treat lens boundary as a line segment for now (simplified)
+                    hitResult = intersectRayLineSegment(rayOrigin, rayDirection, shape.p1, shape.p2);
+                    // Note: A real lens would involve Snell's law at the curved surfaces.
+                    // This is a simplification for visualization.
+                }
+
+                if (hitResult && hitResult.t < closestT) {
+                    closestT = hitResult.t;
+                    closestHit = hitResult;
+                    hitShape = shape;
+                }
+            }
+            return closestHit ? { ...closestHit, shape: hitShape } : null;
+        }
+
+        function reflectRay(incidentDir, normal) {
+            const dot = vec2Dot(incidentDir, normal);
+            return vec2Subtract(incidentDir, vec2Scale(normal, 2 * dot));
+        }
+
+        function refractRay(incidentDir, normal, n1, n2) {
+            const n = n1 / n2;
+            const cosI = -vec2Dot(normal, incidentDir);
+            const sinT2 = n * n * (1.0 - cosI * cosI);
+
+            if (sinT2 > 1.0) {
+                return null; // Total Internal Reflection
+            }
+
+            const cosT = Math.sqrt(1.0 - sinT2);
+            return vec2Add(vec2Scale(incidentDir, n), vec2Scale(normal, n * cosI - cosT));
+        }
+
+        function traceRay(origin, direction, intensity, depth, wavelength = 550) { // Default to green-ish
+            if (depth <= 0 || intensity < 0.01) {
+                return []; // Stop tracing if depth limit reached or intensity too low
+            }
+
+            const pathSegments = [];
+            let currentOrigin = origin;
+            let currentDirection = direction;
+            let currentIntensity = intensity;
+            let currentWavelength = wavelength;
+            let insideShape = null; // Track which shape's interior the ray is currently in
+
+            while (true) {
+                const hit = findClosestIntersection(currentOrigin, currentDirection, insideShape);
+
+                if (!hit) {
+                    // Ray exits to infinity
+                    pathSegments.push({
+                        start: currentOrigin,
+                        end: vec2Add(currentOrigin, vec2Scale(currentDirection, 10000)), // Draw a long line
+                        intensity: currentIntensity,
+                        wavelength: currentWavelength
+                    });
+                    break;
+                }
+
+                const { hitPoint, normal, shape } = hit;
+
+                // Determine if the ray is entering or exiting the shape
+                const rayDirectionDotNormal = vec2Dot(currentDirection, normal);
+                const isEntering = rayDirectionDotNormal < 0;
+                const trueNormal = isEntering ? normal : vec2Scale(normal, -1); // Use normal facing the ray
+
+                // Absorb a bit of light when hitting any surface
+                if (shape.material && shape.material.absorption) {
+                    const absorption = shape.material.absorption;
+                    // Simplified wavelength-dependent absorption could go here
+                    // For now, use average or a specific channel
+                    currentIntensity *= (1 - (absorption.r + absorption.g + absorption.b) / 3);
+                }
+
+                pathSegments.push({
+                    start: currentOrigin,
+                    end: hitPoint,
+                    intensity: currentIntensity,
+                    wavelength: currentWavelength
+                });
+
+                // Determine media indices
+                const n1 = insideShape ? insideShape.material.n : 1.0; // Outside is air/vacuum
+                const n2 = shape.material ? shape.material.n : 1.0;
+
+                let transmittedDir = null;
+                let transmittedIntensity = 0;
+                let reflectedDir = null;
+                let reflectedIntensity = 0;
+
+                if (shape.type === 'mirror') {
+                    // Perfect mirror reflection
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity; // Assume perfect reflector for simplicity in this mode
+                } else if (shape.material) {
+                    // Handle transparent/refractive materials
+
+                    // Fresnel effect (Schlick's approximation) for reflectivity/transmission split
+                    const r0 = Math.pow((n1 - n2) / (n1 + n2), 2);
+                    const cosTheta = -vec2Dot(trueNormal, currentDirection);
+                    let fresnelReflectance = r0 + (1 - r0) * Math.pow(1 - cosTheta, 5);
+                    // Clamp reflectance based on material property
+                    fresnelReflectance = clamp(fresnelReflectance, 0, shape.material.reflectivity);
+
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity * fresnelReflectance;
+
+                    // Refraction
+                    if (n2 > 0) { // Avoid division by zero
+                        transmittedDir = refractRay(currentDirection, trueNormal, n1, n2);
+                    }
+                    transmittedIntensity = currentIntensity * (1 - fresnelReflectance) * shape.material.transparency;
+
+                    // Apply material absorption to transmitted ray
+                    if (transmittedDir && shape.material.absorption) {
+                        // This absorption is applied per segment, so it's cumulative over distance
+                        // A more accurate model would integrate absorption over the path length
+                    }
+
+                } else {
+                    // Default behavior if no special material (shouldn't happen with current setup)
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity * 0.05; // Small default reflection
+                    transmittedDir = reflectRay(vec2Scale(currentDirection, -1), trueNormal); // Just pass through
+                    transmittedIntensity = currentIntensity * 0.95;
+                }
+
+                // Decide which ray(s) to follow
+                // In a full simulation, you'd trace both and add their contributions.
+                // Here, we'll follow one path probabilistically or the strongest one for visualization.
+
+                // Simple approach: Follow the path with higher intensity
+                if (reflectedIntensity > transmittedIntensity && reflectedIntensity > 0.01) {
+                    // Follow reflected ray
+                    currentOrigin = hitPoint;
+                    currentDirection = reflectedDir;
+                    currentIntensity = reflectedIntensity;
+                    // insideShape stays the same for reflection
+                } else if (transmittedIntensity > 0.01) {
+                    // Follow transmitted/refracted ray
+                    currentOrigin = hitPoint;
+                    currentDirection = transmittedDir;
+                    currentIntensity = transmittedIntensity;
+                    // Toggle inside/outside status
+                    insideShape = (insideShape === shape) ? null : shape;
+                } else {
+                    // Both intensities are too low, stop tracing this path
+                    break;
+                }
+                depth--;
+            }
+            return pathSegments;
+        }
+
+
+        function simulateRays() {
+            if (scene.lights.length === 0) {
+                statusBar.textContent = "No light sources to simulate.";
+                return;
+            }
+
+            const maxDepthInput = document.getElementById('maxRayDepth');
+            const numRaysInput = document.getElementById('numRays');
+
+            const maxDepth = maxDepthInput ? parseInt(maxDepthInput.value) || 5 : 5;
+            const numRaysPerSource = numRaysInput ? parseInt(numRaysInput.value) || 36 : 36;
+
+            const allPaths = [];
+
+            scene.lights.forEach(light => {
+                const intensity = light.intensity;
+                for (let i = 0; i < numRaysPerSource; i++) {
+                    const angle = (2 * Math.PI * i) / numRaysPerSource;
+                    const direction = vec2(Math.cos(angle), Math.sin(angle));
+                    // Slightly offset origin to prevent self-intersection
+                    const origin = vec2Add(light.position, vec2Scale(direction, 0.1));
+
+                    // Assign a pseudo-random wavelength for color coding (400nm - 700nm)
+                    const wavelength = 400 + (300 * (i / Math.max(1, numRaysPerSource - 1)));
+
+                    const paths = traceRay(origin, direction, intensity, maxDepth, wavelength);
+                    allPaths.push(...paths);
+                }
+            });
+
+            drawRayPaths(allPaths);
+            statusBar.textContent = `Simulation complete. Traced ${allPaths.length} ray segments.`;
+        }
+
+
+        // --- Rendering ---
+
+        function wavelengthToRgb(wavelength) {
+            let r, g, b, alpha, wl = wavelength;
+
+            // Based on: http://www.physics.sfasu.edu/astro/color/spectra.html
+            // And adapted from: https://stackoverflow.com/a/34002550
+            if (wl >= 380 && wl < 440) {
+                r = -(wl - 440) / (440 - 380);
+                g = 0.0;
+                b = 1.0;
+            } else if (wl >= 440 && wl < 490) {
+                r = 0.0;
+                g = (wl - 440) / (490 - 440);
+                b = 1.0;
+            } else if (wl >= 490 && wl < 510) {
+                r = 0.0;
+                g = 1.0;
+                b = -(wl - 510) / (510 - 490);
+            } else if (wl >= 510 && wl < 580) {
+                r = (wl - 510) / (580 - 510);
+                g = 1.0;
+                b = 0.0;
+            } else if (wl >= 580 && wl < 645) {
+                r = 1.0;
+                g = -(wl - 645) / (645 - 580);
+                b = 0.0;
+            } else if (wl >= 645 && wl <= 700) {
+                r = 1.0;
+                g = 0.0;
+                b = 0.0;
+            } else {
+                r = 0.0;
+                g = 0.0;
+                b = 0.0;
+            }
+
+            // Intensity correction near vision limits
+            if (wl >= 380 && wl < 420) {
+                alpha = 0.3 + 0.7 * (wl - 380) / (420 - 380);
+            } else if (wl >= 420 && wl < 700) {
+                alpha = 1.0;
+            } else if (wl >= 700 && wl <= 780) {
+                alpha = 0.3 + 0.7 * (780 - wl) / (780 - 700);
+            } else {
+                alpha = 0.0;
+            }
+
+            // Scale down intensities for purples and blues for better visual balance
+            // The human eye is less sensitive to blue/violet
+            if (wl >= 380 && wl < 440) {
+                r *= 0.7; // Reduce red component in violet
+            }
+            if (wl >= 440 && wl < 500) {
+                b *= 0.8; // Reduce blue component in blue
+            }
+
+            return { r: r * alpha, g: g * alpha, b: b * alpha };
+        }
+
+        function drawRayPaths(paths) {
+            redraw(); // Clear previous paths
+            ctx.lineCap = 'round';
+
+            paths.forEach(segment => {
+                const startX = segment.start.x;
+                const startY = segment.start.y;
+                const endX = segment.end.x;
+                const endY = segment.end.y;
+
+                // Map wavelength to color
+                const color = wavelengthToRgb(segment.wavelength);
+
+                // Scale intensity (can be non-linear for better visuals)
+                const scaledIntensity = Math.sqrt(clamp(segment.intensity, 0, 1)); // sqrt for perceptual brightness
+                const lineAlpha = clamp(scaledIntensity, 0.1, 1.0); // Minimum visibility
+
+                const lineColor = `rgba(${Math.floor(color.r * 255)}, ${Math.floor(color.g * 255)}, ${Math.floor(color.b * 255)}, ${lineAlpha})`;
+
+                // Line width can also represent intensity or be fixed
+                const lineWidth = Math.max(0.5, scaledIntensity * 2);
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = lineWidth;
+                ctx.stroke();
+            });
+        }
+
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Shapes
+            scene.shapes.forEach(shape => {
+                ctx.beginPath();
+                if (shape.type === 'circle') {
+                    ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, 2 * Math.PI);
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    ctx.moveTo(shape.p1.x, shape.p1.y);
+                    ctx.lineTo(shape.p2.x, shape.p2.y);
+                }
+
+                if (shape.type === 'mirror') {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } else if (shape.type === 'lens') {
+                    ctx.strokeStyle = '#a0d0ff'; // Light blueish
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    // Could draw a more complex lens shape here
+                } else if (shape.type === 'circle') {
+                    // Fill for solid objects like glass/water spheres
+                    if (shape.material && shape.material.transparency < 1.0) {
+                        // Darker fill color based on absorption
+                        const avgAbsorption = (shape.material.absorption.r + shape.material.absorption.g + shape.material.absorption.b) / 3;
+                        const fillAlpha = 1.0 - shape.material.transparency;
+                        // Base color could be derived from material or fixed
+                        ctx.fillStyle = `rgba(100, 150, 255, ${fillAlpha * (1 - avgAbsorption)})`; // Example blueish
+                        ctx.fill();
+                    }
+                    ctx.strokeStyle = '#cccccc';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw Temporary Preview Object (while placing)
+            if (tempPreviewObject) {
+                ctx.beginPath();
+                if (tempPreviewObject.type === 'circle' && tempPreviewObject.center) {
+                    ctx.arc(tempPreviewObject.center.x, tempPreviewObject.center.y, tempPreviewObject.radius, 0, 2 * Math.PI);
+                    ctx.setLineDash([5, 3]);
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                } else if ((tempPreviewObject.type === 'lens' || tempPreviewObject.type === 'mirror') && tempPreviewObject.p1 && tempPreviewObject.p2) {
+                    ctx.moveTo(tempPreviewObject.p1.x, tempPreviewObject.p1.y);
+                    ctx.lineTo(tempPreviewObject.p2.x, tempPreviewObject.p2.y);
+                    ctx.setLineDash([5, 3]);
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = tempPreviewObject.type === 'mirror' ? 3 : 2;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // Draw Lights
+            scene.lights.forEach(light => {
+                ctx.beginPath();
+                ctx.arc(light.position.x, light.position.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffff00'; // Yellow
+                ctx.fill();
+                ctx.strokeStyle = '#ffaa00'; // Orange stroke
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+        }
+
+        // --- Initialization ---
+        updateToolSettingsUI(); // Initialize tool settings UI
+        updateMaterialUIFromPreset(); // Initialize material UI based on default selection
+        redraw();
+
     </script>
+
 </body>
 </html>
