@@ -1,0 +1,2635 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 完整3D渲染器 v2</title>
+    <style>
+        :root {
+            --primary: #00dbde;
+            --secondary: #fc00ff;
+            --bg-dark: #0a0a1a;
+            --bg-medium: #1a1a2e;
+            --bg-light: #2d2d44;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0d0;
+            --success: #2ecc71;
+            --warning: #f39c12;
+            --error: #e74c3c;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-medium) 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+        }
+
+        /* 导航栏 */
+        .navbar {
+            background: rgba(10, 10, 26, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid var(--primary);
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+            .logo h1 {
+                font-size: 1.8rem;
+                background: linear-gradient(90deg, var(--primary), var(--secondary));
+                -webkit-background-clip: text;
+                background-clip: text;
+                color: transparent;
+            }
+
+        /* 标签页样式 */
+        .tab-container {
+            width: 100%;
+        }
+
+        .tab-header {
+            display: flex;
+            gap: 0.5rem;
+            padding: 0 1rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-button {
+            padding: 0.8rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+            .tab-button:hover {
+                color: var(--text-primary);
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+            .tab-button.active {
+                color: var(--primary);
+                border-bottom-color: var(--primary);
+                background: rgba(0, 219, 222, 0.1);
+            }
+
+        .tab-content {
+            display: none;
+            padding: 1.5rem;
+        }
+
+            .tab-content.active {
+                display: block;
+            }
+
+        /* 主容器 */
+        .main-container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 1.5rem;
+            padding: 1.5rem;
+            flex: 1;
+            height: calc(100vh - 140px);
+        }
+
+        @media (max-width: 1200px) {
+            .main-container {
+                grid-template-columns: 1fr;
+                height: auto;
+            }
+        }
+
+        /* 渲染区域 */
+        .canvas-container {
+            background: var(--bg-medium);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        #webgpuCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* 控制面板 */
+        .control-panel {
+            background: var(--bg-medium);
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+        }
+
+        .panel-section {
+            background: rgba(45, 45, 68, 0.5);
+            border-radius: 8px;
+            padding: 1.2rem;
+            margin: 0 1rem 1rem 1rem;
+            border-left: 4px solid var(--primary);
+        }
+
+        .panel-header {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--primary);
+        }
+
+        /* 修复所有UI元素样式 */
+        .control-group {
+            margin-bottom: 1rem;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+
+        .label-text {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .value-display {
+            color: var(--primary);
+            font-weight: bold;
+            font-size: 0.9rem;
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* 修复下拉框 */
+        select, input[type="range"], button, input[type="color"] {
+            width: 100%;
+            padding: 0.8rem;
+            background: rgba(40, 40, 60, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        select {
+            background: rgba(40, 40, 60, 0.9) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%23ffffff' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E") no-repeat right 1rem center;
+            background-size: 12px;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+
+            select option {
+                background: #28283c;
+                color: white;
+                padding: 0.5rem;
+            }
+
+        /* 修复滑块 */
+        input[type="range"] {
+            padding: 0;
+            height: 6px;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 3px;
+            outline: none;
+        }
+
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: white;
+                cursor: pointer;
+                border: 2px solid var(--primary);
+            }
+
+        /* 按钮 */
+        button {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            font-weight: 600;
+            border: none;
+        }
+
+            button:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 5px 15px rgba(0, 219, 222, 0.4);
+            }
+
+        .button-group {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.8rem;
+            margin-top: 1rem;
+        }
+
+        /* 开关 */
+        .toggle-switch {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            padding: 0.5rem 0;
+        }
+
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 50px;
+            height: 26px;
+        }
+
+            .switch input {
+                opacity: 0;
+                width: 0;
+                height: 0;
+            }
+
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #555;
+            transition: .4s;
+            border-radius: 34px;
+        }
+
+            .slider:before {
+                position: absolute;
+                content: "";
+                height: 18px;
+                width: 18px;
+                left: 4px;
+                bottom: 4px;
+                background-color: white;
+                transition: .4s;
+                border-radius: 50%;
+            }
+
+        input:checked + .slider {
+            background-color: var(--primary);
+        }
+
+            input:checked + .slider:before {
+                transform: translateX(24px);
+            }
+
+        /* 性能监控 */
+        .performance-panel {
+            background: rgba(26, 26, 46, 0.8);
+            border-radius: 8px;
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 0.8rem;
+            margin: 1rem;
+        }
+
+        .metric {
+            text-align: center;
+            padding: 0.5rem;
+            background: rgba(45, 45, 68, 0.5);
+            border-radius: 6px;
+        }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+        }
+
+        .metric-value {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--success);
+        }
+
+        /* 状态指示器 */
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.3rem 0.8rem;
+            background: rgba(46, 204, 113, 0.2);
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.5;
+            }
+        }
+
+        /* 加载动画 */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 2rem;
+            border-radius: 10px;
+            z-index: 1000;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* 通知 */
+        .notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 1rem 1.5rem;
+            background: var(--bg-medium);
+            border-left: 4px solid var(--primary);
+            border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+            z-index: 1000;
+        }
+
+            .notification.show {
+                transform: translateX(0);
+            }
+
+        /* 自定义滚动条 */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 4px;
+        }
+
+        /* 错误容器 */
+        .error-container {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            text-align: center;
+            max-width: 80%;
+            z-index: 2000;
+        }
+
+            .error-container h3 {
+                margin-bottom: 1rem;
+                color: white;
+            }
+
+            .error-container p {
+                margin-bottom: 0.5rem;
+                line-height: 1.5;
+            }
+
+            .error-container button {
+                margin-top: 1rem;
+                background: white;
+                color: var(--error);
+                border: none;
+                padding: 0.8rem 1.5rem;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: bold;
+                transition: all 0.3s ease;
+            }
+
+                .error-container button:hover {
+                    background: #f0f0f0;
+                    transform: translateY(-2px);
+                }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            .main-container {
+                padding: 1rem;
+                gap: 1rem;
+            }
+
+            .tab-header {
+                flex-wrap: wrap;
+            }
+
+            .tab-button {
+                flex: 1;
+                min-width: 120px;
+                text-align: center;
+            }
+
+            .error-container {
+                padding: 1.5rem;
+                max-width: 90%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="logo">
+            <div class="logo-icon">⚡</div>
+            <h1>WebGPU 完整3D渲染器</h1>
+        </div>
+        <div class="nav-controls">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="statusText">初始化中...</span>
+            </div>
+            <button id="fullscreenBtn">全屏</button>
+        </div>
+    </nav>
+
+    <!-- 标签页导航 -->
+    <div class="tab-container">
+        <div class="tab-header">
+            <button class="tab-button active" data-tab="models">模型</button>
+            <button class="tab-button" data-tab="materials">材质</button>
+            <button class="tab-button" data-tab="lighting">光照</button>
+            <button class="tab-button" data-tab="effects">特效</button>
+            <button class="tab-button" data-tab="camera">相机</button>
+            <button class="tab-button" data-tab="advanced">高级</button>
+        </div>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="main-container">
+        <!-- 渲染区域 -->
+        <div class="canvas-container">
+            <canvas id="webgpuCanvas"></canvas>
+            <div id="loadingOverlay" class="loading">
+                <div class="spinner"></div>
+                <p id="loadingText">正在初始化WebGPU...</p>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="control-panel">
+            <div class="panel-content">
+                <!-- 模型标签页 -->
+                <div class="tab-content active" id="models-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">🎯 模型选择</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">模型类型</span>
+                                <span class="value-display" id="modelTypeDisplay">立方体</span>
+                            </div>
+                            <select id="modelType">
+                                <option value="cube">立方体</option>
+                                <option value="sphere">球体</option>
+                                <option value="cylinder">圆柱体</option>
+                                <option value="cone">圆锥体</option>
+                                <option value="torus">圆环面</option>
+                                <option value="plane">平面</option>
+                                <option value="pyramid">金字塔</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">细节等级</span>
+                                <span class="value-display" id="lodValue">高</span>
+                            </div>
+                            <div>
+                                <input type="range" id="lodSlider" min="1" max="3" step="1" value="3">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">缩放</span>
+                                <span class="value-display" id="scaleValue">1.0</span>
+                            </div>
+                            <div>
+                                <input type="range" id="scaleSlider" min="0.1" max="3" step="0.1" value="1.0">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">旋转速度</span>
+                                <span class="value-display" id="rotationSpeedValue">1.0</span>
+                            </div>
+                            <div>
+                                <input type="range" id="rotationSpeed" min="0" max="5" step="0.1" value="1.0">
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>线框模式</span>
+                            <label class="switch">
+                                <input type="checkbox" id="wireframeToggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="button-group">
+                            <button id="randomizeModel">随机变换</button>
+                            <button id="resetModel">重置模型</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 材质标签页 -->
+                <div class="tab-content" id="materials-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">🎨 材质属性</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">材质类型</span>
+                            </div>
+                            <select id="materialType">
+                                <option value="phong">Phong材质</option>
+                                <option value="pbr">PBR材质</option>
+                                <option value="toon">卡通着色</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">漫反射颜色</span>
+                            </div>
+                            <input type="color" id="diffuseColor" value="#3498db">
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">镜面反射颜色</span>
+                            </div>
+                            <input type="color" id="specularColor" value="#ffffff">
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">光泽度</span>
+                                <span class="value-display" id="shininessValue">32</span>
+                            </div>
+                            <div>
+                                <input type="range" id="shininess" min="1" max="256" step="1" value="32">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">粗糙度</span>
+                                <span class="value-display" id="roughnessValue">0.5</span>
+                            </div>
+                            <div>
+                                <input type="range" id="roughness" min="0" max="1" step="0.01" value="0.5">
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>法线贴图</span>
+                            <label class="switch">
+                                <input type="checkbox" id="normalMapToggle">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 光照标签页 -->
+                <div class="tab-content" id="lighting-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">💡 光照设置</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">光源数量</span>
+                                <span class="value-display" id="lightCountValue">3</span>
+                            </div>
+                            <div>
+                                <input type="range" id="lightCount" min="1" max="8" step="1" value="3">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">光源强度</span>
+                                <span class="value-display" id="lightIntensityValue">1.0</span>
+                            </div>
+                            <div>
+                                <input type="range" id="lightIntensity" min="0" max="5" step="0.1" value="1.0">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">环境光</span>
+                                <span class="value-display" id="ambientValue">0.3</span>
+                            </div>
+                            <div>
+                                <input type="range" id="ambientStrength" min="0" max="1" step="0.05" value="0.3">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">光源颜色</span>
+                            </div>
+                            <input type="color" id="lightColor" value="#ffffff">
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>动态光源</span>
+                            <label class="switch">
+                                <input type="checkbox" id="animateLight" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>阴影效果</span>
+                            <label class="switch">
+                                <input type="checkbox" id="enableShadows">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 特效标签页 -->
+                <div class="tab-content" id="effects-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">✨ 后期特效</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">后期效果</span>
+                            </div>
+                            <select id="postEffect">
+                                <option value="none">无效果</option>
+                                <option value="bloom">泛光</option>
+                                <option value="sepia">怀旧色调</option>
+                                <option value="invert">颜色反转</option>
+                                <option value="pixelate">像素化</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">效果强度</span>
+                                <span class="value-display" id="effectStrengthValue">0.5</span>
+                            </div>
+                            <div>
+                                <input type="range" id="effectStrength" min="0" max="1" step="0.05" value="0.5">
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>抗锯齿</span>
+                            <label class="switch">
+                                <input type="checkbox" id="enableAA" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>色调映射</span>
+                            <label class="switch">
+                                <input type="checkbox" id="enableToneMapping" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="button-group">
+                            <button id="screenshotBtn">截图</button>
+                            <button id="recordBtn">录制</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 相机标签页 -->
+                <div class="tab-content" id="camera-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">📷 相机控制</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">相机模式</span>
+                            </div>
+                            <select id="cameraMode">
+                                <option value="orbit">轨道相机</option>
+                                <option value="fps">第一人称</option>
+                                <option value="free">自由相机</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">视野角度</span>
+                                <span class="value-display" id="fovValue">75°</span>
+                            </div>
+                            <div>
+                                <input type="range" id="fov" min="30" max="120" step="1" value="75">
+                            </div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">相机距离</span>
+                                <span class="value-display" id="cameraDistanceValue">10.0</span>
+                            </div>
+                            <div>
+                                <input type="range" id="cameraDistance" min="2" max="50" step="0.5" value="10.0">
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>自动旋转</span>
+                            <label class="switch">
+                                <input type="checkbox" id="autoRotate" checked>
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="button-group">
+                            <button id="resetCamera">重置相机</button>
+                            <button id="toggleAnimation">暂停动画</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 高级标签页 -->
+                <div class="tab-content" id="advanced-tab">
+                    <div class="panel-section">
+                        <div class="panel-header">
+                            <div class="panel-title">⚙️ 高级设置</div>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">渲染质量</span>
+                            </div>
+                            <select id="renderQuality">
+                                <option value="low">低质量</option>
+                                <option value="medium">中等质量</option>
+                                <option value="high" selected>高质量</option>
+                            </select>
+                        </div>
+
+                        <div class="control-group">
+                            <div class="control-label">
+                                <span class="label-text">各向异性过滤</span>
+                                <span class="value-display" id="anisotropyValue">4x</span>
+                            </div>
+                            <div>
+                                <input type="range" id="anisotropy" min="1" max="16" step="1" value="4">
+                            </div>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>GPU时间戳</span>
+                            <label class="switch">
+                                <input type="checkbox" id="enableTimestamps">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="toggle-switch">
+                            <span>调试视图</span>
+                            <label class="switch">
+                                <input type="checkbox" id="debugView">
+                                <span class="slider"></span>
+                            </label>
+                        </div>
+
+                        <div class="button-group">
+                            <button id="reloadShaders">重载着色器</button>
+                            <button id="exportScene">导出场景</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 性能监控 -->
+                <div class="performance-panel">
+                    <div class="metric">
+                        <div class="metric-label">FPS</div>
+                        <div class="metric-value" id="fpsCounter">0</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">帧时间</div>
+                        <div class="metric-value" id="frameTime">0ms</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">顶点数</div>
+                        <div class="metric-value" id="vertexCount">0</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">三角形数</div>
+                        <div class="metric-value" id="triangleCount">0</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">显存使用</div>
+                        <div class="metric-value" id="gpuMemory">0 MB</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">绘制调用</div>
+                        <div class="metric-value" id="drawCalls">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知区域 -->
+    <div id="notification" class="notification">
+        <div id="notificationText"></div>
+    </div>
+
+    <script>
+        // ============ WebGPU 渲染器 - 完整功能版 ============
+        class WebGPURenderer {
+            constructor() {
+                // WebGPU相关
+                this.device = null;
+                this.context = null;
+                this.canvas = null;
+                this.adapter = null;
+
+                // 渲染相关
+                this.renderPipeline = null;
+                this.wireframePipeline = null;
+                this.depthTexture = null;
+
+                // 缓冲区
+                this.vertexBuffer = null;
+                this.indexBuffer = null;
+                this.uniformBuffer = null;
+                this.bindGroup = null;
+
+                // 状态
+                this.isInitialized = false;
+                this.isAnimating = true;
+                this.autoRotate = true;
+                this.frameCount = 0;
+                this.lastTime = 0;
+                this.drawCalls = 0;
+                this.animationFrameId = null;
+                this.destroyed = false;
+                this.useFallbackMode = false;
+
+                // 场景数据
+                this.camera = {
+                    position: [0, 2, 10],
+                    target: [0, 0, 0],
+                    up: [0, 1, 0],
+                    fov: 75 * Math.PI / 180,
+                    aspect: 1,
+                    near: 0.1,
+                    far: 1000,
+                    mode: 'orbit'
+                };
+
+                this.model = {
+                    rotation: { x: 0, y: 0 },
+                    scale: 1.0,
+                    position: [0, 0, 0],
+                    type: 'cube'
+                };
+
+                // 性能监控
+                this.performance = {
+                    fps: 0,
+                    frameTime: 0,
+                    vertexCount: 0,
+                    triangleCount: 0,
+                    drawCalls: 0
+                };
+
+                // 错误计数器
+                this.errorCount = 0;
+                this.maxErrors = 5;
+            }
+
+            // ============ 初始化 ============
+            async init() {
+                try {
+                    this.showLoading(true, '正在检查WebGPU支持...');
+                    this.updateStatus('正在检查WebGPU支持...');
+
+                    if (!navigator.gpu) {
+                        throw new Error('您的浏览器不支持WebGPU。请使用Chrome 113+或Edge 113+。');
+                    }
+
+                    // 尝试获取适配器（不使用powerPreference避免Windows上的警告）
+                    try {
+                        this.adapter = await navigator.gpu.requestAdapter();
+                    } catch (adapterError) {
+                        console.warn('请求适配器失败:', adapterError);
+                        // 尝试不带参数的请求
+                        this.adapter = await navigator.gpu.requestAdapter();
+                    }
+
+                    if (!this.adapter) {
+                        throw new Error('无法获取GPU适配器。您的设备可能不支持WebGPU或WebGPU已被禁用。');
+                    }
+
+                    console.log('适配器获取成功:', this.adapter);
+
+                    // 获取适配器限制
+                    const adapterLimits = this.adapter.limits;
+                    console.log('适配器限制:', adapterLimits);
+
+                    // 使用保守的限制值
+                    const maxUniformBufferBindingSize = Math.min(adapterLimits.maxUniformBufferBindingSize || 65536, 65536);
+                    const maxStorageBufferBindingSize = Math.min(adapterLimits.maxStorageBufferBindingSize || 65536, 65536);
+
+                    console.log('使用的限制值:');
+                    console.log('- maxUniformBufferBindingSize:', maxUniformBufferBindingSize);
+                    console.log('- maxStorageBufferBindingSize:', maxStorageBufferBindingSize);
+
+                    // 尝试请求设备
+                    try {
+                        this.device = await this.adapter.requestDevice({
+                            requiredLimits: {
+                                maxUniformBufferBindingSize: maxUniformBufferBindingSize,
+                                maxStorageBufferBindingSize: maxStorageBufferBindingSize,
+                            }
+                        });
+                    } catch (deviceError) {
+                        console.warn('请求设备失败，尝试使用更低的限制:', deviceError);
+
+                        // 第二次尝试，使用更低的限制
+                        try {
+                            this.device = await this.adapter.requestDevice({
+                                requiredLimits: {
+                                    maxUniformBufferBindingSize: 16384,
+                                    maxStorageBufferBindingSize: 16384,
+                                }
+                            });
+                        } catch (secondError) {
+                            console.warn('第二次尝试失败，尝试无限制配置:', secondError);
+
+                            // 最后一次尝试，不指定任何限制
+                            try {
+                                this.device = await this.adapter.requestDevice();
+                            } catch (finalError) {
+                                console.error('所有设备请求尝试都失败了:', finalError);
+                                throw new Error('无法创建GPU设备。请确保WebGPU功能已启用。');
+                            }
+                        }
+                    }
+
+                    if (!this.device) {
+                        throw new Error('无法创建GPU设备。');
+                    }
+
+                    console.log('设备创建成功:', this.device);
+
+                    // 设置设备丢失处理
+                    this.device.lost.then((info) => {
+                        console.error(`设备丢失: ${info.message}`);
+                        this.updateStatus('设备丢失', 'error');
+                        this.showNotification('GPU设备丢失，正在恢复...', 'warning');
+                        this.tryRecover();
+                    });
+
+                    this.updateStatus('✅ WebGPU已启用');
+
+                    this.canvas = document.getElementById('webgpuCanvas');
+                    if (!this.canvas) {
+                        throw new Error('Canvas元素未找到');
+                    }
+
+                    this.context = this.canvas.getContext('webgpu');
+                    if (!this.context) {
+                        throw new Error('无法获取WebGPU上下文。请确保浏览器支持WebGPU。');
+                    }
+
+                    const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+                    console.log('Canvas格式:', canvasFormat);
+
+                    this.context.configure({
+                        device: this.device,
+                        format: canvasFormat,
+                        alphaMode: 'opaque',
+                        usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.COPY_SRC,
+                        colorSpace: 'srgb'
+                    });
+
+                    this.resizeCanvas();
+
+                    // 创建管线
+                    await this.createPipelines();
+
+                    await this.loadModel('cube');
+
+                    this.isInitialized = true;
+                    this.showLoading(false);
+
+                    this.lastTime = performance.now();
+                    this.startRenderLoop();
+
+                    this.showNotification('WebGPU渲染器初始化成功！');
+
+                } catch (error) {
+                    console.error('初始化失败:', error);
+
+                    let errorMessage = error.message;
+
+                    // 根据错误类型提供更友好的消息
+                    if (error.message.includes('maxUniformBufferBindingSize') ||
+                        error.message.includes('required limits')) {
+                        errorMessage = 'GPU设备限制较低，正在使用兼容模式...';
+                        this.useFallbackMode = true;
+                        const fallbackSuccess = await this.initFallback();
+                        if (fallbackSuccess) {
+                            return true;
+                        }
+                    } else if (error.message.includes('adapter') ||
+                        error.message.includes('device')) {
+                        errorMessage = 'WebGPU初始化失败。请确保：\n1. 使用Chrome 113+或Edge 113+\n2. 已启用WebGPU功能\n3. 显卡驱动是最新的';
+                    }
+
+                    this.updateStatus(`❌ ${errorMessage.split('\n')[0]}`, 'error');
+                    this.showNotification(`初始化失败: ${errorMessage.split('\n')[0]}`, 'error');
+                    this.showError(errorMessage);
+                    this.showLoading(false);
+                    return false;
+                }
+                return true;
+            }
+
+            // ============ 回退模式 ============
+            async initFallback() {
+                try {
+                    this.showLoading(true, '正在使用兼容模式...');
+                    this.updateStatus('使用兼容模式...');
+
+                    console.log('尝试初始化回退模式...');
+
+                    // 清理之前的资源
+                    this.cleanupResources();
+
+                    // 重新获取适配器
+                    this.adapter = await navigator.gpu.requestAdapter();
+                    if (!this.adapter) {
+                        throw new Error('无法获取GPU适配器。');
+                    }
+
+                    // 使用最简单的配置
+                    this.device = await this.adapter.requestDevice();
+
+                    if (!this.device) {
+                        throw new Error('无法创建GPU设备。');
+                    }
+
+                    this.canvas = document.getElementById('webgpuCanvas');
+                    if (!this.canvas) {
+                        throw new Error('Canvas元素未找到');
+                    }
+
+                    this.context = this.canvas.getContext('webgpu');
+                    if (!this.context) {
+                        throw new Error('无法获取WebGPU上下文。');
+                    }
+
+                    const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+                    this.context.configure({
+                        device: this.device,
+                        format: canvasFormat,
+                        alphaMode: 'opaque'
+                    });
+
+                    this.resizeCanvas();
+
+                    // 创建简化版管线
+                    await this.createSimplePipelines();
+
+                    await this.loadModel('cube');
+
+                    this.isInitialized = true;
+                    this.showLoading(false);
+
+                    this.lastTime = performance.now();
+                    this.startRenderLoop();
+
+                    this.showNotification('WebGPU渲染器（兼容模式）初始化成功！', 'warning');
+                    console.log('回退模式初始化成功');
+
+                } catch (error) {
+                    console.error('回退模式初始化失败:', error);
+                    this.showError(`回退模式失败: ${error.message}`);
+                    return false;
+                }
+                return true;
+            }
+
+            // ============ 创建渲染管线 ============
+            async createPipelines() {
+                try {
+                    // 简化着色器以减少uniform大小
+                    const vertexShader = `
+                                struct Uniforms {
+                                    modelMatrix: mat4x4<f32>,
+                                    viewMatrix: mat4x4<f32>,
+                                    projectionMatrix: mat4x4<f32>,
+                                };
+
+                                struct VertexInput {
+                                    @location(0) position: vec3<f32>,
+                                    @location(1) normal: vec3<f32>,
+                                    @location(2) color: vec3<f32>,
+                                };
+
+                                struct VertexOutput {
+                                    @builtin(position) clipPosition: vec4<f32>,
+                                    @location(0) color: vec3<f32>,
+                                    @location(1) normal: vec3<f32>,
+                                };
+
+                                @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+                                @vertex
+                                fn main(input: VertexInput) -> VertexOutput {
+                                    var output: VertexOutput;
+
+                                    let worldPosition = uniforms.modelMatrix * vec4<f32>(input.position, 1.0);
+                                    output.clipPosition = uniforms.projectionMatrix * uniforms.viewMatrix * worldPosition;
+                                    output.color = input.color;
+                                    output.normal = normalize((uniforms.modelMatrix * vec4<f32>(input.normal, 0.0)).xyz);
+
+                                    return output;
+                                }
+                            `;
+
+                    const fragmentShader = `
+                                struct FragmentInput {
+                                    @location(0) color: vec3<f32>,
+                                    @location(1) normal: vec3<f32>,
+                                };
+
+                                @fragment
+                                fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+                                    let lightDir = normalize(vec3<f32>(0.5, 1.0, 0.5));
+                                    let ambient = 0.3;
+                                    let diffuse = max(dot(input.normal, lightDir), 0.0);
+                                    let intensity = ambient + diffuse * 0.7;
+
+                                    return vec4<f32>(input.color * intensity, 1.0);
+                                }
+                            `;
+
+                    // 简化版uniform缓冲区大小（3个mat4x4 = 192字节）
+                    const uniformBufferSize = 192;
+
+                    // 创建渲染管线
+                    this.renderPipeline = this.device.createRenderPipeline({
+                        layout: 'auto',
+                        vertex: {
+                            module: this.device.createShaderModule({
+                                code: vertexShader
+                            }),
+                            entryPoint: 'main',
+                            buffers: [{
+                                arrayStride: 9 * 4,
+                                attributes: [
+                                    { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                                    { shaderLocation: 1, offset: 3 * 4, format: 'float32x3' },
+                                    { shaderLocation: 2, offset: 6 * 4, format: 'float32x3' }
+                                ]
+                            }]
+                        },
+                        fragment: {
+                            module: this.device.createShaderModule({
+                                code: fragmentShader
+                            }),
+                            entryPoint: 'main',
+                            targets: [{
+                                format: navigator.gpu.getPreferredCanvasFormat(),
+                            }]
+                        },
+                        primitive: {
+                            topology: 'triangle-list',
+                            cullMode: 'back',
+                            frontFace: 'ccw'
+                        },
+                        depthStencil: {
+                            format: 'depth24plus',
+                            depthWriteEnabled: true,
+                            depthCompare: 'less'
+                        }
+                    });
+
+                    // 创建线框渲染管线
+                    const wireframeVertexShader = `
+                                struct Uniforms {
+                                    modelViewProjection: mat4x4<f32>,
+                                };
+
+                                struct VertexInput {
+                                    @location(0) position: vec3<f32>,
+                                };
+
+                                struct VertexOutput {
+                                    @builtin(position) clipPosition: vec4<f32>,
+                                    @location(0) color: vec3<f32>,
+                                };
+
+                                @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+                                @vertex
+                                fn main(input: VertexInput) -> VertexOutput {
+                                    var output: VertexOutput;
+                                    output.clipPosition = uniforms.modelViewProjection * vec4<f32>(input.position, 1.0);
+                                    output.color = vec3<f32>(1.0, 1.0, 1.0);
+                                    return output;
+                                }
+                            `;
+
+                    const wireframeFragmentShader = `
+                                struct FragmentInput {
+                                    @location(0) color: vec3<f32>,
+                                };
+
+                                @fragment
+                                fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+                                    return vec4<f32>(input.color, 1.0);
+                                }
+                            `;
+
+                    this.wireframePipeline = this.device.createRenderPipeline({
+                        layout: 'auto',
+                        vertex: {
+                            module: this.device.createShaderModule({
+                                code: wireframeVertexShader
+                            }),
+                            entryPoint: 'main',
+                            buffers: [{
+                                arrayStride: 9 * 4,
+                                attributes: [
+                                    { shaderLocation: 0, offset: 0, format: 'float32x3' }
+                                ]
+                            }]
+                        },
+                        fragment: {
+                            module: this.device.createShaderModule({
+                                code: wireframeFragmentShader
+                            }),
+                            entryPoint: 'main',
+                            targets: [{
+                                format: navigator.gpu.getPreferredCanvasFormat(),
+                            }]
+                        },
+                        primitive: {
+                            topology: 'line-list',
+                            cullMode: 'none'
+                        },
+                        depthStencil: {
+                            format: 'depth24plus',
+                            depthWriteEnabled: true,
+                            depthCompare: 'less'
+                        }
+                    });
+
+                    // 创建统一缓冲区
+                    this.uniformBuffer = this.device.createBuffer({
+                        size: uniformBufferSize,
+                        usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST
+                    });
+
+                    // 创建绑定组
+                    this.bindGroup = this.device.createBindGroup({
+                        layout: this.renderPipeline.getBindGroupLayout(0),
+                        entries: [
+                            { binding: 0, resource: { buffer: this.uniformBuffer } }
+                        ]
+                    });
+
+                    console.log('管线创建成功');
+
+                } catch (error) {
+                    console.error('创建管线失败:', error);
+                    throw error;
+                }
+            }
+
+            // ============ 创建简化管线 ============
+            async createSimplePipelines() {
+                try {
+                    // 超简化着色器 - 只使用位置和颜色，没有uniform
+                    const vertexShader = `
+                                struct VertexInput {
+                                    @location(0) position: vec3<f32>,
+                                    @location(1) color: vec3<f32>,
+                                };
+
+                                struct VertexOutput {
+                                    @builtin(position) clipPosition: vec4<f32>,
+                                    @location(0) color: vec3<f32>,
+                                };
+
+                                @vertex
+                                fn main(input: VertexInput) -> VertexOutput {
+                                    var output: VertexOutput;
+                                    // 简单变换
+                                    output.clipPosition = vec4<f32>(input.position * 0.5, 1.0);
+                                    output.color = input.color;
+                                    return output;
+                                }
+                            `;
+
+                    const fragmentShader = `
+                                struct FragmentInput {
+                                    @location(0) color: vec3<f32>,
+                                };
+
+                                @fragment
+                                fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+                                    return vec4<f32>(input.color, 1.0);
+                                }
+                            `;
+
+                    // 创建渲染管线
+                    this.renderPipeline = this.device.createRenderPipeline({
+                        layout: 'auto',
+                        vertex: {
+                            module: this.device.createShaderModule({
+                                code: vertexShader
+                            }),
+                            entryPoint: 'main',
+                            buffers: [{
+                                arrayStride: 6 * 4,
+                                attributes: [
+                                    { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                                    { shaderLocation: 1, offset: 3 * 4, format: 'float32x3' }
+                                ]
+                            }]
+                        },
+                        fragment: {
+                            module: this.device.createShaderModule({
+                                code: fragmentShader
+                            }),
+                            entryPoint: 'main',
+                            targets: [{
+                                format: navigator.gpu.getPreferredCanvasFormat(),
+                            }]
+                        },
+                        primitive: {
+                            topology: 'triangle-list',
+                            cullMode: 'none'
+                        }
+                    });
+
+                    // 线框管线与主管线相同
+                    this.wireframePipeline = this.renderPipeline;
+
+                    console.log('简化管线创建成功');
+
+                } catch (error) {
+                    console.error('创建简化管线失败:', error);
+                    throw error;
+                }
+            }
+
+            // ============ 加载模型 ============
+            async loadModel(modelType) {
+                try {
+                    console.log(`加载模型: ${modelType}`);
+
+                    const { vertices, indices } = this.generateModelData(modelType);
+
+                    // 检查顶点和索引数据是否有效
+                    if (!vertices || vertices.length === 0 || !indices || indices.length === 0) {
+                        throw new Error(`无效的模型数据: ${modelType}`);
+                    }
+
+                    // 清理旧的缓冲区
+                    if (this.vertexBuffer) {
+                        this.vertexBuffer.destroy();
+                    }
+                    if (this.indexBuffer) {
+                        this.indexBuffer.destroy();
+                    }
+
+                    // 根据模式调整顶点数据
+                    let vertexData = vertices;
+                    if (this.useFallbackMode) {
+                        // 回退模式：只使用位置和颜色
+                        vertexData = new Float32Array(vertices.length / 9 * 6);
+                        for (let i = 0, j = 0; i < vertices.length; i += 9, j += 6) {
+                            // 位置 (3个float)
+                            vertexData[j] = vertices[i];
+                            vertexData[j + 1] = vertices[i + 1];
+                            vertexData[j + 2] = vertices[i + 2];
+                            // 颜色 (3个float)
+                            vertexData[j + 3] = vertices[i + 6];
+                            vertexData[j + 4] = vertices[i + 7];
+                            vertexData[j + 5] = vertices[i + 8];
+                        }
+                    }
+
+                    // 创建顶点缓冲区
+                    this.vertexBuffer = this.device.createBuffer({
+                        size: vertexData.byteLength,
+                        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                        mappedAtCreation: true
+                    });
+                    new Float32Array(this.vertexBuffer.getMappedRange()).set(vertexData);
+                    this.vertexBuffer.unmap();
+
+                    // 创建索引缓冲区
+                    this.indexBuffer = this.device.createBuffer({
+                        size: indices.byteLength,
+                        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                        mappedAtCreation: true
+                    });
+                    new Uint16Array(this.indexBuffer.getMappedRange()).set(indices);
+                    this.indexBuffer.unmap();
+
+                    // 更新统计
+                    this.performance.vertexCount = vertices.length / 9;
+                    this.performance.triangleCount = indices.length / 3;
+                    this.model.type = modelType;
+
+                    // 更新UI
+                    this.updatePerformanceStats();
+                    const modelTypeDisplay = document.getElementById('modelTypeDisplay');
+                    if (modelTypeDisplay) {
+                        modelTypeDisplay.textContent = this.getModelName(modelType);
+                    }
+
+                    this.showNotification(`模型已切换为: ${this.getModelName(modelType)}`);
+
+                } catch (error) {
+                    console.error(`加载模型失败 (${modelType}):`, error);
+                    this.showNotification(`加载模型失败: ${modelType}`, 'error');
+                    // 回退到立方体
+                    if (modelType !== 'cube') {
+                        await this.loadModel('cube');
+                    }
+                }
+            }
+
+            // ============ 模型生成函数 ============
+            generateModelData(type) {
+                let vertices = [];
+                let indices = [];
+
+                switch (type) {
+                    case 'cube':
+                        vertices = this.generateCubeVertices();
+                        indices = this.generateCubeIndices();
+                        break;
+                    case 'sphere':
+                        vertices = this.generateSphereVertices(16, 8); // 减少细分
+                        indices = this.generateSphereIndices(16, 8);
+                        break;
+                    case 'cylinder':
+                        vertices = this.generateCylinderVertices(12);
+                        indices = this.generateCylinderIndices(12);
+                        break;
+                    case 'cone':
+                        vertices = this.generateConeVertices(12);
+                        indices = this.generateConeIndices(12);
+                        break;
+                    case 'torus':
+                        vertices = this.generateTorusVertices(12, 6);
+                        indices = this.generateTorusIndices(12, 6);
+                        break;
+                    case 'plane':
+                        vertices = this.generatePlaneVertices();
+                        indices = this.generatePlaneIndices();
+                        break;
+                    case 'pyramid':
+                        vertices = this.generatePyramidVertices();
+                        indices = this.generatePyramidIndices();
+                        break;
+                    default:
+                        vertices = this.generateCubeVertices();
+                        indices = this.generateCubeIndices();
+                }
+
+                return {
+                    vertices: new Float32Array(vertices),
+                    indices: new Uint16Array(indices)
+                };
+            }
+
+            // 立方体
+            generateCubeVertices() {
+                const vertices = [];
+                const colors = [
+                    [1, 0, 0], [0, 1, 0], [0, 0, 1],
+                    [1, 1, 0], [1, 0, 1], [0, 1, 1]
+                ];
+
+                // 6个面，每个面4个顶点
+                const faces = [
+                    // 前面
+                    { pos: [[-1, -1, 1], [1, -1, 1], [1, 1, 1], [-1, 1, 1]], norm: [0, 0, 1], color: colors[0] },
+                    // 后面
+                    { pos: [[-1, -1, -1], [-1, 1, -1], [1, 1, -1], [1, -1, -1]], norm: [0, 0, -1], color: colors[1] },
+                    // 上面
+                    { pos: [[-1, 1, -1], [-1, 1, 1], [1, 1, 1], [1, 1, -1]], norm: [0, 1, 0], color: colors[2] },
+                    // 下面
+                    { pos: [[-1, -1, -1], [1, -1, -1], [1, -1, 1], [-1, -1, 1]], norm: [0, -1, 0], color: colors[3] },
+                    // 右面
+                    { pos: [[1, -1, -1], [1, 1, -1], [1, 1, 1], [1, -1, 1]], norm: [1, 0, 0], color: colors[4] },
+                    // 左面
+                    { pos: [[-1, -1, -1], [-1, -1, 1], [-1, 1, 1], [-1, 1, -1]], norm: [-1, 0, 0], color: colors[5] }
+                ];
+
+                for (let face of faces) {
+                    for (let i = 0; i < 4; i++) {
+                        // 位置
+                        vertices.push(...face.pos[i]);
+                        // 法线
+                        vertices.push(...face.norm);
+                        // 颜色
+                        vertices.push(...face.color);
+                    }
+                }
+
+                return vertices;
+            }
+
+            generateCubeIndices() {
+                const indices = [];
+                for (let face = 0; face < 6; face++) {
+                    const base = face * 4;
+                    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+                }
+                return indices;
+            }
+
+            // 球体
+            generateSphereVertices(segments, rings) {
+                const vertices = [];
+
+                for (let ring = 0; ring <= rings; ring++) {
+                    const v = ring / rings;
+                    const phi = v * Math.PI;
+
+                    for (let segment = 0; segment <= segments; segment++) {
+                        const u = segment / segments;
+                        const theta = u * Math.PI * 2;
+
+                        const x = Math.sin(phi) * Math.cos(theta);
+                        const y = Math.cos(phi);
+                        const z = Math.sin(phi) * Math.sin(theta);
+
+                        // 位置
+                        vertices.push(x, y, z);
+                        // 法线
+                        vertices.push(x, y, z);
+                        // 颜色
+                        vertices.push(
+                            0.5 + 0.5 * x,
+                            0.5 + 0.5 * y,
+                            0.5 + 0.5 * z
+                        );
+                    }
+                }
+
+                return vertices;
+            }
+
+            generateSphereIndices(segments, rings) {
+                const indices = [];
+                for (let ring = 0; ring < rings; ring++) {
+                    for (let segment = 0; segment < segments; segment++) {
+                        const a = ring * (segments + 1) + segment;
+                        const b = a + segments + 1;
+                        indices.push(a, b, a + 1, b, b + 1, a + 1);
+                    }
+                }
+                return indices;
+            }
+
+            // 圆柱体
+            generateCylinderVertices(segments) {
+                const vertices = [];
+
+                // 顶部
+                vertices.push(0, 1, 0, 0, 1, 0, 1, 0, 0);
+
+                // 侧面和底部
+                for (let i = 0; i <= segments; i++) {
+                    const theta = (i / segments) * Math.PI * 2;
+                    const x = Math.cos(theta);
+                    const z = Math.sin(theta);
+
+                    // 顶部边缘
+                    vertices.push(x, 1, z, 0, 1, 0, 1, 0.5, 0);
+                    // 底部边缘
+                    vertices.push(x, -1, z, 0, -1, 0, 0, 0.5, 1);
+                }
+
+                return vertices;
+            }
+
+            generateCylinderIndices(segments) {
+                const indices = [];
+
+                // 顶部
+                for (let i = 0; i < segments; i++) {
+                    indices.push(0, i + 1, i + 2);
+                }
+
+                // 侧面
+                const base = segments + 2;
+                for (let i = 0; i < segments; i++) {
+                    const a = i + 1;
+                    const b = a + base;
+                    indices.push(a, b, a + 1, b, b + 1, a + 1);
+                }
+
+                // 底部
+                const bottomCenter = base + segments + 1;
+                for (let i = 0; i < segments; i++) {
+                    indices.push(bottomCenter, bottomCenter - i - 1, bottomCenter - i - 2);
+                }
+
+                return indices;
+            }
+
+            // 圆锥体
+            generateConeVertices(segments) {
+                const vertices = [];
+
+                // 顶点
+                vertices.push(0, 1, 0, 0, 1, 0, 1, 0, 0);
+
+                // 底部
+                for (let i = 0; i <= segments; i++) {
+                    const theta = (i / segments) * Math.PI * 2;
+                    const x = Math.cos(theta);
+                    const z = Math.sin(theta);
+
+                    vertices.push(x, -1, z, 0, -1, 0, 0, 1, 0);
+                }
+
+                return vertices;
+            }
+
+            generateConeIndices(segments) {
+                const indices = [];
+
+                // 侧面
+                for (let i = 0; i < segments; i++) {
+                    indices.push(0, i + 1, i + 2);
+                }
+
+                // 底部
+                const center = segments + 2;
+                for (let i = 0; i < segments; i++) {
+                    indices.push(center, i + 2, i + 1);
+                }
+
+                return indices;
+            }
+
+            // 圆环面
+            generateTorusVertices(tubeSegments, ringSegments) {
+                const vertices = [];
+                const tubeRadius = 0.3;
+                const ringRadius = 1.0;
+
+                for (let i = 0; i <= ringSegments; i++) {
+                    const u = (i / ringSegments) * Math.PI * 2;
+                    const cosU = Math.cos(u);
+                    const sinU = Math.sin(u);
+
+                    for (let j = 0; j <= tubeSegments; j++) {
+                        const v = (j / tubeSegments) * Math.PI * 2;
+                        const cosV = Math.cos(v);
+                        const sinV = Math.sin(v);
+
+                        const x = (ringRadius + tubeRadius * cosV) * cosU;
+                        const y = tubeRadius * sinV;
+                        const z = (ringRadius + tubeRadius * cosV) * sinU;
+
+                        const nx = cosV * cosU;
+                        const ny = sinV;
+                        const nz = cosV * sinU;
+
+                        vertices.push(x, y, z, nx, ny, nz, 1.0, 1.0, 1.0);
+                    }
+                }
+
+                return vertices;
+            }
+
+            generateTorusIndices(tubeSegments, ringSegments) {
+                const indices = [];
+                for (let i = 0; i < ringSegments; i++) {
+                    for (let j = 0; j < tubeSegments; j++) {
+                        const a = i * (tubeSegments + 1) + j;
+                        const b = a + tubeSegments + 1;
+                        indices.push(a, b, a + 1, b, b + 1, a + 1);
+                    }
+                }
+                return indices;
+            }
+
+            // 平面
+            generatePlaneVertices() {
+                return [
+                    -1, 0, -1, 0, 1, 0, 0.5, 0.5, 1,
+                    1, 0, -1, 0, 1, 0, 0.5, 0.5, 1,
+                    1, 0, 1, 0, 1, 0, 0.5, 0.5, 1,
+                    -1, 0, 1, 0, 1, 0, 0.5, 0.5, 1
+                ];
+            }
+
+            generatePlaneIndices() {
+                return [0, 1, 2, 0, 2, 3];
+            }
+
+            // 金字塔
+            generatePyramidVertices() {
+                return [
+                    // 底面
+                    -1, -1, -1, 0, -1, 0, 1, 0, 0,
+                    1, -1, -1, 0, -1, 0, 0, 1, 0,
+                    1, -1, 1, 0, -1, 0, 0, 0, 1,
+                    -1, -1, 1, 0, -1, 0, 1, 1, 0,
+
+                    // 顶点
+                    0, 1, 0, 0, 0.707, 0.707, 1, 1, 1
+                ];
+            }
+
+            generatePyramidIndices() {
+                return [
+                    0, 1, 2, 0, 2, 3, // 底面
+                    0, 1, 4, // 侧面1
+                    1, 2, 4, // 侧面2
+                    2, 3, 4, // 侧面3
+                    3, 0, 4  // 侧面4
+                ];
+            }
+
+            getModelName(type) {
+                const names = {
+                    'cube': '立方体', 'sphere': '球体', 'cylinder': '圆柱体',
+                    'cone': '圆锥体', 'torus': '圆环面', 'plane': '平面',
+                    'pyramid': '金字塔'
+                };
+                return names[type] || type;
+            }
+
+            // ============ 渲染循环管理 ============
+            startRenderLoop() {
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                }
+
+                const renderLoop = (timestamp) => {
+                    if (this.destroyed) return;
+
+                    this.renderLoop(timestamp);
+                    this.animationFrameId = requestAnimationFrame(renderLoop);
+                };
+
+                this.animationFrameId = requestAnimationFrame(renderLoop);
+            }
+
+            stopRenderLoop() {
+                if (this.animationFrameId) {
+                    cancelAnimationFrame(this.animationFrameId);
+                    this.animationFrameId = null;
+                }
+            }
+
+            renderLoop(timestamp) {
+                try {
+                    // 计算FPS
+                    this.frameCount++;
+                    const deltaTime = timestamp - this.lastTime;
+
+                    if (deltaTime >= 1000) {
+                        this.performance.fps = Math.round((this.frameCount * 1000) / deltaTime);
+                        this.performance.frameTime = deltaTime / this.frameCount;
+
+                        this.frameCount = 0;
+                        this.lastTime = timestamp;
+                        this.updatePerformanceStats();
+                    }
+
+                    if (!this.isInitialized || !this.isAnimating || !this.device) {
+                        return;
+                    }
+
+                    // 更新动画
+                    if (this.autoRotate) {
+                        const speed = parseFloat(document.getElementById('rotationSpeed')?.value) || 1.0;
+                        this.model.rotation.y += deltaTime * 0.001 * speed;
+                        this.model.rotation.x += deltaTime * 0.0005 * speed * 0.5;
+                    }
+
+                    // 渲染
+                    this.render();
+
+                    this.performance.drawCalls++;
+
+                } catch (error) {
+                    console.error('渲染错误:', error);
+                    this.updateStatus('渲染错误', 'error');
+                    this.errorCount++;
+
+                    if (this.errorCount > this.maxErrors) {
+                        console.error('错误过多，停止渲染循环');
+                        this.stopRenderLoop();
+                        this.showNotification('渲染错误过多，已停止渲染', 'error');
+                        return;
+                    }
+                }
+            }
+
+            render() {
+                if (!this.device || !this.context || !this.vertexBuffer || !this.indexBuffer) {
+                    console.warn('渲染器未准备好');
+                    return;
+                }
+
+                try {
+                    const commandEncoder = this.device.createCommandEncoder();
+
+                    // 更新uniform数据
+                    if (!this.useFallbackMode && this.uniformBuffer) {
+                        this.updateUniformData();
+                    }
+
+                    // 获取当前纹理
+                    const currentTexture = this.context.getCurrentTexture();
+                    if (!currentTexture) {
+                        throw new Error('无法获取当前纹理');
+                    }
+
+                    // 只在正常模式下使用深度纹理
+                    if (!this.useFallbackMode) {
+                        const needsNewDepthTexture = !this.depthTexture ||
+                            this.depthTexture.width !== currentTexture.width ||
+                            this.depthTexture.height !== currentTexture.height;
+
+                        if (needsNewDepthTexture) {
+                            if (this.depthTexture) {
+                                this.depthTexture.destroy();
+                            }
+                            this.depthTexture = this.device.createTexture({
+                                size: [currentTexture.width, currentTexture.height],
+                                format: 'depth24plus',
+                                usage: GPUTextureUsage.RENDER_ATTACHMENT
+                            });
+                        }
+                    }
+
+                    // 配置渲染通道
+                    const renderPassDescriptor = {
+                        colorAttachments: [{
+                            view: currentTexture.createView(),
+                            loadOp: 'clear',
+                            storeOp: 'store',
+                            clearValue: [0.05, 0.05, 0.1, 1.0]
+                        }]
+                    };
+
+                    // 添加深度附件（只在正常模式下）
+                    if (!this.useFallbackMode && this.depthTexture) {
+                        renderPassDescriptor.depthStencilAttachment = {
+                            view: this.depthTexture.createView(),
+                            depthLoadOp: 'clear',
+                            depthStoreOp: 'store',
+                            depthClearValue: 1.0
+                        };
+                    }
+
+                    const renderPass = commandEncoder.beginRenderPass(renderPassDescriptor);
+
+                    // 检查线框模式
+                    const wireframeToggle = document.getElementById('wireframeToggle');
+                    const isWireframe = wireframeToggle && wireframeToggle.checked;
+
+                    if (isWireframe && this.wireframePipeline) {
+                        renderPass.setPipeline(this.wireframePipeline);
+                        if (!this.useFallbackMode && this.bindGroup) {
+                            renderPass.setBindGroup(0, this.bindGroup);
+                        }
+                    } else {
+                        renderPass.setPipeline(this.renderPipeline);
+                        if (!this.useFallbackMode && this.bindGroup) {
+                            renderPass.setBindGroup(0, this.bindGroup);
+                        }
+                    }
+
+                    renderPass.setVertexBuffer(0, this.vertexBuffer);
+                    renderPass.setIndexBuffer(this.indexBuffer, 'uint16');
+                    renderPass.drawIndexed(this.performance.triangleCount * 3);
+
+                    renderPass.end();
+
+                    this.device.queue.submit([commandEncoder.finish()]);
+                    this.errorCount = 0; // 重置错误计数
+
+                } catch (error) {
+                    console.error('渲染失败:', error);
+                    throw error;
+                }
+            }
+
+            updateUniformData() {
+                const scale = parseFloat(document.getElementById('scaleSlider')?.value) || 1.0;
+
+                // 模型矩阵
+                const modelMatrix = this.createModelMatrix(scale);
+
+                // 视图矩阵
+                const viewMatrix = this.createViewMatrix();
+
+                // 投影矩阵
+                const projectionMatrix = this.createProjectionMatrix();
+
+                // 上传uniform数据
+                const uniformData = new Float32Array(48); // 3个mat4x4 = 48个float
+                uniformData.set(modelMatrix, 0);
+                uniformData.set(viewMatrix, 16);
+                uniformData.set(projectionMatrix, 32);
+
+                this.device.queue.writeBuffer(this.uniformBuffer, 0, uniformData);
+            }
+
+            createModelMatrix(scale) {
+                const matrix = new Float32Array(16);
+                const cosY = Math.cos(this.model.rotation.y);
+                const sinY = Math.sin(this.model.rotation.y);
+                const cosX = Math.cos(this.model.rotation.x);
+                const sinX = Math.sin(this.model.rotation.x);
+
+                matrix[0] = cosY * scale;
+                matrix[1] = sinX * sinY;
+                matrix[2] = -cosX * sinY;
+                matrix[3] = 0;
+
+                matrix[4] = 0;
+                matrix[5] = cosX * scale;
+                matrix[6] = sinX * scale;
+                matrix[7] = 0;
+
+                matrix[8] = sinY * scale;
+                matrix[9] = -sinX * cosY;
+                matrix[10] = cosX * cosY * scale;
+                matrix[11] = 0;
+
+                matrix[12] = this.model.position[0];
+                matrix[13] = this.model.position[1];
+                matrix[14] = this.model.position[2];
+                matrix[15] = 1;
+
+                return matrix;
+            }
+
+            createViewMatrix() {
+                const eye = this.camera.position;
+                const target = this.camera.target;
+                const up = this.camera.up;
+
+                const z = this.normalize([eye[0] - target[0], eye[1] - target[1], eye[2] - target[2]]);
+                const x = this.normalize(this.cross(up, z));
+                const y = this.cross(z, x);
+
+                const matrix = new Float32Array(16);
+                matrix[0] = x[0]; matrix[1] = y[0]; matrix[2] = z[0]; matrix[3] = 0;
+                matrix[4] = x[1]; matrix[5] = y[1]; matrix[6] = z[1]; matrix[7] = 0;
+                matrix[8] = x[2]; matrix[9] = y[2]; matrix[10] = z[2]; matrix[11] = 0;
+                matrix[12] = -this.dot(x, eye);
+                matrix[13] = -this.dot(y, eye);
+                matrix[14] = -this.dot(z, eye);
+                matrix[15] = 1;
+
+                return matrix;
+            }
+
+            createProjectionMatrix() {
+                const fov = this.camera.fov;
+                const aspect = this.canvas.width / this.canvas.height;
+                const near = this.camera.near;
+                const far = this.camera.far;
+
+                const f = 1.0 / Math.tan(fov / 2);
+                const nf = 1 / (near - far);
+
+                const matrix = new Float32Array(16);
+                matrix[0] = f / aspect; matrix[1] = 0; matrix[2] = 0; matrix[3] = 0;
+                matrix[4] = 0; matrix[5] = f; matrix[6] = 0; matrix[7] = 0;
+                matrix[8] = 0; matrix[9] = 0; matrix[10] = (far + near) * nf; matrix[11] = -1;
+                matrix[12] = 0; matrix[13] = 0; matrix[14] = 2 * far * near * nf; matrix[15] = 0;
+
+                return matrix;
+            }
+
+            normalize(v) {
+                const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
+                if (len === 0) return [0, 0, 0];
+                return [v[0] / len, v[1] / len, v[2] / len];
+            }
+
+            cross(a, b) {
+                return [
+                    a[1] * b[2] - a[2] * b[1],
+                    a[2] * b[0] - a[0] * b[2],
+                    a[0] * b[1] - a[1] * b[0]
+                ];
+            }
+
+            dot(a, b) {
+                return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+            }
+
+            // ============ UI 功能 ============
+            resizeCanvas() {
+                if (!this.canvas) return;
+
+                const container = this.canvas.parentElement;
+                if (!container) return;
+
+                const width = Math.floor(container.clientWidth * window.devicePixelRatio);
+                const height = Math.floor(container.clientHeight * window.devicePixelRatio);
+
+                // 防止尺寸为0
+                if (width === 0 || height === 0) {
+                    console.warn('Canvas尺寸为0');
+                    return;
+                }
+
+                // 限制最大尺寸
+                const maxWidth = 2048;
+                const maxHeight = 2048;
+
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    this.canvas.width = Math.floor(width * ratio);
+                    this.canvas.height = Math.floor(height * ratio);
+                } else {
+                    this.canvas.width = width;
+                    this.canvas.height = height;
+                }
+
+                // 更新相机宽高比
+                this.camera.aspect = this.canvas.width / this.canvas.height;
+            }
+
+            updateStatus(message, type = 'success') {
+                const statusText = document.getElementById('statusText');
+                if (!statusText) return;
+
+                const statusDot = statusText.previousElementSibling;
+
+                statusText.textContent = message;
+                if (statusDot) {
+                    statusDot.style.background = type === 'error' ? 'var(--error)' :
+                        type === 'warning' ? 'var(--warning)' : 'var(--success)';
+                }
+                statusText.style.color = type === 'error' ? 'var(--error)' :
+                    type === 'warning' ? 'var(--warning)' : 'var(--success)';
+            }
+
+            updatePerformanceStats() {
+                const elements = {
+                    'fpsCounter': this.performance.fps || 0,
+                    'frameTime': (this.performance.frameTime || 0).toFixed(2) + 'ms',
+                    'vertexCount': (this.performance.vertexCount || 0).toLocaleString(),
+                    'triangleCount': (this.performance.triangleCount || 0).toLocaleString(),
+                    'drawCalls': this.performance.drawCalls || 0
+                };
+
+                for (const [id, value] of Object.entries(elements)) {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.textContent = value;
+                    }
+                }
+
+                // GPU内存显示
+                const gpuMemoryElement = document.getElementById('gpuMemory');
+                if (gpuMemoryElement) {
+                    gpuMemoryElement.textContent = this.useFallbackMode ? '兼容模式' : '正常模式';
+                }
+            }
+
+            showLoading(show, message = '正在初始化WebGPU...') {
+                const loadingOverlay = document.getElementById('loadingOverlay');
+                const loadingText = document.getElementById('loadingText');
+
+                if (loadingOverlay) {
+                    loadingOverlay.style.display = show ? 'block' : 'none';
+                }
+                if (loadingText) {
+                    loadingText.textContent = message;
+                }
+            }
+
+            showNotification(message, type = 'info') {
+                const notification = document.getElementById('notification');
+                const text = document.getElementById('notificationText');
+                if (!notification || !text) return;
+
+                text.textContent = message;
+                notification.style.borderLeftColor = type === 'error' ? 'var(--error)' :
+                    type === 'warning' ? 'var(--warning)' : 'var(--primary)';
+
+                notification.classList.add('show');
+                setTimeout(() => notification.classList.remove('show'), 3000);
+            }
+
+            showError(message) {
+                const canvasContainer = document.querySelector('.canvas-container');
+                if (!canvasContainer) return;
+
+                // 移除旧的错误消息
+                const oldError = canvasContainer.querySelector('.error-container');
+                if (oldError) {
+                    oldError.remove();
+                }
+
+                const errorContainer = document.createElement('div');
+                errorContainer.className = 'error-container';
+                errorContainer.innerHTML = `
+                            <h3>WebGPU 初始化失败</h3>
+                            <p style="white-space: pre-line;">${message}</p>
+                            <button id="retryBtn">重试</button>
+                            <button id="refreshBtn" style="margin-left: 10px;">刷新页面</button>
+                        `;
+
+                canvasContainer.appendChild(errorContainer);
+
+                // 添加重试按钮事件
+                const retryBtn = document.getElementById('retryBtn');
+                if (retryBtn) {
+                    retryBtn.addEventListener('click', async () => {
+                        errorContainer.remove();
+                        await this.retryInit();
+                    });
+                }
+
+                // 添加刷新按钮事件
+                const refreshBtn = document.getElementById('refreshBtn');
+                if (refreshBtn) {
+                    refreshBtn.addEventListener('click', () => {
+                        location.reload();
+                    });
+                }
+            }
+
+            async retryInit() {
+                try {
+                    this.showLoading(true, '正在重试初始化...');
+                    this.updateStatus('正在重试初始化...');
+
+                    this.cleanup();
+
+                    const success = await this.init();
+                    if (!success) {
+                        this.showError('初始化失败，请检查浏览器设置。');
+                    }
+                } catch (error) {
+                    console.error('重试失败:', error);
+                    this.showError(`重试失败: ${error.message}`);
+                }
+            }
+
+            async tryRecover() {
+                try {
+                    console.log('尝试恢复渲染器...');
+                    this.stopRenderLoop();
+                    this.isInitialized = false;
+                    this.errorCount = 0;
+
+                    this.cleanupResources();
+
+                    if (this.useFallbackMode) {
+                        await this.initFallback();
+                    } else {
+                        await this.init();
+                    }
+
+                    this.showNotification('渲染器已恢复', 'success');
+
+                } catch (recoverError) {
+                    console.error('恢复失败:', recoverError);
+                    this.showNotification('恢复失败，请刷新页面', 'error');
+                }
+            }
+
+            // ============ 清理资源 ============
+            cleanupResources() {
+                const resources = [
+                    this.vertexBuffer,
+                    this.indexBuffer,
+                    this.uniformBuffer,
+                    this.depthTexture
+                ];
+
+                resources.forEach(resource => {
+                    if (resource && typeof resource.destroy === 'function') {
+                        try {
+                            resource.destroy();
+                        } catch (e) {
+                            console.warn('清理资源时出错:', e);
+                        }
+                    }
+                });
+
+                this.vertexBuffer = null;
+                this.indexBuffer = null;
+                this.uniformBuffer = null;
+                this.depthTexture = null;
+            }
+
+            cleanup() {
+                console.log('清理WebGPU资源...');
+                this.destroyed = true;
+                this.stopRenderLoop();
+
+                this.cleanupResources();
+
+                this.renderPipeline = null;
+                this.wireframePipeline = null;
+                this.bindGroup = null;
+
+                if (this.device) {
+                    this.device.destroy();
+                    this.device = null;
+                }
+
+                this.context = null;
+                this.isInitialized = false;
+
+                console.log('WebGPU资源清理完成');
+            }
+
+            // ============ 事件监听 ============
+            setupEventListeners() {
+                // 标签页
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const tabId = e.target.dataset.tab;
+                        this.switchTab(tabId);
+                    });
+                });
+
+                // 模型选择
+                const modelTypeSelect = document.getElementById('modelType');
+                if (modelTypeSelect) {
+                    modelTypeSelect.addEventListener('change', (e) => {
+                        this.loadModel(e.target.value);
+                    });
+                }
+
+                // 滑块事件
+                const sliders = [
+                    'scaleSlider', 'rotationSpeed', 'lodSlider', 'shininess', 'roughness',
+                    'lightIntensity', 'ambientStrength', 'cameraDistance', 'fov',
+                    'effectStrength', 'anisotropy', 'lightCount'
+                ];
+
+                sliders.forEach(id => {
+                    const slider = document.getElementById(id);
+                    if (slider) {
+                        const displayId = id + 'Value';
+                        const display = document.getElementById(displayId);
+
+                        slider.addEventListener('input', (e) => {
+                            let value = e.target.value;
+                            if (display) {
+                                if (id === 'fov') {
+                                    display.textContent = `${value}°`;
+                                } else if (id === 'anisotropy') {
+                                    display.textContent = `${value}x`;
+                                } else if (id === 'lodSlider') {
+                                    const levels = ['低', '中', '高'];
+                                    display.textContent = levels[value - 1] || '高';
+                                } else {
+                                    display.textContent = value;
+                                }
+                            }
+                        });
+                    }
+                });
+
+                // 按钮
+                const fullscreenBtn = document.getElementById('fullscreenBtn');
+                if (fullscreenBtn) {
+                    fullscreenBtn.addEventListener('click', () => {
+                        this.toggleFullscreen();
+                    });
+                }
+
+                const randomizeModelBtn = document.getElementById('randomizeModel');
+                if (randomizeModelBtn) {
+                    randomizeModelBtn.addEventListener('click', () => {
+                        this.model.rotation.x = Math.random() * Math.PI * 2;
+                        this.model.rotation.y = Math.random() * Math.PI * 2;
+                        const scaleSlider = document.getElementById('scaleSlider');
+                        if (scaleSlider) {
+                            const randomScale = (0.5 + Math.random() * 1.5).toFixed(1);
+                            scaleSlider.value = randomScale;
+                            document.getElementById('scaleValue').textContent = randomScale;
+                        }
+                        this.showNotification('模型已随机变换');
+                    });
+                }
+
+                const resetModelBtn = document.getElementById('resetModel');
+                if (resetModelBtn) {
+                    resetModelBtn.addEventListener('click', () => {
+                        this.model.rotation = { x: 0, y: 0 };
+                        this.model.position = [0, 0, 0];
+                        const scaleSlider = document.getElementById('scaleSlider');
+                        if (scaleSlider) {
+                            scaleSlider.value = 1.0;
+                            document.getElementById('scaleValue').textContent = '1.0';
+                        }
+                        this.showNotification('模型已重置');
+                    });
+                }
+
+                const screenshotBtn = document.getElementById('screenshotBtn');
+                if (screenshotBtn) {
+                    screenshotBtn.addEventListener('click', () => {
+                        this.takeScreenshot();
+                    });
+                }
+
+                const resetCameraBtn = document.getElementById('resetCamera');
+                if (resetCameraBtn) {
+                    resetCameraBtn.addEventListener('click', () => {
+                        this.camera.position = [0, 2, 10];
+                        this.camera.target = [0, 0, 0];
+                        const cameraDistance = document.getElementById('cameraDistance');
+                        if (cameraDistance) {
+                            cameraDistance.value = 10;
+                            document.getElementById('cameraDistanceValue').textContent = '10.0';
+                        }
+                        const fov = document.getElementById('fov');
+                        if (fov) {
+                            fov.value = 75;
+                            document.getElementById('fovValue').textContent = '75°';
+                        }
+                        this.showNotification('相机已重置');
+                    });
+                }
+
+                const toggleAnimationBtn = document.getElementById('toggleAnimation');
+                if (toggleAnimationBtn) {
+                    toggleAnimationBtn.addEventListener('click', () => {
+                        this.isAnimating = !this.isAnimating;
+                        toggleAnimationBtn.textContent = this.isAnimating ? '暂停动画' : '播放动画';
+                        this.showNotification(this.isAnimating ? '动画已恢复' : '动画已暂停');
+                    });
+                }
+
+                // 窗口大小调整
+                let resizeTimeout;
+                window.addEventListener('resize', () => {
+                    clearTimeout(resizeTimeout);
+                    resizeTimeout = setTimeout(() => {
+                        if (this.isInitialized) {
+                            this.resizeCanvas();
+                        }
+                    }, 250);
+                });
+
+                // 页面可见性变化
+                document.addEventListener('visibilitychange', () => {
+                    if (document.hidden) {
+                        this.stopRenderLoop();
+                    } else {
+                        this.startRenderLoop();
+                    }
+                });
+
+                // 页面卸载时清理资源
+                window.addEventListener('beforeunload', () => {
+                    this.cleanup();
+                });
+
+                // 初始化滑块显示值
+                setTimeout(() => {
+                    document.querySelectorAll('input[type="range"]').forEach(slider => {
+                        if (slider) {
+                            const event = new Event('input', { bubbles: true });
+                            slider.dispatchEvent(event);
+                        }
+                    });
+                }, 100);
+            }
+
+            switchTab(tabId) {
+                document.querySelectorAll('.tab-button').forEach(btn => {
+                    if (btn) {
+                        btn.classList.toggle('active', btn.dataset.tab === tabId);
+                    }
+                });
+
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    if (content) {
+                        content.classList.toggle('active', content.id === `${tabId}-tab`);
+                    }
+                });
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    if (this.canvas.requestFullscreen) {
+                        this.canvas.requestFullscreen().catch(err => {
+                            this.showNotification(`全屏失败: ${err.message}`, 'error');
+                        });
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    }
+                }
+            }
+
+            takeScreenshot() {
+                try {
+                    if (!this.canvas) {
+                        throw new Error('Canvas不可用');
+                    }
+
+                    this.canvas.toBlob(blob => {
+                        if (!blob) {
+                            throw new Error('无法创建截图blob');
+                        }
+
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `webgpu-${this.model.type}-${Date.now()}.png`;
+
+                        document.body.appendChild(a);
+                        a.click();
+                        document.body.removeChild(a);
+
+                        setTimeout(() => {
+                            URL.revokeObjectURL(url);
+                        }, 1000);
+
+                        this.showNotification('截图已保存');
+                    }, 'image/png');
+                } catch (error) {
+                    console.error('截图失败:', error);
+                    this.showNotification('截图失败', 'error');
+                }
+            }
+        }
+
+        // ============ 页面初始化 ============
+        document.addEventListener('DOMContentLoaded', async () => {
+            let renderer = null;
+
+            try {
+                renderer = new WebGPURenderer();
+                window.renderer = renderer;
+
+                const success = await renderer.init();
+                if (success) {
+                    renderer.setupEventListeners();
+                    console.log('渲染器初始化成功');
+                } else {
+                    console.error('渲染器初始化失败');
+                }
+            } catch (error) {
+                console.error('页面初始化失败:', error);
+                const statusText = document.getElementById('statusText');
+                if (statusText) {
+                    statusText.textContent = `初始化失败: ${error.message}`;
+                    statusText.style.color = 'var(--error)';
+                }
+
+                // 显示错误消息
+                const canvasContainer = document.querySelector('.canvas-container');
+                if (canvasContainer) {
+                    const errorMsg = document.createElement('div');
+                    errorMsg.style.cssText = `
+                                position: absolute;
+                                top: 50%;
+                                left: 50%;
+                                transform: translate(-50%, -50%);
+                                background: rgba(231, 76, 60, 0.9);
+                                color: white;
+                                padding: 2rem;
+                                border-radius: 10px;
+                                text-align: center;
+                                max-width: 80%;
+                            `;
+                    errorMsg.innerHTML = `
+                                <h3>WebGPU 初始化失败</h3>
+                                <p style="white-space: pre-line;">${error.message}</p>
+                                <p>请确保：</p>
+                                <p>1. 使用Chrome 113+或Edge 113+</p>
+                                <p>2. 在浏览器设置中启用WebGPU</p>
+                                <p>3. 更新显卡驱动程序</p>
+                                <button id="refreshPage" style="margin-top: 1rem; padding: 0.8rem 1.5rem; background: white; color: #e74c3c; border: none; border-radius: 6px; cursor: pointer; font-weight: bold;">刷新页面</button>
+                            `;
+                    canvasContainer.appendChild(errorMsg);
+
+                    document.getElementById('refreshPage')?.addEventListener('click', () => {
+                        location.reload();
+                    });
+                }
+            }
+        });
+    </script>
+</body>
+</html>
