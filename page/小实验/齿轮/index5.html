@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>高级齿轮联动仿真系统 v2.2 (ESM)  v5</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no">
+    
+    <!-- 使用 Import Map 来映射模块标识符 -->
+    <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.152.2/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.152.2/examples/jsm/"
+      }
+    }
+    </script>
+
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0c0f15;
+            color: #e0e1dd;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(12,15,21,0.92);
+            padding: 14px;
+            border-radius: 10px;
+            max-width: 380px;
+            z-index: 100;
+            border: 1px solid #2a3b5c;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        h3 {
+            margin: 0 0 12px;
+            color: #4cc9f0;
+            font-size: 18px;
+            text-align: center;
+        }
+
+        .btn-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        button {
+            flex: 1 1 auto;
+            min-width: 0;
+            background: linear-gradient(to bottom, #3a86ff, #2a6fd6);
+            color: white;
+            border: none;
+            padding: 6px 10px;
+            margin: 0;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover {
+            background: linear-gradient(to bottom, #4361ee, #335ac9);
+            transform: translateY(-1px);
+        }
+
+        button:active {
+             transform: translateY(1px);
+        }
+
+
+        button.driver {
+            background: linear-gradient(to bottom, #f72585, #d61e6e);
+        }
+
+        button.reset {
+            background: linear-gradient(to bottom, #fb5607, #d84a05);
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 12px 0;
+        }
+
+        label {
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        input[type="range"] {
+            flex-grow: 1;
+            height: 6px;
+            -webkit-appearance: none;
+            background: #2a3b5c;
+            border-radius: 3px;
+            outline: none;
+        }
+
+         input[type="range"]::-webkit-slider-thumb {
+             -webkit-appearance: none;
+             width: 18px;
+             height: 18px;
+             border-radius: 50%;
+             background: #4cc9f0;
+             cursor: pointer;
+         }
+
+        #speed-val {
+            min-width: 35px;
+            text-align: right;
+            font-weight: bold;
+            color: #4cc9f0;
+        }
+
+        .gear-list {
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 8px;
+            font-size: 12px;
+            border: 1px solid #2a3b5c;
+            border-radius: 5px;
+            padding: 5px;
+            background: rgba(20, 25, 35, 0.5);
+        }
+
+        .gear-item {
+            padding: 6px 8px;
+            margin: 3px 0;
+            background: rgba(30,40,60,0.6);
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s, border-left 0.2s;
+        }
+
+        .gear-item:hover {
+            background: rgba(50, 60, 80, 0.8);
+        }
+
+        .gear-item.active {
+            background: rgba(76,201,240,0.25);
+            border-left: 3px solid #4cc9f0;
+        }
+
+        .info {
+            color: #8d99ae;
+            font-size: 11px;
+            margin-top: 12px;
+            line-height: 1.5;
+            padding-top: 8px;
+            border-top: 1px dashed #2a3b5c;
+        }
+
+        .highlight {
+            color: #ffbe0b;
+            font-weight: bold;
+        }
+
+        /* 滚动条样式 */
+        .gear-list::-webkit-scrollbar {
+            width: 8px;
+        }
+        .gear-list::-webkit-scrollbar-track {
+            background: rgba(12, 15, 21, 0.5);
+            border-radius: 4px;
+        }
+        .gear-list::-webkit-scrollbar-thumb {
+            background: #2a3b5c;
+            border-radius: 4px;
+        }
+        .gear-list::-webkit-scrollbar-thumb:hover {
+            background: #3a5a80;
+        }
+
+        #loading-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 18px;
+            z-index: 200;
+        }
+
+    </style>
+</head>
+<body>
+    <div id="loading-message">⚙️ 正在加载资源...</div>
+    <div id="ui">
+        <h3>⚙️ 高级齿轮联动仿真系统 v2.2 (ESM)</h3>
+        
+        <div class="btn-row">
+            <!-- 按钮不再有 onclick 属性 -->
+            <button id="btn-spur">直齿轮</button>
+            <button id="btn-helical">斜齿轮</button>
+            <button id="btn-bevel">锥齿轮</button>
+            <button id="btn-worm">蜗杆</button>
+        </div>
+        <div class="btn-row">
+            <button id="btn-internal">内齿轮</button>
+            <button id="btn-planetary">行星轮系</button>
+            <button id="btn-rack">齿条</button>
+        </div>
+        <div class="btn-row">
+            <button id="btn-set-driver" class="driver">设为驱动轮</button>
+            <button id="btn-reset" class="reset">↺ 默认场景</button>
+            <button id="btn-auto-arrange">📐 自动排列</button>
+        </div>
+        
+        <div class="slider-container">
+            <label for="speed">驱动速度:</label>
+            <input type="range" id="speed" min="-100" max="100" value="40">
+            <span id="speed-val">40</span>
+        </div>
+
+        <div class="gear-list" id="gear-list"></div>
+        
+        <div class="info">
+            • <span class="highlight">点击齿轮列表项</span> 选中，再点“设为驱动轮”<br>
+            • 支持 <span class="highlight">行星轮、内啮合、齿条直线运动</span><br>
+            • <span class="highlight">蜗杆不可反驱</span>（自锁特性）<br>
+            • 鼠标: 拖拽旋转 | 滚轮缩放 | 右键平移
+        </div>
+    </div>
+
+    <!-- 使用 type="module" 并将所有 JS 逻辑放入其中 -->
+    <script type="module">
+        // ======================
+        // 导入所需模块
+        // ======================
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ======================
+        // 核心数据结构 & 配置
+        // ======================
+        let scene, camera, renderer, controls;
+        const clock = new THREE.Clock();
+        let gears = []; // 所有齿轮对象
+        let constraints = []; // 啮合约束
+        let visuals = []; // 用于清理辅助可视化的数组
+        let driverIndex = -1;
+        let selectedGearIndex = -1; // 新增：跟踪当前选中的齿轮索引
+
+        // 齿轮类型定义
+        const GEAR_TYPES = {
+            spur: { name: '直齿轮', color: 0x4cc9f0 },
+            helical: { name: '斜齿轮', color: 0x3a86ff },
+            bevel: { name: '锥齿轮', color: 0xf72585 },
+            worm: { name: '蜗杆', color: 0xffbe0b, selfLocking: true },
+            internal: { name: '内齿轮', color: 0x7209b7 },
+            rack: { name: '齿条', color: 0x5e548e, isLinear: true }
+        };
+
+        // ======================
+        // 初始化 Three.js
+        // ======================
+        function initThree() {
+            try {
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x0c0f15);
+                scene.fog = new THREE.Fog(0x0c0f15, 15, 50);
+
+                camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+                camera.position.set(0, 5, 15);
+
+                renderer = new THREE.WebGLRenderer({ antialias: true });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(window.devicePixelRatio);
+                renderer.shadowMap.enabled = true;
+                document.body.appendChild(renderer.domElement);
+
+                // OrbitControls 已正确导入
+                controls = new OrbitControls(camera, renderer.domElement);
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.screenSpacePanning = false;
+                controls.minDistance = 5;
+                controls.maxDistance = 50;
+
+                const light = new THREE.DirectionalLight(0xffffff, 1.1);
+                light.position.set(15, 20, 15);
+                light.castShadow = true;
+                light.shadow.mapSize.width = 1024;
+                light.shadow.mapSize.height = 1024;
+                scene.add(light);
+                
+                const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+                scene.add(ambientLight);
+
+                const grid = new THREE.GridHelper(40, 40, 0x2a3b5c, 0x1a2233);
+                grid.position.y = -2;
+                grid.receiveShadow = true;
+                scene.add(grid);
+
+                // 地面
+                const groundGeo = new THREE.PlaneGeometry(100, 100);
+                const groundMat = new THREE.MeshStandardMaterial({ color: 0x1a2233, depthWrite: false });
+                const ground = new THREE.Mesh(groundGeo, groundMat);
+                ground.rotation.x = -Math.PI / 2;
+                ground.position.y = -2.01;
+                ground.receiveShadow = true;
+                scene.add(ground);
+
+                return true; // 初始化成功
+
+            } catch (e) {
+                console.error("初始化 Three.js 时发生错误:", e);
+                return false;
+            }
+        }
+
+        function setupEventListeners() {
+            window.addEventListener('resize', onWindowResize, false);
+            
+            const speedSlider = document.getElementById('speed');
+            const speedValue = document.getElementById('speed-val');
+            
+            speedSlider.addEventListener('input', function() {
+                speedValue.textContent = this.value;
+                if (driverIndex >= 0 && gears[driverIndex]) {
+                    gears[driverIndex].speed = parseFloat(this.value);
+                }
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ======================
+        // 齿轮对象工厂
+        // ======================
+        function createGear(type, options = {}) {
+            const baseTeeth = options.teeth || (type === 'worm' ? 2 : Math.floor(Math.random() * 12) + 18);
+            const pitchRadius = baseTeeth * 0.06;
+            const width = type === 'rack' ? 0.3 : (options.width || 0.5);
+
+            return {
+                id: Date.now() + Math.random(), // 唯一ID
+                type: type,
+                teeth: baseTeeth,
+                pitchRadius: pitchRadius,
+                width: width,
+                position: options.position || new THREE.Vector3(0, 0, 0),
+                axis: options.axis || new THREE.Vector3(0, 1, 0).normalize(), // 默认Y轴向上
+                normal: options.normal || new THREE.Vector3(0, 0, 1), // 对于齿条，法向量指向Z
+                speed: 0, // 角速度（RPM）或线速度（mm/s）
+                isDriver: false,
+                mesh: null,
+                constraints: [] // 存储与此齿轮相关的约束ID
+            };
+        }
+
+        // ======================
+        // 几何生成（区分类型）
+        // ======================
+        function buildGeometry(gear) {
+            const { type, teeth, pitchRadius, width } = gear;
+            let geometry, material;
+
+            const color = GEAR_TYPES[type]?.color || 0xffffff;
+            material = new THREE.MeshStandardMaterial({
+                color: color,
+                metalness: 0.7,
+                roughness: 0.25,
+                emissive: color,
+                emissiveIntensity: 0.05
+            });
+
+            if (type === 'rack') {
+                const length = 8;
+                const shape = new THREE.Shape();
+                const halfWidth = width / 2;
+                const halfLength = length / 2;
+                const toothHeight = 0.2;
+                const toothCount = Math.max(10, Math.floor(length / (pitchRadius * 0.8))); // 至少10个齿
+                const toothPitch = length / toothCount;
+
+                shape.moveTo(-halfLength, -halfWidth);
+                shape.lineTo(halfLength, -halfWidth);
+                
+                // 绘制齿顶
+                for (let i = 0; i <= toothCount; i++) {
+                    const x = -halfLength + i * toothPitch;
+                    shape.lineTo(x, halfWidth);
+                    if (i < toothCount) { // 不是最后一个点
+                        shape.lineTo(x + toothPitch * 0.3, halfWidth + toothHeight);
+                        shape.lineTo(x + toothPitch * 0.7, halfWidth);
+                    }
+                }
+                shape.lineTo(-halfLength, halfWidth);
+                shape.closePath();
+
+                const extrudeSettings = {
+                    steps: 1,
+                    depth: 0.25,
+                    bevelEnabled: false
+                };
+                geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                geometry.translate(0, 0, -0.125); // 居中Z轴
+
+            } else if (type === 'internal') {
+                const outerR = pitchRadius + 0.4;
+                const innerR = pitchRadius - 0.2;
+                const segments = Math.max(64, teeth * 3);
+                geometry = new THREE.RingGeometry(innerR, outerR, segments);
+                geometry.rotateX(-Math.PI / 2); // 使其面向XY平面
+
+            } else if (type === 'worm') {
+                // 简化为带螺纹的圆柱
+                const radius = 0.15;
+                const segments = 32;
+                const geometryCyl = new THREE.CylinderGeometry(radius, radius, width, segments, 1, true); // 开放端
+                geometryCyl.rotateX(Math.PI / 2); // 使其沿Z轴
+                
+                // 创建螺纹
+                const threadPoints = [];
+                const turns = teeth / 4; // 假设每4齿一圈
+                const pitch = width / turns;
+                for (let i = 0; i <= segments * turns; i++) {
+                     const t = i / segments;
+                     const angle = t * Math.PI * 2;
+                     const z = t * pitch;
+                     threadPoints.push(new THREE.Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, z - width/2));
+                }
+                const threadGeo = new THREE.TubeGeometry(
+                    new THREE.CatmullRomCurve3(threadPoints),
+                    Math.floor(segments * turns),
+                    0.05, // tube radius
+                    8, // tubular segments
+                    false // closed
+                );
+                
+                // 合并几何体
+                geometry = THREE.BufferGeometryUtils.mergeGeometries([geometryCyl, threadGeo]);
+                
+
+            } else if (type === 'bevel') {
+                geometry = new THREE.ConeGeometry(pitchRadius, width, teeth * 2);
+                geometry.rotateX(Math.PI); // 使其开口朝上
+
+            } else { // spur or helical
+                const points = [];
+                const step = Math.PI * 2 / teeth;
+                const toothDepth = 0.18;
+                for (let i = 0; i < teeth; i++) {
+                    const a = i * step;
+                    // 齿根
+                    points.push(new THREE.Vector2(
+                        Math.cos(a - step * 0.45) * (pitchRadius - toothDepth),
+                        Math.sin(a - step * 0.45) * (pitchRadius - toothDepth)
+                    ));
+                    // 齿顶
+                    points.push(new THREE.Vector2(
+                        Math.cos(a) * (pitchRadius + toothDepth * 0.5),
+                        Math.sin(a) * (pitchRadius + toothDepth * 0.5)
+                    ));
+                    // 下一个齿根
+                    points.push(new THREE.Vector2(
+                        Math.cos(a + step * 0.45) * (pitchRadius - toothDepth),
+                        Math.sin(a + step * 0.45) * (pitchRadius - toothDepth)
+                    ));
+                }
+                
+                const shape = new THREE.Shape(points);
+                const extrudeSettings = {
+                    steps: 1,
+                    depth: width,
+                    bevelEnabled: false
+                };
+                geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+                
+                if (type === 'helical') {
+                    const posAttr = geometry.attributes.position;
+                    const vertex = new THREE.Vector3();
+                    for (let i = 0; i < posAttr.count; i++) {
+                        vertex.fromBufferAttribute(posAttr, i);
+                        // 基于Z坐标应用扭转
+                        const twistAngle = (vertex.z / width) * Math.PI / 3; // 扭转角度
+                        const cos = Math.cos(twistAngle);
+                        const sin = Math.sin(twistAngle);
+                        const newX = vertex.x * cos - vertex.y * sin;
+                        const newY = vertex.x * sin + vertex.y * cos;
+                        posAttr.setXYZ(i, newX, newY, vertex.z);
+                    }
+                    posAttr.needsUpdate = true;
+                    geometry.computeVertexNormals();
+                }
+                geometry.translate(0, 0, -width/2); // 居中Z轴
+            }
+
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.copy(gear.position);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // 根据轴向旋转齿轮
+            if (!gear.axis.equals(new THREE.Vector3(0, 1, 0))) {
+                const targetAxis = gear.axis.clone().normalize();
+                const currentAxis = new THREE.Vector3(0, 1, 0);
+                const quaternion = new THREE.Quaternion().setFromUnitVectors(currentAxis, targetAxis);
+                mesh.quaternion.copy(quaternion);
+            }
+            
+            return mesh;
+        }
+
+        // ======================
+        // 啮合检测（核心！）
+        // ======================
+        function detectConstraints() {
+            constraints = [];
+            // 清除旧的约束引用
+            gears.forEach(g => g.constraints = []);
+
+            for (let i = 0; i < gears.length; i++) {
+                for (let j = i + 1; j < gears.length; j++) {
+                    const g1 = gears[i], g2 = gears[j];
+
+                    // --- 齿条啮合 ---
+                    if (g1.type === 'rack' || g2.type === 'rack') {
+                        const rack = g1.type === 'rack' ? g1 : g2;
+                        const gear = g1.type === 'rack' ? g2 : g1;
+                        
+                        // 蜗杆不与齿条啮合
+                        if (gear.type === 'worm') continue;
+
+                        const dist = rack.position.distanceTo(gear.position);
+                        // 齿条中心线到齿轮中心的距离应约等于齿轮半径 + 齿条宽度一半
+                        const idealDist = gear.pitchRadius + rack.width / 2;
+                        const gap = Math.abs(dist - idealDist);
+                        
+                        if (gap < 0.5) { // 容差
+                            // 检查是否平行（齿条法向量与齿轮轴垂直）
+                            const rackToGear = new THREE.Vector3().subVectors(gear.position, rack.position).normalize();
+                            const dotWithNormal = Math.abs(rackToGear.dot(rack.normal));
+                            if (dotWithNormal > 0.9) { // 接近垂直
+                                addConstraint(gear, rack, 'rack');
+                            }
+                        }
+                        continue; // 处理完一对后继续下一轮
+                    }
+
+                    // --- 蜗杆蜗轮啮合 ---
+                    if ((g1.type === 'worm' || g2.type === 'worm')) {
+                        const worm = g1.type === 'worm' ? g1 : g2;
+                        const wheel = g1.type === 'worm' ? g2 : g1;
+                        
+                        // 通常蜗轮是直齿轮
+                        if (wheel.type !== 'spur') continue;
+                        
+                        const dist = worm.position.distanceTo(wheel.position);
+                        const idealDist = worm.width / 2 + wheel.pitchRadius;
+                        
+                        if (Math.abs(dist - idealDist) < 0.4) {
+                            // 简单检查轴向是否垂直
+                            const dot = Math.abs(worm.axis.dot(wheel.axis));
+                            if (dot < 0.1) { // 接近垂直
+                                 addConstraint(worm, wheel, 'worm', true); // 蜗杆自锁
+                            }
+                        }
+                        continue;
+                    }
+
+                    // --- 内齿轮啮合 ---
+                    if (g1.type === 'internal' || g2.type === 'internal') {
+                        const internal = g1.type === 'internal' ? g1 : g2;
+                        const external = g1.type === 'internal' ? g2 : g1;
+                        
+                        const dist = internal.position.distanceTo(external.position);
+                        const idealDist = Math.abs(internal.pitchRadius - external.pitchRadius);
+                        
+                        if (Math.abs(dist - idealDist) < 0.4 && internal.axis.dot(external.axis) > 0.99) {
+                            addConstraint(internal, external, 'internal');
+                        }
+                        continue;
+                    }
+
+                    // --- 标准外齿轮啮合 ---
+                    const dist = g1.position.distanceTo(g2.position);
+                    const idealDist = g1.pitchRadius + g2.pitchRadius;
+                    
+                    if (Math.abs(dist - idealDist) < 0.4 && g1.axis.dot(g2.axis) > 0.99) {
+                        addConstraint(g1, g2, 'external');
+                    }
+                }
+            }
+            console.log(`检测到 ${constraints.length} 个啮合约束`);
+        }
+
+        function addConstraint(g1, g2, type, selfLocking = false) {
+            // 计算传动比，增加保护防止除以零
+            let ratio = 0;
+            if (g2.teeth !== 0) {
+                if (type === 'internal') {
+                    ratio = g1.teeth / g2.teeth; // 内啮合同向
+                } else if (type === 'worm') {
+                    ratio = -g1.teeth / g2.teeth; // 蜗杆通常是大减速比，这里简化
+                } else {
+                    ratio = -g1.teeth / g2.teeth; // 外啮合反向
+                }
+            } else {
+                console.warn("警告：发现齿数为0的齿轮，跳过约束。");
+                return;
+            }
+            
+            const constraint = { g1, g2, type, ratio, selfLocking };
+            const cid = constraints.push(constraint) - 1; // 获取新约束的ID
+            g1.constraints.push(cid);
+            g2.constraints.push(cid);
+        }
+
+
+        // ======================
+        // 运动求解器（真实级联）
+        // ======================
+        function solveMotion(deltaTime) {
+            // 重置非驱动轮速度
+            gears.forEach(g => {
+                if (!g.isDriver) g.speed = 0;
+            });
+
+            // 如果没有驱动轮或 deltaTime 异常，则只更新可视化
+            if (driverIndex === -1 || deltaTime <= 0 || deltaTime > 0.1) {
+                updateVisuals(deltaTime > 0 ? deltaTime : 0.016); // 使用默认帧时间
+                return;
+            }
+
+            const visited = new Set();
+            const queue = [{ gear: gears[driverIndex], speed: gears[driverIndex].speed }];
+
+            // BFS 遍历齿轮系统
+            while (queue.length > 0) {
+                const { gear, speed } = queue.shift();
+                
+                // 防止重复处理
+                if (visited.has(gear.id)) continue;
+                visited.add(gear.id);
+                
+                // 设置当前齿轮的速度
+                gear.speed = speed;
+
+                // 遍历所有与该齿轮相关的约束
+                gear.constraints.forEach(cid => {
+                    const con = constraints[cid];
+                    // 找到另一个齿轮
+                    const otherGear = con.g1 === gear ? con.g2 : con.g1;
+                    
+                    // 如果另一个齿轮已被处理过，则跳过
+                    if (visited.has(otherGear.id)) return;
+                    
+                    // 自锁检查：如果从动件试图驱动自锁件，则无效
+                    if (con.selfLocking && con.g2 === gear) return;
+
+                    let newSpeed = 0;
+                    // 根据约束类型计算新速度
+                    if (con.type === 'rack') {
+                        // 齿轮 -> 齿条: 角速度转线速度
+                        if (gear.type !== 'rack') {
+                            newSpeed = (speed / 60) * 2 * Math.PI * gear.pitchRadius * 1000; // 转换为 mm/s
+                        } 
+                        // 齿条 -> 齿轮: 线速度转角速度
+                        else {
+                            // 避免除以零
+                            if (otherGear.pitchRadius > 0.0001) {
+                                newSpeed = (speed / 1000) / otherGear.pitchRadius * 60 / (2 * Math.PI); // mm/s 转 RPM
+                            }
+                        }
+                    } else {
+                        // 普通齿轮间传动
+                        newSpeed = speed * con.ratio;
+                    }
+
+                    // 将计算出的速度加入队列，供下一轮处理
+                    queue.push({ gear: otherGear, speed: newSpeed });
+                });
+            }
+
+            // 更新所有齿轮的可视化（旋转/移动和箭头）
+            updateVisuals(deltaTime);
+        }
+
+
+        // ======================
+        // 可视化更新
+        // ======================
+        function updateVisuals(deltaTime) {
+            // 清理上一帧的辅助可视化（箭头）
+            visuals.forEach(obj => scene.remove(obj));
+            visuals = [];
+
+            gears.forEach(g => {
+                if (!g.mesh) return; // 安全检查
+
+                if (g.type === 'rack') {
+                    // 齿条：沿法向量平移
+                    const movement = g.normal.clone().multiplyScalar(g.speed * deltaTime / 1000); // mm/s -> m/s
+                    g.position.add(movement);
+                    g.mesh.position.copy(g.position);
+                } else {
+                    // 齿轮：绕轴旋转
+                    const radPerSec = (g.speed / 60) * 2 * Math.PI;
+                    const angle = radPerSec * deltaTime;
+                    g.mesh.rotateOnAxis(g.axis, angle);
+                }
+
+                // --- 更新速度指示箭头 ---
+                const arrowOrigin = g.position.clone();
+                let arrowDir, arrowLength, arrowColor;
+
+                if (g.type === 'rack') {
+                    arrowDir = g.normal.clone(); // 方向沿法向量
+                    arrowLength = Math.min(1.5, Math.abs(g.speed) / 50); // 长度与速度相关
+                    arrowColor = g.speed >= 0 ? 0x4cc9f0 : 0xf72585; // 蓝色正向，粉色负向
+                } else {
+                    arrowDir = g.axis.clone(); // 方向沿旋转轴
+                    arrowLength = Math.min(1.5, Math.abs(g.speed) / 50);
+                    arrowColor = g.speed >= 0 ? 0x4cc9f0 : 0xf72585;
+                }
+                
+                // 箭头方向由速度符号决定
+                if (g.speed < 0) {
+                    arrowDir.negate();
+                }
+
+                if (arrowLength > 0.01) { // 只有在有明显运动时才显示箭头
+                    const arrowHelper = new THREE.ArrowHelper(
+                        arrowDir, 
+                        arrowOrigin, 
+                        arrowLength, 
+                        arrowColor, 
+                        0.2 * arrowLength, // 头部长度
+                        0.1 * arrowLength  // 头部宽度
+                    );
+                    scene.add(arrowHelper);
+                    visuals.push(arrowHelper);
+                }
+            });
+        }
+
+
+        // ======================
+        // UI 与交互
+        // ======================
+        // 重构：将场景重建逻辑分离
+        function rebuildSceneGeometryOnly() {
+             // 只重建几何体和网格，不重新检测约束
+             gears.forEach(g => {
+                 if (g.mesh) scene.remove(g.mesh);
+                 g.mesh = buildGeometry(g);
+                 g.mesh.userData = { index: gears.indexOf(g) }; // 用于射线拾取
+                 scene.add(g.mesh);
+             });
+        }
+
+        function rebuildSceneFull() {
+            // 1. 清理旧网格
+            gears.forEach(g => {
+                if (g.mesh) scene.remove(g.mesh);
+            });
+
+            // 2. 为每个齿轮创建新的网格
+            gears.forEach(g => {
+                g.mesh = buildGeometry(g);
+                g.mesh.userData = { index: gears.indexOf(g) }; // 关键：将索引存入userData以便拾取
+                scene.add(g.mesh);
+            });
+
+            // 3. 重新检测所有约束
+            detectConstraints();
+            
+            // 4. 如果已有驱动轮，立即求解一次运动
+            if (driverIndex >= 0 && gears[driverIndex]) {
+                 const currentSpeed = parseFloat(document.getElementById('speed').value) || 0;
+                 gears[driverIndex].speed = currentSpeed;
+                 solveMotion(clock.getDelta()); // 使用一个小的时间增量触发初始计算
+            }
+            
+            // 5. 更新UI列表
+            updateUI();
+        }
+
+        // 新增：处理齿轮列表项点击
+        function onGearListItemClick(index) {
+            selectedGearIndex = index;
+            updateUI(); // 重新渲染列表以高亮选中项
+            // 可以在这里添加其他选中反馈，比如高亮网格等
+        }
+
+        // 新增：将选中的齿轮设为驱动轮
+        function setSelectedAsDriver() {
+             if (selectedGearIndex >= 0 && selectedGearIndex < gears.length) {
+                 // 重置旧驱动轮状态
+                 if (driverIndex >= 0 && gears[driverIndex]) {
+                     gears[driverIndex].isDriver = false;
+                 }
+                 
+                 // 设置新驱动轮
+                 driverIndex = selectedGearIndex;
+                 gears[driverIndex].isDriver = true;
+                 
+                 // 更新速度滑块和值
+                 const speedSlider = document.getElementById('speed');
+                 const speedValue = document.getElementById('speed-val');
+                 const newSpeed = parseFloat(speedSlider.value) || 40;
+                 gears[driverIndex].speed = newSpeed;
+                 
+                 // 触发一次运动求解
+                 solveMotion(clock.getDelta());
+                 
+                 // 更新UI
+                 updateUI();
+             } else {
+                 alert("请先从列表中选择一个齿轮！");
+             }
+        }
+
+        function addGear(type) {
+            const pos = new THREE.Vector3(
+                (gears.length - 2) * 2.5,
+                type === 'rack' ? -1 : 0,
+                (gears.length % 3) * 1.5 // Z轴轻微偏移避免完全重叠
+            );
+            const gear = createGear(type, { position: pos });
+            
+            // 如果这是第一个齿轮，自动设为驱动
+            /*
+            if (gears.length === 0) {
+                gear.isDriver = true;
+                driverIndex = 0;
+                gear.speed = 40;
+            }
+            */
+
+            gears.push(gear);
+            rebuildSceneGeometryOnly(); // 只添加新齿轮，不重算所有
+            detectConstraints(); // 重新检测约束
+            updateUI();
+        }
+
+        function addPlanetary() {
+            const centerIndex = gears.length;
+            const center = new THREE.Vector3(centerIndex * 2.5, 0, 0);
+            
+            const sun = createGear('spur', {
+                teeth: 16,
+                position: center.clone(),
+                axis: new THREE.Vector3(0, 1, 0)
+            });
+            
+            const ring = createGear('internal', {
+                teeth: 48,
+                position: center.clone(),
+                axis: new THREE.Vector3(0, 1, 0)
+            });
+            
+            const planets = [];
+            const planetCount = 3;
+            for (let i = 0; i < planetCount; i++) {
+                const angle = (i / planetCount) * Math.PI * 2 + Math.PI/6; // 微小偏移避免对齐
+                const r = (sun.pitchRadius + (ring.pitchRadius - sun.pitchRadius) / 2) * 1.1; // 稍微分开一点
+                const pos = center.clone().add(new THREE.Vector3(Math.cos(angle) * r, 0, Math.sin(angle) * r));
+                planets.push(createGear('spur', {
+                    teeth: 16,
+                    position: pos,
+                    axis: new THREE.Vector3(0, 1, 0)
+                }));
+            }
+
+            // 默认太阳轮为驱动
+            /*
+            sun.isDriver = true;
+            sun.speed = 40;
+            if (driverIndex === -1) driverIndex = centerIndex;
+            */
+
+            gears.push(sun, ring, ...planets);
+            rebuildSceneGeometryOnly();
+            detectConstraints();
+            updateUI();
+        }
+
+        function autoArrange() {
+            if (gears.length === 0) return;
+            let x = -gears.length * 1.8 / 2;
+            gears.forEach(g => {
+                if (g.type !== 'rack') {
+                    g.position.set(x, 0, 0);
+                    x += g.pitchRadius * 2 + 0.8;
+                } else {
+                    // 齿条放在下方
+                    g.position.set(x, -1, 0);
+                    x += 3; // 齿条长度固定
+                }
+            });
+            rebuildSceneGeometryOnly();
+            detectConstraints();
+        }
+
+        function resetDemo() {
+            // 清理现有场景
+            gears.forEach(g => {
+                if (g.mesh) scene.remove(g.mesh);
+            });
+            visuals.forEach(v => scene.remove(v));
+            visuals = [];
+            
+            gears = [];
+            constraints = [];
+            driverIndex = -1;
+            selectedGearIndex = -1;
+
+            // 创建默认场景
+            addGear('spur'); // 0
+            addGear('spur'); // 1
+            addGear('spur'); // 2
+            addGear('rack'); // 3
+            
+            // 手动调整位置
+            gears[0].position.set(-4, 0, 0);
+            gears[1].position.set(0, 0, 0);
+            gears[2].position.set(0, 3, 0);
+            gears[3].position.set(4, -0.3, 0);
+            // 齿条法向量朝上，与齿轮啮合
+            gears[3].normal.set(0, 1, 0); 
+            
+            rebuildSceneFull(); // 完整重建
+            
+            // 默认选择第一个齿轮并设为驱动
+            selectedGearIndex = 0;
+            if (gears.length > 0) {
+                const speedSlider = document.getElementById('speed');
+                const speedValue = document.getElementById('speed-val');
+                const defaultSpeed = 40;
+                speedSlider.value = defaultSpeed;
+                speedValue.textContent = defaultSpeed.toString();
+                setSelectedAsDriver();
+            }
+        }
+
+        function updateUI() {
+            const list = document.getElementById('gear-list');
+            list.innerHTML = '';
+            gears.forEach((g, i) => {
+                const div = document.createElement('div');
+                div.className = 'gear-item';
+                if (i === selectedGearIndex) div.classList.add('active'); // 高亮选中项
+                if (i === driverIndex) div.innerHTML += ' <strong>(驱动)</strong>'; // 标记驱动轮
+                
+                const typeName = GEAR_TYPES[g.type]?.name || g.type;
+                let speedStr = "静止";
+                if (g.speed !== 0) {
+                     speedStr = g.type === 'rack' ? 
+                         `${g.speed.toFixed(1)} mm/s` : 
+                         `${g.speed.toFixed(1)} RPM`;
+                }
+                div.textContent = `#${i + 1} ${typeName} | 齿:${g.teeth} | ${speedStr}`;
+                // 绑定点击事件到列表项
+                div.onclick = () => onGearListItemClick(i); 
+                list.appendChild(div);
+            });
+        }
+
+        // ======================
+        // 动画循环
+        // ======================
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const delta = clock.getDelta(); // 只调用一次，获取帧间隔时间
+
+            // 更新控制器阻尼
+            if (controls) {
+                controls.update();
+            }
+
+            // 求解并更新齿轮运动
+            if (gears.length > 0) {
+                solveMotion(delta);
+            }
+
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+
+        // ======================
+        // 启动应用 & 设置 UI 交互
+        // ======================
+        // 等待 DOM 加载完成后再初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            const loadingMessage = document.getElementById('loading-message');
+            
+            if (!initThree()) {
+                 loadingMessage.textContent = "❌ 初始化失败，请刷新页面。";
+                 loadingMessage.style.color = "#f72585";
+                 return;
+            }
+            
+            setupEventListeners();
+            
+            // --- 设置 UI 按钮的点击事件 ---
+            // 使用 addEventListener 替代 HTML 内联 onclick
+            document.getElementById('btn-spur').addEventListener('click', () => addGear('spur'));
+            document.getElementById('btn-helical').addEventListener('click', () => addGear('helical'));
+            document.getElementById('btn-bevel').addEventListener('click', () => addGear('bevel'));
+            document.getElementById('btn-worm').addEventListener('click', () => addGear('worm'));
+            document.getElementById('btn-internal').addEventListener('click', () => addGear('internal'));
+            document.getElementById('btn-rack').addEventListener('click', () => addGear('rack'));
+            document.getElementById('btn-planetary').addEventListener('click', addPlanetary);
+            document.getElementById('btn-set-driver').addEventListener('click', setSelectedAsDriver);
+            document.getElementById('btn-reset').addEventListener('click', resetDemo);
+            document.getElementById('btn-auto-arrange').addEventListener('click', autoArrange);
+            
+            resetDemo(); // 启动默认场景
+            animate(); // 开始渲染循环
+            
+            // 移除加载提示
+            loadingMessage.style.display = 'none';
+        });
+
+    </script>
+</body>
+</html>
