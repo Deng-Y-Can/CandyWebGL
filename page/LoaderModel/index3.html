@@ -1,0 +1,1501 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Multi Model Viewer - PLY/OBJ/STL/FBX/GLTF/GLB/USD</title>
+    <style>
+        html, body {
+            height: 100%;
+            margin: 0;
+            background: #0b0f14;
+            overflow: hidden;
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial;
+        }
+
+        #wrap {
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .ui {
+            position: absolute;
+            left: 12px;
+            top: 12px;
+            background: rgba(12,16,22,.82);
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 12px;
+            padding: 12px;
+            color: rgba(255,255,255,.92);
+            backdrop-filter: blur(10px);
+            min-width: 380px;
+            max-width: 520px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.35);
+            user-select: none;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin: 8px 0;
+            flex-wrap: wrap;
+        }
+
+            .row > label {
+                width: 96px;
+                opacity: .85;
+                font-size: 12px;
+            }
+
+        select, button, input[type="range"], input[type="number"] {
+            background: rgba(255,255,255,.06);
+            color: rgba(255,255,255,.92);
+            border: 1px solid rgba(255,255,255,.12);
+            border-radius: 10px;
+            padding: 8px 10px;
+            outline: none;
+        }
+
+        input[type="file"] {
+            color: rgba(255,255,255,.9);
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+            button.primary {
+                background: rgba(60,140,255,.22);
+                border-color: rgba(60,140,255,.35);
+            }
+
+            button.danger {
+                background: rgba(255,90,90,.18);
+                border-color: rgba(255,90,90,.28);
+            }
+
+            button:disabled {
+                opacity: .45;
+                cursor: not-allowed;
+            }
+
+        .sep {
+            height: 1px;
+            background: rgba(255,255,255,.08);
+            margin: 10px 0;
+        }
+
+        .hint {
+            font-size: 12px;
+            opacity: .75;
+            line-height: 1.35;
+            margin-top: 6px;
+        }
+
+        .stats {
+            font-size: 12px;
+            opacity: .85;
+            line-height: 1.35;
+        }
+
+        .panel {
+            border: 1px solid rgba(255,255,255,.08);
+            border-radius: 10px;
+            padding: 6px 8px;
+            background: rgba(255,255,255,.04);
+            font-size: 12px;
+            max-height: 160px;
+            overflow: auto;
+        }
+
+        .item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 6px 0;
+            border-bottom: 1px dashed rgba(255,255,255,.08);
+        }
+
+            .item:last-child {
+                border-bottom: none;
+            }
+
+            .item .left {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                min-width: 0;
+            }
+
+            .item .name {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 220px;
+                opacity: .95;
+            }
+
+            .item .tag {
+                opacity: .6;
+                font-size: 11px;
+            }
+
+            .item .btns {
+                display: flex;
+                gap: 6px;
+                align-items: center;
+            }
+
+        .tiny {
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .selected {
+            outline: 1px solid rgba(60,140,255,.55);
+            outline-offset: 2px;
+            border-radius: 10px;
+        }
+
+        .measure-list {
+            max-height: 130px;
+            overflow: auto;
+        }
+
+        .measure-item {
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 4px 0;
+            border-bottom: 1px dashed rgba(255,255,255,.08);
+        }
+
+            .measure-item:last-child {
+                border-bottom: none;
+            }
+
+        .toast {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            background: rgba(20,26,36,.90);
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 12px;
+            padding: 10px 12px;
+            color: rgba(255,255,255,.92);
+            max-width: 520px;
+            line-height: 1.35;
+            box-shadow: 0 10px 30px rgba(0,0,0,.35);
+            display: none;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="wrap">
+        <canvas id="c"></canvas>
+
+        <div class="ui">
+            <div class="row" style="justify-content:space-between;">
+                <div style="font-weight:600;">多模型查看 / 测量 / 轴染色</div>
+                <div style="display:flex; gap:8px;">
+                    <button id="btnReset" class="primary">重置视角</button>
+                    <button id="btnClearScene" class="danger">清空场景</button>
+                </div>
+            </div>
+
+            <div class="row">
+                <label>导入文件</label>
+                <input id="file" type="file"
+                       accept=".ply,.obj,.stl,.fbx,.gltf,.glb,.usd,.usda,.usdc,.usdz"
+                       multiple />
+                <button id="btnLoadUrl" title="输入 URL（需 CORS / 同源）">加载 URL</button>
+            </div>
+
+            <div class="row">
+                <label>导入选项</label>
+                <label style="width:auto;">
+                    <input id="optCenter" type="checkbox" />
+                    <span style="font-size:12px; opacity:.85;">居中</span>
+                </label>
+                <label style="width:auto;">
+                    <input id="optUnit" type="checkbox" />
+                    <span style="font-size:12px; opacity:.85;">归一化</span>
+                </label>
+                <span style="font-size:12px; opacity:.65;">（多模型对齐建议都关）</span>
+            </div>
+
+            <div class="row">
+                <label>显示模式</label>
+                <select id="viewMode">
+                    <option value="auto" selected>自动（有面=网格 / 无面=点云）</option>
+                    <option value="points">强制点云</option>
+                    <option value="triangles">强制网格</option>
+                </select>
+
+                <label style="width:auto;">点大小</label>
+                <input id="pointSize" type="range" min="1" max="12" step="0.5" value="2.5" />
+                <span id="pointSizeVal" style="font-size:12px; opacity:.85;">2.5</span>
+            </div>
+
+            <div class="row">
+                <label>沿轴染色</label>
+                <select id="axisColor">
+                    <option value="none" selected>不染色（恢复原色/白色）</option>
+                    <option value="x">按 X</option>
+                    <option value="y">按 Y</option>
+                    <option value="z">按 Z</option>
+                </select>
+
+                <select id="axisScope" title="染色作用范围">
+                    <option value="all" selected>全部模型</option>
+                    <option value="selected">仅选中</option>
+                </select>
+
+                <button id="btnApplyAxis">应用</button>
+
+                <label style="width:auto;">
+                    <input id="fakeLight" type="checkbox" checked />
+                    <span style="font-size:12px; opacity:.85;">假光照</span>
+                </label>
+            </div>
+
+            <div class="row">
+                <label>测量</label>
+                <button id="btnMeasure" class="primary">开启测量</button>
+                <button id="btnClearMeasure" class="danger">清空</button>
+
+                <label style="width:auto;">
+                    <input id="snapPixels" type="number" min="2" max="120" value="10" style="width:72px; padding:6px 8px;">
+                    <span style="font-size:12px; opacity:.85;">像素吸附</span>
+                </label>
+            </div>
+
+            <div class="panel measure-list" id="measureList"></div>
+
+            <div class="sep"></div>
+
+            <div class="row" style="justify-content:space-between;">
+                <div style="font-weight:600; opacity:.92;">模型列表（点击行可选中）</div>
+                <span style="font-size:12px; opacity:.65;">选中后可“仅选中染色/聚焦/删除”</span>
+            </div>
+            <div class="panel" id="modelList"></div>
+
+            <div class="sep"></div>
+            <div class="stats" id="stats">未加载模型</div>
+
+            <div class="hint">
+                操作：
+                <br>• 左键拖动：旋转
+                <br>• 右键拖动 / Shift+左键：平移
+                <br>• 滚轮：缩放（相机距离）
+                <br>• 测量开启：左键点两次（优先拾取选中组；未选中则全局拾取）
+            </div>
+        </div>
+
+        <div class="toast" id="toast"></div>
+    </div>
+
+    <script type="module">
+        import { vec3, vec4, mat4, mathf } from "./math-gl.js";
+        import { GLDevice, Renderer, Scene, Program, Mesh, Material, Model } from "./webgl-runtime.js";
+
+        import { parsePLY } from "./ply-importer.js";
+        import { parseOBJ } from "./obj-importer.js";
+        import { parseSTL } from "./stl-importer.js";
+
+        // ✅ 新增：这三个 importer（你已经让它们各自生成了）
+        import { parseFBX } from "./fbx-importer.js";
+        import { parseGLTF } from "./gltf-importer.js";
+        import { parseUSD } from "./usd-importer.js";
+
+        // -----------------------
+        // Toast
+        // -----------------------
+        const toastEl = document.getElementById("toast");
+        let toastTimer = null;
+        function toast(msg, ms = 2600) {
+            toastEl.textContent = msg;
+            toastEl.style.display = "block";
+            clearTimeout(toastTimer);
+            toastTimer = setTimeout(() => toastEl.style.display = "none", ms);
+        }
+
+        // -----------------------
+        // BasicCamera
+        // -----------------------
+        class BasicCamera {
+            constructor() {
+                this.projectionMatrix = mat4.create();
+                this.viewMatrix = mat4.create();
+                this.viewProjectionMatrix = mat4.create();
+                this.eye = vec3.fromValues(0, 0, 3);
+                this.target = vec3.fromValues(0, 0, 0);
+                this.up = vec3.fromValues(0, 1, 0);
+                this.fovY = mathf.degToRad ? mathf.degToRad(60) : (60 * Math.PI / 180);
+                this.near = 0.01; this.far = 5000; this.aspect = 1;
+                this._dirty = true;
+            }
+            setPerspective(fovY, aspect, near, far) {
+                this.fovY = fovY; this.aspect = aspect; this.near = near; this.far = far;
+                this._dirty = true;
+            }
+            lookAt(eye, target, up) {
+                vec3.copy(this.eye, eye);
+                vec3.copy(this.target, target);
+                vec3.copy(this.up, up);
+                this._dirty = true;
+            }
+            updateMatrices() {
+                if (!this._dirty) return;
+                mat4.perspective(this.projectionMatrix, this.fovY, this.aspect, this.near, this.far);
+                mat4.lookAt(this.viewMatrix, this.eye, this.target, this.up);
+                mat4.mul(this.viewProjectionMatrix, this.projectionMatrix, this.viewMatrix);
+                this._dirty = false;
+            }
+        }
+
+        // -----------------------
+        // OrbitControls（略：与之前相同）
+        // -----------------------
+        class OrbitControls {
+            constructor(canvas, camera) {
+                this.canvas = canvas;
+                this.camera = camera;
+                this.target = vec3.fromValues(0, 0, 0);
+                this.distance = 3.0;
+                this.yaw = 0.0; this.pitch = 0.0;
+                this._drag = false; this._mode = "rotate";
+                this._lastX = 0; this._lastY = 0;
+                this.minDistance = 0.05; this.maxDistance = 1e6;
+                this._bind(); this.updateCamera();
+            }
+            setFromBounds(bbox) {
+                const c = vec3.fromValues(
+                    (bbox.min[0] + bbox.max[0]) * 0.5,
+                    (bbox.min[1] + bbox.max[1]) * 0.5,
+                    (bbox.min[2] + bbox.max[2]) * 0.5
+                );
+                vec3.copy(this.target, c);
+                const dx = bbox.max[0] - bbox.min[0];
+                const dy = bbox.max[1] - bbox.min[1];
+                const dz = bbox.max[2] - bbox.min[2];
+                const diag = Math.max(1e-6, Math.hypot(dx, dy, dz));
+                this.distance = diag * 1.8;
+                this.yaw = Math.PI * 0.25;
+                this.pitch = Math.PI * 0.12;
+                this.updateCamera();
+            }
+            _bind() {
+                this.canvas.addEventListener("contextmenu", e => e.preventDefault());
+                this.canvas.addEventListener("mousedown", e => {
+                    this._drag = true;
+                    this._lastX = e.clientX;
+                    this._lastY = e.clientY;
+                    const isPan = (e.button === 2) || (e.button === 0 && e.shiftKey);
+                    this._mode = isPan ? "pan" : "rotate";
+                });
+                window.addEventListener("mouseup", () => this._drag = false);
+                window.addEventListener("mousemove", e => {
+                    if (!this._drag) return;
+                    const dx = e.clientX - this._lastX;
+                    const dy = e.clientY - this._lastY;
+                    this._lastX = e.clientX; this._lastY = e.clientY;
+                    if (this._mode === "rotate") {
+                        const s = 0.005;
+                        this.yaw -= dx * s;
+                        this.pitch -= dy * s;
+                        const lim = Math.PI / 2 - 0.01;
+                        this.pitch = Math.max(-lim, Math.min(lim, this.pitch));
+                    } else {
+                        const panSpeed = this.distance * 0.0012;
+                        const dir = this._getDir();
+                        const right = vec3.create();
+                        vec3.cross(right, dir, vec3.fromValues(0, 1, 0));
+                        let rl = Math.hypot(right[0], right[1], right[2]) || 1;
+                        right[0] /= rl; right[1] /= rl; right[2] /= rl;
+                        const up = vec3.create();
+                        vec3.cross(up, right, dir);
+                        let ul = Math.hypot(up[0], up[1], up[2]) || 1;
+                        up[0] /= ul; up[1] /= ul; up[2] /= ul;
+                        this.target[0] += (-dx * panSpeed) * right[0] + (dy * panSpeed) * up[0];
+                        this.target[1] += (-dx * panSpeed) * right[1] + (dy * panSpeed) * up[1];
+                        this.target[2] += (-dx * panSpeed) * right[2] + (dy * panSpeed) * up[2];
+                    }
+                    this.updateCamera();
+                });
+                this.canvas.addEventListener("wheel", e => {
+                    e.preventDefault();
+                    const s = Math.exp(e.deltaY * 0.001);
+                    this.distance *= s;
+                    this.distance = Math.max(this.minDistance, Math.min(this.maxDistance, this.distance));
+                    this.updateCamera();
+                }, { passive: false });
+            }
+            _getDir() {
+                const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+                const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+                const ex = this.target[0] + this.distance * (cp * sy);
+                const ey = this.target[1] + this.distance * (sp);
+                const ez = this.target[2] + this.distance * (cp * cy);
+                const dir = vec3.fromValues(this.target[0] - ex, this.target[1] - ey, this.target[2] - ez);
+                const l = Math.hypot(dir[0], dir[1], dir[2]) || 1;
+                dir[0] /= l; dir[1] /= l; dir[2] /= l;
+                return dir;
+            }
+            updateCamera() {
+                const cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+                const cy = Math.cos(this.yaw), sy = Math.sin(this.yaw);
+                const eye = vec3.fromValues(
+                    this.target[0] + this.distance * (cp * sy),
+                    this.target[1] + this.distance * (sp),
+                    this.target[2] + this.distance * (cp * cy)
+                );
+                this.camera.lookAt(eye, this.target, vec3.fromValues(0, 1, 0));
+            }
+        }
+
+        // -----------------------
+        // ShaderLib（与你现有一致：略微精简）
+        // -----------------------
+        const ShaderLib = {
+            Points: {
+                vs100: `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+uniform float uPointSize;
+varying vec4 vColor;
+void main(){
+      vColor=aColor;
+      gl_Position=uMVP*vec4(aPosition,1.0);
+      gl_PointSize=uPointSize;
+}`,
+                fs100: `
+precision highp float;
+varying vec4 vColor;
+uniform vec4 uColor;
+uniform float uRoundPoints;
+void main(){
+      vec4 c=vColor*uColor;
+      if(uRoundPoints>0.5){
+        vec2 p=gl_PointCoord*2.0-1.0;
+        if(dot(p,p)>1.0) discard;
+      }
+      gl_FragColor=c;
+}`,
+                vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+in vec4 aColor;
+uniform mat4 uMVP;
+uniform float uPointSize;
+out vec4 vColor;
+void main(){
+      vColor=aColor;
+      gl_Position=uMVP*vec4(aPosition,1.0);
+      gl_PointSize=uPointSize;
+}`,
+                fs300: `#version 300 es
+precision highp float;
+in vec4 vColor;
+uniform vec4 uColor;
+uniform float uRoundPoints;
+out vec4 outColor;
+void main(){
+      vec4 c=vColor*uColor;
+      if(uRoundPoints>0.5){
+        vec2 p=gl_PointCoord*2.0-1.0;
+        if(dot(p,p)>1.0) discard;
+      }
+      outColor=c;
+}`
+            },
+            Mesh: {
+                vs100: `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+uniform mat3 uNormalMat;
+varying vec4 vColor;
+varying vec3 vN;
+void main(){
+      vColor=aColor;
+      vN=normalize(uNormalMat*aNormal);
+      gl_Position=uMVP*vec4(aPosition,1.0);
+}`,
+                fs100: `
+precision highp float;
+varying vec4 vColor;
+varying vec3 vN;
+uniform vec4 uColor;
+uniform float uUseFakeLight;
+void main(){
+      vec4 c=vColor*uColor;
+      if(uUseFakeLight>0.5){
+        vec3 L=normalize(vec3(0.35,0.85,0.55));
+        float ndl=max(dot(normalize(vN),L),0.0);
+        c.rgb*=(0.22+0.78*ndl);
+      }
+      gl_FragColor=c;
+}`,
+                vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+in vec3 aNormal;
+in vec4 aColor;
+uniform mat4 uMVP;
+uniform mat3 uNormalMat;
+out vec4 vColor;
+out vec3 vN;
+void main(){
+      vColor=aColor;
+      vN=normalize(uNormalMat*aNormal);
+      gl_Position=uMVP*vec4(aPosition,1.0);
+}`,
+                fs300: `#version 300 es
+precision highp float;
+in vec4 vColor;
+in vec3 vN;
+uniform vec4 uColor;
+uniform float uUseFakeLight;
+out vec4 outColor;
+void main(){
+      vec4 c=vColor*uColor;
+      if(uUseFakeLight>0.5){
+        vec3 L=normalize(vec3(0.35,0.85,0.55));
+        float ndl=max(dot(normalize(vN),L),0.0);
+        c.rgb*=(0.22+0.78*ndl);
+      }
+      outColor=c;
+}`
+            },
+            Lines: {
+                vs100: `
+precision highp float;
+attribute vec3 aPosition;
+uniform mat4 uMVP;
+void main(){ gl_Position=uMVP*vec4(aPosition,1.0); }`,
+                fs100: `
+precision highp float;
+uniform vec4 uColor;
+void main(){ gl_FragColor=uColor; }`,
+                vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+uniform mat4 uMVP;
+void main(){ gl_Position=uMVP*vec4(aPosition,1.0); }`,
+                fs300: `#version 300 es
+precision highp float;
+uniform vec4 uColor;
+out vec4 outColor;
+void main(){ outColor=uColor; }`
+            }
+        };
+
+        // -----------------------
+        // Setup GL / Scene / Renderer
+        // -----------------------
+        const canvas = document.getElementById("c");
+        const device = GLDevice.createFromCanvas(canvas, { antialias: true, alpha: false });
+        const gl = device.gl;
+
+        const renderer = new Renderer(device);
+        const scene = new Scene();
+        scene.backgroundColor = vec4.fromValues(0.05, 0.06, 0.075, 1);
+
+        const camera = new BasicCamera();
+        const controls = new OrbitControls(canvas, camera);
+
+        function resize() {
+            renderer.resizeToDisplaySize(canvas);
+            camera.setPerspective(camera.fovY, canvas.width / canvas.height, 0.01, 5000);
+        }
+        window.addEventListener("resize", resize);
+        resize();
+
+        const progPoints = Program.fromSources(device, ShaderLib.Points);
+        const progMesh = Program.fromSources(device, ShaderLib.Mesh);
+        const progLines = Program.fromSources(device, ShaderLib.Lines);
+
+        // -----------------------
+        // 多模型数据结构
+        // -----------------------
+        let groupSeq = 0;
+        const modelGroups = []; // {id,name,format,visible,models,targets,bbox,vCount,triCount}
+        let selectedGroupId = null;
+
+        function unionBBox(a, b) {
+            if (!a) return b;
+            if (!b) return a;
+            return {
+                min: vec3.fromValues(
+                    Math.min(a.min[0], b.min[0]),
+                    Math.min(a.min[1], b.min[1]),
+                    Math.min(a.min[2], b.min[2])
+                ),
+                max: vec3.fromValues(
+                    Math.max(a.max[0], b.max[0]),
+                    Math.max(a.max[1], b.max[1]),
+                    Math.max(a.max[2], b.max[2])
+                )
+            };
+        }
+
+        function getGlobalBBox(onlyVisible = true) {
+            let bb = null;
+            for (const g of modelGroups) {
+                if (onlyVisible && !g.visible) continue;
+                bb = unionBBox(bb, g.bbox);
+            }
+            return bb;
+        }
+
+        function setGroupVisible(groupId, visible) {
+            const g = modelGroups.find(x => x.id === groupId);
+            if (!g) return;
+            g.visible = visible;
+            for (const m of g.models) m.visible = visible;
+            updateStats();
+            renderModelList();
+        }
+
+        function removeGroup(groupId) {
+            const idx = modelGroups.findIndex(x => x.id === groupId);
+            if (idx < 0) return;
+            const g = modelGroups[idx];
+            for (const m of g.models) m.visible = false;
+            modelGroups.splice(idx, 1);
+            if (selectedGroupId === groupId) selectedGroupId = null;
+            updateStats();
+            renderModelList();
+        }
+
+        function clearScene() {
+            for (const g of modelGroups) for (const m of g.models) m.visible = false;
+            modelGroups.length = 0;
+            selectedGroupId = null;
+            clearMeasurements();
+            updateStats();
+            renderModelList();
+            toast("已清空场景");
+        }
+
+        // -----------------------
+        // 测量 overlay（与你之前一致，略保留）
+        // -----------------------
+        const measurements = [];
+        let measureEnabled = false;
+        let pendingPoint = null;
+
+        const measureLineMesh = Mesh.fromData(device, {
+            attributes: { aPosition: { data: new Float32Array(0), size: 3, usage: gl.DYNAMIC_DRAW } },
+            indices: null, mode: gl.LINES
+        });
+        const measureLineMat = new Material(progLines, {
+            depthTest: false, depthWrite: false, blend: true, cull: false,
+            uniforms: { uColor: vec4.fromValues(0.95, 0.95, 0.2, 1.0) }
+        });
+        const measureLinesModel = new Model(measureLineMesh, measureLineMat, "measure-lines");
+        scene.add(measureLinesModel);
+
+        const measurePointMesh = Mesh.fromData(device, {
+            attributes: {
+                aPosition: { data: new Float32Array(0), size: 3, usage: gl.DYNAMIC_DRAW },
+                aColor: { data: new Float32Array(0), size: 4, usage: gl.DYNAMIC_DRAW }
+            },
+            indices: null, mode: gl.POINTS
+        });
+        const measurePointMat = new Material(progPoints, {
+            depthTest: false, depthWrite: false, blend: true, cull: false,
+            uniforms: { uColor: vec4.fromValues(1, 1, 1, 1), uPointSize: 9.0, uRoundPoints: 1.0 }
+        });
+        const measurePointsModel = new Model(measurePointMesh, measurePointMat, "measure-points");
+        scene.add(measurePointsModel);
+
+        const measureListEl = document.getElementById("measureList");
+        function renderMeasureList() {
+            if (measurements.length === 0 && !pendingPoint) {
+                measureListEl.innerHTML = `<div style="opacity:.65; padding:6px 2px;">暂无测量</div>`;
+                return;
+            }
+            const rows = measurements.map((m, idx) => `
+          <div class="measure-item"><div>#${idx + 1}</div><div>${m.dist.toFixed(6)}</div></div>
+        `).join("");
+            const pending = pendingPoint ? `<div style="opacity:.75; padding:6px 2px;">已选 1 点，继续选第 2 点…</div>` : "";
+            measureListEl.innerHTML = rows + pending;
+        }
+        function updateMeasureMeshes() {
+            const segPos = new Float32Array(measurements.length * 2 * 3);
+            for (let i = 0; i < measurements.length; i++) {
+                const m = measurements[i];
+                segPos.set(m.a, i * 6 + 0);
+                segPos.set(m.b, i * 6 + 3);
+            }
+            const pts = []; const cols = [];
+            for (const m of measurements) {
+                pts.push(...m.a, ...m.b);
+                cols.push(1, 0.35, 0.2, 1, 0.2, 0.75, 1, 1);
+            }
+            if (pendingPoint) { pts.push(...pendingPoint); cols.push(0.9, 0.9, 0.25, 1); }
+
+            const lineAttr = measureLineMesh.attributes.find(a => a.name === "aPosition");
+            gl.bindBuffer(gl.ARRAY_BUFFER, lineAttr.buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, segPos, gl.DYNAMIC_DRAW);
+            measureLineMesh.vertexCount = (segPos.length / 3) | 0;
+            measureLineMesh.vao = null;
+
+            const pAttr = measurePointMesh.attributes.find(a => a.name === "aPosition");
+            const cAttr = measurePointMesh.attributes.find(a => a.name === "aColor");
+            gl.bindBuffer(gl.ARRAY_BUFFER, pAttr.buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(pts), gl.DYNAMIC_DRAW);
+            gl.bindBuffer(gl.ARRAY_BUFFER, cAttr.buffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(cols), gl.DYNAMIC_DRAW);
+            measurePointMesh.vertexCount = (pts.length / 3) | 0;
+            measurePointMesh.vao = null;
+
+            renderMeasureList();
+        }
+        function clearMeasurements() {
+            measurements.length = 0;
+            pendingPoint = null;
+            updateMeasureMeshes();
+        }
+        function addMeasurement(a, b) {
+            const dx = b[0] - a[0], dy = b[1] - a[1], dz = b[2] - a[2];
+            const dist = Math.hypot(dx, dy, dz);
+            measurements.push({ a, b, dist });
+            pendingPoint = null;
+            updateMeasureMeshes();
+        }
+        renderMeasureList();
+
+        // -----------------------
+        // 轴染色（与你之前一致：略）
+        // -----------------------
+        function colorRamp(t) {
+            t = Math.max(0, Math.min(1, t));
+            const stops = [
+                { t: 0.0, c: [0.10, 0.30, 1.00] },
+                { t: 0.25, c: [0.10, 0.95, 1.00] },
+                { t: 0.5, c: [0.20, 1.00, 0.25] },
+                { t: 0.75, c: [1.00, 0.95, 0.10] },
+                { t: 1.0, c: [1.00, 0.15, 0.10] },
+            ];
+            for (let i = 0; i < stops.length - 1; i++) {
+                const a = stops[i], b = stops[i + 1];
+                if (t >= a.t && t <= b.t) {
+                    const u = (t - a.t) / (b.t - a.t);
+                    return [
+                        a.c[0] + (b.c[0] - a.c[0]) * u,
+                        a.c[1] + (b.c[1] - a.c[1]) * u,
+                        a.c[2] + (b.c[2] - a.c[2]) * u,
+                        1.0
+                    ];
+                }
+            }
+            return [1, 1, 1, 1];
+        }
+        function ensureMeshColorAttribute(mesh, colorsFloat4) {
+            let aColor = mesh.attributes.find(a => a.name === "aColor");
+            if (!aColor) {
+                const buf = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+                gl.bufferData(gl.ARRAY_BUFFER, colorsFloat4, gl.STATIC_DRAW);
+                mesh.attributes.push({
+                    name: "aColor", buffer: buf, size: 4,
+                    type: gl.FLOAT, normalized: false, stride: 0, offset: 0, divisor: 0
+                });
+            } else {
+                gl.bindBuffer(gl.ARRAY_BUFFER, aColor.buffer);
+                gl.bufferData(gl.ARRAY_BUFFER, colorsFloat4, gl.STATIC_DRAW);
+            }
+            mesh.vao = null;
+        }
+        function applyAxisColor(axis, scope) {
+            if (!modelGroups.length) return;
+
+            const targetsGroups = (scope === "selected" && selectedGroupId != null)
+                ? modelGroups.filter(g => g.id === selectedGroupId)
+                : modelGroups;
+
+            if (!targetsGroups.length) return;
+
+            if (axis === "none") {
+                for (const g of targetsGroups) for (const t of g.targets)
+                    ensureMeshColorAttribute(t.model.mesh, t.colorsOriginal);
+                toast("已恢复原始颜色（或白色）");
+                return;
+            }
+
+            const ai = axis === "x" ? 0 : axis === "y" ? 1 : 2;
+
+            let bb = null;
+            for (const g of targetsGroups) {
+                if (!g.visible) continue;
+                bb = unionBBox(bb, g.bbox);
+            }
+            if (!bb) return;
+            const min = bb.min[ai], max = bb.max[ai], span = Math.max(1e-9, max - min);
+
+            for (const g of targetsGroups) {
+                if (!g.visible) continue;
+                for (const t of g.targets) {
+                    const pos = t.positions, vCount = (pos.length / 3) | 0;
+                    const out = new Float32Array(vCount * 4);
+                    for (let i = 0; i < vCount; i++) {
+                        const v = pos[i * 3 + ai];
+                        const tt = (v - min) / span;
+                        const c = colorRamp(tt);
+                        out.set(c, i * 4);
+                    }
+                    ensureMeshColorAttribute(t.model.mesh, out);
+                }
+            }
+            toast(`已按 ${axis.toUpperCase()} 轴染色（${scope === "selected" ? "仅选中" : "全部"}）`);
+        }
+
+        // -----------------------
+        // Picking（跨模型 O(N)）
+        // -----------------------
+        const _tmpMVP = mat4.create();
+        const _tmpV4 = new Float32Array(4);
+        function mulMat4Vec4(out4, m, x, y, z, w) {
+            out4[0] = m[0] * x + m[4] * y + m[8] * z + m[12] * w;
+            out4[1] = m[1] * x + m[5] * y + m[9] * z + m[13] * w;
+            out4[2] = m[2] * x + m[6] * y + m[10] * z + m[14] * w;
+            out4[3] = m[3] * x + m[7] * y + m[11] * z + m[15] * w;
+            return out4;
+        }
+        function getPickTargets() {
+            if (selectedGroupId != null) {
+                const g = modelGroups.find(x => x.id === selectedGroupId);
+                if (g && g.visible) return g.targets;
+            }
+            const out = [];
+            for (const g of modelGroups) if (g.visible) out.push(...g.targets);
+            return out;
+        }
+        function pickVertexScreenSpace(mx, my, pixelThreshold = 10) {
+            const targets = getPickTargets();
+            if (!targets.length) return null;
+            const w = canvas.width, h = canvas.height;
+            let best = null, bestD2 = pixelThreshold * pixelThreshold, bestDepth = Infinity;
+
+            for (const t of targets) {
+                const model = t.model;
+                const pos = t.positions;
+                const vCount = (pos.length / 3) | 0;
+                mat4.mul(_tmpMVP, camera.viewProjectionMatrix, model.matrixWorld);
+
+                for (let i = 0; i < vCount; i++) {
+                    const x = pos[i * 3 + 0], y = pos[i * 3 + 1], z = pos[i * 3 + 2];
+                    mulMat4Vec4(_tmpV4, _tmpMVP, x, y, z, 1);
+                    const cw = _tmpV4[3];
+                    if (cw <= 1e-6) continue;
+
+                    const ndcX = _tmpV4[0] / cw, ndcY = _tmpV4[1] / cw, ndcZ = _tmpV4[2] / cw;
+                    if (ndcX < -1 || ndcX > 1 || ndcY < -1 || ndcY > 1 || ndcZ < -1 || ndcZ > 1) continue;
+
+                    const sx = (ndcX * 0.5 + 0.5) * w;
+                    const sy = (1 - (ndcY * 0.5 + 0.5)) * h;
+                    const dx = sx - mx, dy = sy - my;
+                    const d2 = dx * dx + dy * dy;
+
+                    if (d2 < bestD2) {
+                        const depth = ndcZ;
+                        if (d2 < bestD2 - 1e-6 || depth < bestDepth) {
+                            mulMat4Vec4(_tmpV4, model.matrixWorld, x, y, z, 1);
+                            const iw = _tmpV4[3] || 1;
+                            best = vec3.fromValues(_tmpV4[0] / iw, _tmpV4[1] / iw, _tmpV4[2] / iw);
+                            bestD2 = d2; bestDepth = depth;
+                        }
+                    }
+                }
+            }
+            return best;
+        }
+
+        canvas.addEventListener("click", e => {
+            if (!measureEnabled) return;
+            if (!modelGroups.length) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const mx = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const my = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            const px = parseFloat(document.getElementById("snapPixels").value) || 10;
+            const p = pickVertexScreenSpace(mx, my, px);
+            if (!p) { toast("未命中点（可增大像素吸附，或先选中某组）"); return; }
+
+            if (!pendingPoint) { pendingPoint = p; updateMeasureMeshes(); }
+            else addMeasurement(pendingPoint, p);
+        });
+
+        // -----------------------
+        // Geometry -> Model（统一入口，支持 submeshes）
+        // -----------------------
+        function getImportOptions() {
+            return {
+                center: document.getElementById("optCenter").checked,
+                scaleToUnit: document.getElementById("optUnit").checked
+            };
+        }
+
+        function ensureColors(geo) {
+            const vCount = (geo.positions.length / 3) | 0;
+            if (geo.colors) return geo.colors;
+            const c = new Float32Array(vCount * 4);
+            for (let i = 0; i < vCount; i++) c.set([1, 1, 1, 1], i * 4);
+            return c;
+        }
+        function ensureNormalsIfNeeded(geo) {
+            if (geo.normals) return geo.normals;
+            const vCount = (geo.positions.length / 3) | 0;
+            const n = new Float32Array(vCount * 3);
+            for (let i = 0; i < vCount; i++) n[i * 3 + 1] = 1;
+            return n;
+        }
+        function shouldTriangles(viewMode, hasIndices) {
+            if (viewMode === "points") return false;
+            if (viewMode === "triangles") return !!hasIndices;
+            return !!hasIndices; // auto
+        }
+
+        // WebGL1 + Uint32 indices 兼容（无扩展则 deindex）
+        const hasUint32Element = (() => {
+            const isWebGL2 = (gl instanceof WebGL2RenderingContext);
+            if (isWebGL2) return true;
+            return !!gl.getExtension("OES_element_index_uint");
+        })();
+
+        function deindexIfNeeded(geo) {
+            if (!geo.indices) return geo;
+            if (!(geo.indices instanceof Uint32Array)) return geo;
+            if (hasUint32Element) return geo;
+
+            // WebGL1 无 uint32 element index：展开成非索引三角形（代价是内存）
+            const idx = geo.indices;
+            const pos = geo.positions;
+            const nor = geo.normals;
+            const col = geo.colors;
+            const outPos = new Float32Array(idx.length * 3);
+            const outNor = nor ? new Float32Array(idx.length * 3) : null;
+            const outCol = col ? new Float32Array(idx.length * 4) : null;
+
+            for (let i = 0; i < idx.length; i++) {
+                const vi = idx[i];
+                outPos[i * 3 + 0] = pos[vi * 3 + 0];
+                outPos[i * 3 + 1] = pos[vi * 3 + 1];
+                outPos[i * 3 + 2] = pos[vi * 3 + 2];
+                if (outNor) {
+                    outNor[i * 3 + 0] = nor[vi * 3 + 0];
+                    outNor[i * 3 + 1] = nor[vi * 3 + 1];
+                    outNor[i * 3 + 2] = nor[vi * 3 + 2];
+                }
+                if (outCol) {
+                    outCol[i * 4 + 0] = col[vi * 4 + 0];
+                    outCol[i * 4 + 1] = col[vi * 4 + 1];
+                    outCol[i * 4 + 2] = col[vi * 4 + 2];
+                    outCol[i * 4 + 3] = col[vi * 4 + 3];
+                }
+            }
+
+            return {
+                ...geo,
+                positions: outPos,
+                normals: outNor,
+                colors: outCol,
+                indices: null
+            };
+        }
+
+        function buildModelFromGeometry(geoIn, displayName) {
+            const geo = deindexIfNeeded(geoIn);
+
+            const viewMode = document.getElementById("viewMode").value;
+            const wantTriangles = shouldTriangles(viewMode, geo.indices);
+
+            const colors = ensureColors(geo);
+            const attrs = {
+                aPosition: { data: geo.positions, size: 3 },
+                aColor: { data: colors, size: 4 }
+            };
+            if (wantTriangles) attrs.aNormal = { data: ensureNormalsIfNeeded(geo), size: 3 };
+
+            const mesh = Mesh.fromData(device, {
+                attributes: attrs,
+                indices: wantTriangles ? geo.indices : null,
+                mode: wantTriangles ? gl.TRIANGLES : gl.POINTS
+            });
+
+            const program = wantTriangles ? progMesh : progPoints;
+            const material = new Material(program, {
+                depthTest: true, depthWrite: true, blend: false, cull: wantTriangles,
+                uniforms: {
+                    uColor: vec4.fromValues(1, 1, 1, 1),
+                    uPointSize: parseFloat(document.getElementById("pointSize").value),
+                    uRoundPoints: 1.0,
+                    uUseFakeLight: document.getElementById("fakeLight").checked ? 1.0 : 0.0
+                }
+            });
+
+            const model = new Model(mesh, material, displayName);
+            scene.add(model);
+
+            const bbox = geo.bbox || null;
+
+            return {
+                model,
+                target: { model, positions: geo.positions, colorsOriginal: colors.slice() },
+                bbox,
+                vCount: (geo.positions.length / 3) | 0,
+                triCount: (wantTriangles && geo.indices) ? ((geo.indices.length / 3) | 0) : 0
+            };
+        }
+
+        function addGroupFromGeometries({ name, format, geometries, bboxHint }) {
+            const groupId = ++groupSeq;
+            const group = {
+                id: groupId,
+                name,
+                format,
+                visible: true,
+                models: [],
+                targets: [],
+                bbox: bboxHint || null,
+                vCount: 0,
+                triCount: 0
+            };
+
+            for (const g of geometries) {
+                const res = buildModelFromGeometry(g.geo, g.partName || name);
+                group.models.push(res.model);
+                group.targets.push(res.target);
+                group.vCount += res.vCount;
+                group.triCount += res.triCount;
+                if (res.bbox) group.bbox = unionBBox(group.bbox, res.bbox);
+            }
+
+            modelGroups.push(group);
+            selectedGroupId = groupId;
+
+            if (group.bbox) controls.setFromBounds(group.bbox);
+
+            updateStats();
+            renderModelList();
+
+            // 如果当前 UI 选了轴染色，导入后也应用（按范围）
+            const axis = document.getElementById("axisColor").value;
+            if (axis !== "none") applyAxisColor(axis, document.getElementById("axisScope").value);
+
+            toast(`加载成功：${name}`);
+        }
+
+        // -----------------------
+        // Importers（关键：注册表，未来加新格式只加一项）
+        // -----------------------
+        async function importPLY(fileOrBuf, name, fromUrl = false) {
+            const opt = getImportOptions();
+            const buf = fromUrl ? fileOrBuf : await fileOrBuf.arrayBuffer();
+            const parsed = parsePLY(buf, { _device: device, computeNormals: true, center: opt.center, scaleToUnit: opt.scaleToUnit });
+            addGroupFromGeometries({
+                name, format: "PLY",
+                geometries: [{ geo: parsed, partName: name }],
+                bboxHint: parsed.bbox
+            });
+        }
+
+        async function importOBJ(fileOrText, name, fromUrl = false) {
+            const opt = getImportOptions();
+            const text = fromUrl ? fileOrText : await fileOrText.text();
+            const parsed = parseOBJ(text, {
+                mergeByMaterial: true,
+                center: opt.center,
+                scaleToUnit: opt.scaleToUnit,
+                computeNormals: true,
+                flipUVY: true,
+                upAxis: "y"
+            });
+
+            // parseOBJ 如果输出 submeshes
+            const geometries = (parsed.submeshes || []).map(sm => ({
+                geo: { positions: sm.positions, normals: sm.normals, colors: null, indices: sm.indices, bbox: sm.bbox || null },
+                partName: `${name} | ${sm.materialName || sm.name || "part"}`
+            }));
+
+            if (!geometries.length) {
+                // 兜底：当它只给了一个 mesh
+                geometries.push({ geo: parsed, partName: name });
+            }
+
+            addGroupFromGeometries({
+                name, format: "OBJ",
+                geometries,
+                bboxHint: parsed.bbox
+            });
+        }
+
+        async function importSTL(fileOrBuf, name, fromUrl = false) {
+            const opt = getImportOptions();
+            const buf = fromUrl ? fileOrBuf : await fileOrBuf.arrayBuffer();
+            const geo = await parseSTL(buf, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+            addGroupFromGeometries({
+                name, format: "STL",
+                geometries: [{ geo, partName: name }],
+                bboxHint: geo.bbox
+            });
+        }
+
+        // ✅ 新增三种：FBX / glTF(GLB) / USD
+        // 约定：parseXXX 返回：
+        //  - 单一几何：{positions,normals,colors,indices,bbox}
+        //  - 或多几何：{submeshes:[{name,positions,normals,colors,indices,bbox}], bbox}
+        async function importFBX(fileOrBuf, name, fromUrl = false) {
+            const opt = getImportOptions();
+            const buf = fromUrl ? fileOrBuf : await fileOrBuf.arrayBuffer();
+            const parsed = await parseFBX(buf, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+            const subs = parsed.submeshes || null;
+            if (subs && subs.length) {
+                addGroupFromGeometries({
+                    name, format: "FBX",
+                    geometries: subs.map(sm => ({
+                        geo: { positions: sm.positions, normals: sm.normals, colors: sm.colors || null, indices: sm.indices || null, bbox: sm.bbox || null },
+                        partName: `${name} | ${sm.name || "part"}`
+                    })),
+                    bboxHint: parsed.bbox
+                });
+            } else {
+                addGroupFromGeometries({
+                    name, format: "FBX",
+                    geometries: [{ geo: parsed, partName: name }],
+                    bboxHint: parsed.bbox
+                });
+            }
+        }
+
+        async function importGLTF(fileOrAny, name, fromUrl = false, isGLB = false, baseUrl = null) {
+            const opt = getImportOptions();
+
+            // glb: ArrayBuffer；gltf: 可能需要 baseUrl 拉外部 bin/纹理（纹理你可先忽略）
+            let parsed;
+            if (fromUrl) {
+                parsed = await parseGLTF(fileOrAny, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+            } else {
+                if (isGLB) {
+                    const buf = await fileOrAny.arrayBuffer();
+                    parsed = await parseGLTF(buf, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+                } else {
+                    const text = await fileOrAny.text();
+                    parsed = await parseGLTF({ jsonText: text, baseUrl }, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+                }
+            }
+
+            const subs = parsed.submeshes || parsed.meshes || null;
+            if (subs && subs.length) {
+                addGroupFromGeometries({
+                    name, format: isGLB ? "GLB" : "glTF",
+                    geometries: subs.map(sm => ({
+                        geo: { positions: sm.positions, normals: sm.normals, colors: sm.colors || null, indices: sm.indices || null, bbox: sm.bbox || null },
+                        partName: `${name} | ${sm.name || "mesh"}`
+                    })),
+                    bboxHint: parsed.bbox
+                });
+            } else {
+                addGroupFromGeometries({
+                    name, format: isGLB ? "GLB" : "glTF",
+                    geometries: [{ geo: parsed, partName: name }],
+                    bboxHint: parsed.bbox
+                });
+            }
+        }
+
+        async function importUSD(fileOrBufOrText, name, fromUrl = false, isText = false) {
+            const opt = getImportOptions();
+
+            let parsed;
+            if (fromUrl) {
+                parsed = await parseUSD(fileOrBufOrText, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+            } else {
+                if (isText) {
+                    const txt = await fileOrBufOrText.text();
+                    parsed = await parseUSD(txt, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+                } else {
+                    const buf = await fileOrBufOrText.arrayBuffer();
+                    parsed = await parseUSD(buf, { center: opt.center, scaleToUnit: opt.scaleToUnit, computeNormals: true });
+                }
+            }
+
+            const subs = parsed.submeshes || parsed.meshes || null;
+            if (subs && subs.length) {
+                addGroupFromGeometries({
+                    name, format: "USD",
+                    geometries: subs.map(sm => ({
+                        geo: { positions: sm.positions, normals: sm.normals, colors: sm.colors || null, indices: sm.indices || null, bbox: sm.bbox || null },
+                        partName: `${name} | ${sm.name || "prim"}`
+                    })),
+                    bboxHint: parsed.bbox
+                });
+            } else {
+                addGroupFromGeometries({
+                    name, format: "USD",
+                    geometries: [{ geo: parsed, partName: name }],
+                    bboxHint: parsed.bbox
+                });
+            }
+        }
+
+        // ✅ importer 注册表：以后支持更多格式，在这里加一项就行
+        const ImporterByExt = {
+            "ply": async (file) => importPLY(file, file.name, false),
+            "obj": async (file) => importOBJ(file, file.name, false),
+            "stl": async (file) => importSTL(file, file.name, false),
+
+            "fbx": async (file) => importFBX(file, file.name, false),
+
+            "glb": async (file) => importGLTF(file, file.name, false, true, null),
+            "gltf": async (file) => {
+                // File 方式 gltf：如果外部 bin/纹理，需要 parseGLTF 内部用 FileMap 或者 ObjectURL 方案；
+                // 这里先传 baseUrl=null，具体依赖你的 gltf-importer.js 实现。
+                return importGLTF(file, file.name, false, false, null);
+            },
+
+            "usd": async (file) => importUSD(file, file.name, false, false),
+            "usdc": async (file) => importUSD(file, file.name, false, false),
+            "usdz": async (file) => importUSD(file, file.name, false, false),
+            "usda": async (file) => importUSD(file, file.name, false, true),
+        };
+
+        async function importFile(file) {
+            const ext = (file.name.split(".").pop() || "").toLowerCase();
+            const fn = ImporterByExt[ext];
+            if (!fn) throw new Error(`不支持的格式：.${ext}`);
+            await fn(file);
+        }
+
+        async function importUrl(url) {
+            const u = url.trim();
+            if (!u) return;
+            const lower = u.toLowerCase();
+            const ext = (lower.split(".").pop() || "").split("?")[0].split("#")[0];
+
+            const r = await fetch(u);
+            if (!r.ok) throw new Error("HTTP " + r.status);
+
+            // 按扩展名走不同读取方式
+            if (ext === "obj" || ext === "gltf" || ext === "usda") {
+                const text = await r.text();
+                if (ext === "obj") return importOBJ(text, u.split("/").pop(), true);
+                if (ext === "gltf") return importGLTF(u, u.split("/").pop(), true, false, null); // 让 parseGLTF 自己 fetch 依赖
+                if (ext === "usda") return importUSD(text, u.split("/").pop(), true, true);
+            } else {
+                const buf = await r.arrayBuffer();
+                if (ext === "ply") return importPLY(buf, u.split("/").pop(), true);
+                if (ext === "stl") return importSTL(buf, u.split("/").pop(), true);
+                if (ext === "fbx") return importFBX(buf, u.split("/").pop(), true);
+                if (ext === "glb") return importGLTF(buf, u.split("/").pop(), true, true, null);
+                if (ext === "usd" || ext === "usdc" || ext === "usdz") return importUSD(buf, u.split("/").pop(), true, false);
+            }
+
+            // 兜底：先当 obj 文本试试
+            const t = await r.text();
+            toast("URL 未识别后缀：默认按 OBJ 文本尝试", 3000);
+            return importOBJ(t, u.split("/").pop() || "OBJ", true);
+        }
+
+        // -----------------------
+        // UI：模型列表
+        // -----------------------
+        const modelListEl = document.getElementById("modelList");
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, m => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[m]));
+        }
+        function renderModelList() {
+            if (!modelGroups.length) {
+                modelListEl.innerHTML = `<div style="opacity:.65; padding:6px 2px;">暂无模型</div>`;
+                return;
+            }
+            modelListEl.innerHTML = modelGroups.map(g => {
+                const isSel = g.id === selectedGroupId;
+                return `
+            <div class="item ${isSel ? "selected" : ""}" data-id="${g.id}">
+              <div class="left" style="min-width:0;">
+                <input type="checkbox" ${g.visible ? "checked" : ""} data-act="vis" data-id="${g.id}"/>
+                <div style="min-width:0;">
+                  <div class="name">${escapeHtml(g.name)}</div>
+                  <div class="tag">${g.format} | parts:${g.models.length} | v:${g.vCount} | tri:${g.triCount}</div>
+                </div>
+              </div>
+              <div class="btns">
+                <button class="tiny" data-act="focus" data-id="${g.id}">聚焦</button>
+                <button class="tiny danger" data-act="del" data-id="${g.id}">删除</button>
+              </div>
+            </div>
+          `;
+            }).join("");
+
+            for (const row of modelListEl.querySelectorAll(".item")) {
+                row.addEventListener("click", (e) => {
+                    const id = parseInt(row.getAttribute("data-id"), 10);
+                    const act = e.target?.getAttribute?.("data-act");
+                    if (act) return;
+                    selectedGroupId = id;
+                    renderModelList();
+                });
+            }
+            modelListEl.querySelectorAll("[data-act='vis']").forEach(el => {
+                el.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(el.getAttribute("data-id"), 10);
+                    setGroupVisible(id, el.checked);
+                });
+            });
+            modelListEl.querySelectorAll("[data-act='focus']").forEach(el => {
+                el.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(el.getAttribute("data-id"), 10);
+                    const g = modelGroups.find(x => x.id === id);
+                    if (!g || !g.bbox) return;
+                    selectedGroupId = id;
+                    controls.setFromBounds(g.bbox);
+                    renderModelList();
+                });
+            });
+            modelListEl.querySelectorAll("[data-act='del']").forEach(el => {
+                el.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    const id = parseInt(el.getAttribute("data-id"), 10);
+                    removeGroup(id);
+                });
+            });
+        }
+
+        // -----------------------
+        // Stats
+        // -----------------------
+        const statsEl = document.getElementById("stats");
+        function updateStats() {
+            if (!modelGroups.length) { statsEl.textContent = "未加载模型"; return; }
+            const visible = modelGroups.filter(g => g.visible);
+            let vSum = 0, triSum = 0, parts = 0;
+            for (const g of visible) { vSum += g.vCount; triSum += g.triCount; parts += g.models.length; }
+            const bb = getGlobalBBox(true);
+            const sx = bb ? (bb.max[0] - bb.min[0]).toFixed(6) : "0";
+            const sy = bb ? (bb.max[1] - bb.min[1]).toFixed(6) : "0";
+            const sz = bb ? (bb.max[2] - bb.min[2]).toFixed(6) : "0";
+            statsEl.innerHTML = `
+          <div>模型组：${modelGroups.length}（可见 ${visible.length}） | parts：${parts}</div>
+          <div>可见顶点：${vSum} | 可见三角形：${triSum}</div>
+          <div>可见包围盒尺寸：${sx} / ${sy} / ${sz}</div>
+          <div style="opacity:.7;">提示：WebGL1 若不支持 uint32 index 会自动展开（三角面很大时会慢）</div>
+        `;
+        }
+
+        // -----------------------
+        // UI bindings
+        // -----------------------
+        const fileEl = document.getElementById("file");
+        fileEl.addEventListener("change", async (e) => {
+            const files = Array.from(e.target.files || []);
+            if (!files.length) return;
+            for (const f of files) {
+                try { await importFile(f); }
+                catch (err) {
+                    console.error(err);
+                    toast(`导入失败：${f.name}\n${err?.message || err}`, 5200);
+                }
+            }
+            fileEl.value = "";
+        });
+
+        document.getElementById("btnLoadUrl").addEventListener("click", async () => {
+            const txt = prompt("输入一个或多个 URL（换行分隔，需 CORS/同源）：", "");
+            if (!txt) return;
+            const urls = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+            for (const u of urls) {
+                try { await importUrl(u); }
+                catch (err) {
+                    console.error(err);
+                    toast(`URL 导入失败：\n${u}\n${err?.message || err}`, 5200);
+                }
+            }
+        });
+
+        document.getElementById("pointSize").addEventListener("input", (e) => {
+            const v = parseFloat(e.target.value);
+            document.getElementById("pointSizeVal").textContent = v.toFixed(1);
+            for (const g of modelGroups) for (const m of g.models)
+                if (m?.material?.uniforms?.uPointSize != null) m.material.uniforms.uPointSize = v;
+        });
+
+        document.getElementById("fakeLight").addEventListener("change", (e) => {
+            const on = e.target.checked ? 1.0 : 0.0;
+            for (const g of modelGroups) for (const m of g.models)
+                if (m?.material?.uniforms?.uUseFakeLight != null) m.material.uniforms.uUseFakeLight = on;
+        });
+
+        document.getElementById("btnApplyAxis").addEventListener("click", () => {
+            applyAxisColor(
+                document.getElementById("axisColor").value,
+                document.getElementById("axisScope").value
+            );
+        });
+
+        document.getElementById("btnMeasure").addEventListener("click", (e) => {
+            measureEnabled = !measureEnabled;
+            e.target.textContent = measureEnabled ? "关闭测量" : "开启测量";
+            e.target.classList.toggle("primary", measureEnabled);
+            pendingPoint = null;
+            updateMeasureMeshes();
+            toast(measureEnabled ? "测量已开启：点两个点" : "测量已关闭");
+        });
+        document.getElementById("btnClearMeasure").addEventListener("click", () => clearMeasurements());
+
+        document.getElementById("btnReset").addEventListener("click", () => {
+            const bb = getGlobalBBox(true);
+            if (bb) controls.setFromBounds(bb);
+            else toast("没有可见模型");
+        });
+
+        document.getElementById("btnClearScene").addEventListener("click", () => clearScene());
+
+        // -----------------------
+        // Render loop
+        // -----------------------
+        function syncUniforms() {
+            const ps = parseFloat(document.getElementById("pointSize").value);
+            measurePointsModel.material.uniforms.uPointSize = Math.max(7.0, ps * 3.2);
+            measurePointsModel.material.uniforms.uRoundPoints = 1.0;
+        }
+
+        function frame() {
+            resize();
+            camera.updateMatrices();
+            syncUniforms();
+            renderer.render(scene, camera);
+            requestAnimationFrame(frame);
+        }
+        frame();
+
+        renderModelList();
+        updateStats();
+        toast("提示：请用 http://localhost 打开（不要 file://）", 3500);
+    </script>
+</body>
+</html>
