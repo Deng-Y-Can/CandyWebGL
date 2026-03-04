@@ -1,0 +1,1340 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三维诗歌空间 - 参数可调版 v4</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #000;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        /* 顶部信息栏 */
+        .ui-text {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #fff;
+            text-shadow: 0 0 10px #0ff;
+            font-family: Arial, sans-serif;
+            z-index: 100;
+        }
+
+        /* 右下角控制面板 */
+        .control-panel {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 320px;
+            background: rgba(0, 20, 40, 0.9);
+            border-radius: 10px;
+            box-shadow: 0 5px 25px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(0, 200, 255, 0.3);
+            z-index: 1000;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+
+        .panel-collapsed {
+            width: 60px;
+            height: 60px;
+            overflow: hidden;
+        }
+
+        .panel-header {
+            padding: 15px;
+            background: linear-gradient(90deg, rgba(0, 80, 120, 0.8), rgba(0, 120, 180, 0.8));
+            border-radius: 10px 10px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .panel-collapsed .panel-header {
+            border-radius: 10px;
+        }
+
+        .panel-title {
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .toggle-btn {
+            background: rgba(0, 150, 200, 0.8);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+            .toggle-btn:hover {
+                background: rgba(0, 180, 240, 0.9);
+                transform: scale(1.1);
+            }
+
+        .panel-content {
+            padding: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .panel-collapsed .panel-content {
+            display: none;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid rgba(100, 150, 200, 0.2);
+        }
+
+            .control-group:last-child {
+                border-bottom: none;
+                margin-bottom: 0;
+            }
+
+        .group-title {
+            color: #4df;
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+
+            .group-title i {
+                margin-right: 8px;
+                font-size: 16px;
+            }
+
+        .control-item {
+            margin-bottom: 12px;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 5px;
+            color: #aaf;
+            font-size: 13px;
+        }
+
+        .control-value {
+            color: #0ff;
+            font-weight: bold;
+            font-size: 13px;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            height: 6px;
+            -webkit-appearance: none;
+            background: linear-gradient(90deg, #006, #0af);
+            border-radius: 3px;
+            outline: none;
+        }
+
+            input[type="range"]::-webkit-slider-thumb {
+                -webkit-appearance: none;
+                width: 18px;
+                height: 18px;
+                border-radius: 50%;
+                background: #0ff;
+                cursor: pointer;
+                box-shadow: 0 0 5px rgba(0, 255, 255, 0.8);
+            }
+
+        input[type="color"] {
+            width: 100%;
+            height: 30px;
+            border: 2px solid rgba(0, 200, 255, 0.5);
+            border-radius: 5px;
+            background: transparent;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background: linear-gradient(45deg, #0088ff, #00ccff);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: rgba(100, 100, 150, 0.6);
+            color: #ccc;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 100, 200, 0.4);
+        }
+
+        /* 底部基本控制按钮 */
+        .basic-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
+        }
+
+            .basic-controls button {
+                background: linear-gradient(45deg, #0088ff, #00ccff);
+                border: 2px solid #0ff;
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                cursor: pointer;
+            }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .control-panel {
+                width: 280px;
+                right: 10px;
+                bottom: 10px;
+            }
+
+            .basic-controls {
+                left: 10px;
+                bottom: 10px;
+                flex-wrap: wrap;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ui-text" id="title">三维诗歌空间</div>
+    <div class="ui-text" id="poem-info" style="top: 60px;">《春夜喜雨》 - 杜甫</div>
+
+    <canvas id="canvas"></canvas>
+
+    <!-- 基本控制按钮 -->
+    <div class="basic-controls">
+        <button id="reset">重置视角</button>
+        <button id="change-poem">切换诗歌</button>
+    </div>
+
+    <!-- 右下角参数控制面板 -->
+    <div class="control-panel panel-collapsed" id="controlPanel">
+        <div class="panel-header" id="panelToggle">
+            <div class="panel-title">参数控制面板</div>
+            <button class="toggle-btn" id="toggleBtn">▶</button>
+        </div>
+        <div class="panel-content" id="panelContent">
+            <!-- 文字参数 -->
+            <div class="control-group">
+                <div class="group-title">📝 文字参数</div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>文字大小</span>
+                        <span class="control-value" id="fontSizeValue">72</span>
+                    </div>
+                    <input type="range" id="fontSize" min="48" max="120" value="72" step="1">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>文字间距</span>
+                        <span class="control-value" id="charSpacingValue">1.8</span>
+                    </div>
+                    <input type="range" id="charSpacing" min="0.5" max="3.0" value="1.8" step="0.1">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>行间距</span>
+                        <span class="control-value" id="lineSpacingValue">4.0</span>
+                    </div>
+                    <input type="range" id="lineSpacing" min="2.0" max="8.0" value="4.0" step="0.1">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>文字缩放</span>
+                        <span class="control-value" id="scaleValue">1.0</span>
+                    </div>
+                    <input type="range" id="scale" min="0.5" max="2.0" value="1.0" step="0.1">
+                </div>
+            </div>
+
+            <!-- 颜色参数 -->
+            <div class="control-group">
+                <div class="group-title">🎨 颜色参数</div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>背景颜色</span>
+                    </div>
+                    <input type="color" id="bgColor" value="#020408">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>文字主色</span>
+                    </div>
+                    <input type="color" id="textColor" value="#ffffff">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>发光颜色</span>
+                    </div>
+                    <input type="color" id="glowColor" value="#30a0ff">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>饱和度</span>
+                        <span class="control-value" id="saturationValue">0.85</span>
+                    </div>
+                    <input type="range" id="saturation" min="0.1" max="1.0" value="0.85" step="0.05">
+                </div>
+            </div>
+
+            <!-- 动画参数 -->
+            <div class="control-group">
+                <div class="group-title">✨ 动画参数</div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>浮动幅度</span>
+                        <span class="control-value" id="floatAmountValue">0.4</span>
+                    </div>
+                    <input type="range" id="floatAmount" min="0.0" max="1.0" value="0.4" step="0.05">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>浮动速度</span>
+                        <span class="control-value" id="floatSpeedValue">0.001</span>
+                    </div>
+                    <input type="range" id="floatSpeed" min="0.0001" max="0.005" value="0.001" step="0.0001">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>旋转速度</span>
+                        <span class="control-value" id="rotateSpeedValue">0.0001</span>
+                    </div>
+                    <input type="range" id="rotateSpeed" min="0.0" max="0.001" value="0.0001" step="0.00005">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>发光强度</span>
+                        <span class="control-value" id="glowIntensityValue">0.3</span>
+                    </div>
+                    <input type="range" id="glowIntensity" min="0.0" max="1.0" value="0.3" step="0.05">
+                </div>
+            </div>
+
+            <!-- 相机参数 -->
+            <div class="control-group">
+                <div class="group-title">📷 相机参数</div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>视角缩放</span>
+                        <span class="control-value" id="zoomValue">25</span>
+                    </div>
+                    <input type="range" id="zoom" min="10" max="60" value="25" step="1">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>X轴旋转</span>
+                        <span class="control-value" id="rotationXValue">0.3</span>
+                    </div>
+                    <input type="range" id="rotationX" min="-1.0" max="1.0" value="0.3" step="0.05">
+                </div>
+
+                <div class="control-item">
+                    <div class="control-label">
+                        <span>Y轴旋转</span>
+                        <span class="control-value" id="rotationYValue">0.5</span>
+                    </div>
+                    <input type="range" id="rotationY" min="-2.0" max="2.0" value="0.5" step="0.05">
+                </div>
+            </div>
+
+            <!-- 控制按钮 -->
+            <div class="button-group">
+                <button class="btn btn-primary" id="applyChanges">应用更改</button>
+                <button class="btn btn-secondary" id="resetParams">重置参数</button>
+            </div>
+
+            <div class="button-group">
+                <button class="btn btn-secondary" id="toggleAutoRotate">暂停旋转</button>
+                <button class="btn btn-secondary" id="resetAnimation">重新动画</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 配置和诗歌数据 ====================
+        const DEFAULT_CONFIG = {
+            TEXTURE_SIZE: 512,
+            FONT_SIZE: 72,
+            CHAR_SPACING: 1.8,
+            LINE_SPACING: 4.0,
+            SCALE: 1.0,
+            ZOOM: 25,
+            ROTATION_X: 0.3,
+            ROTATION_Y: 0.5,
+            BG_COLOR: [0.02, 0.04, 0.08, 1.0],
+            TEXT_COLOR: [1.0, 1.0, 1.0, 1.0],
+            GLOW_COLOR: [0.19, 0.63, 1.0, 1.0],
+            SATURATION: 0.85,
+            FLOAT_AMOUNT: 0.4,
+            FLOAT_SPEED: 0.001,
+            ROTATE_SPEED: 0.0001,
+            GLOW_INTENSITY: 0.3,
+            LINE_ANIMATION_DURATION: 1200,
+            CHAR_ANIMATION_DURATION: 150
+        };
+
+        // 当前配置（可从面板修改）
+        let CURRENT_CONFIG = { ...DEFAULT_CONFIG };
+
+        const POEMS = [
+            {
+                title: "春夜喜雨",
+                author: "杜甫",
+                lines: [
+                    "好雨知时节",
+                    "当春乃发生",
+                    "随风潜入夜",
+                    "润物细无声",
+                    "野径云俱黑",
+                    "江船火独明",
+                    "晓看红湿处",
+                    "花重锦官城"
+                ]
+            },
+            {
+                title: "将进酒",
+                author: "李白",
+                lines: [
+                    "君不见黄河之水天上来",
+                    "奔流到海不复回",
+                    "君不见高堂明镜悲白发",
+                    "朝如青丝暮成雪",
+                    "人生得意须尽欢",
+                    "莫使金樽空对月",
+                    "天生我材必有用",
+                    "千金散尽还复来",
+                    "烹羊宰牛且为乐",
+                    "会须一饮三百杯",
+                    "岑夫子，丹丘生",
+                    "将进酒，杯莫停",
+                    "与君歌一曲",
+                    "请君为我倾耳听"
+                ]
+            },
+            {
+                title: "长恨歌（节选）",
+                author: "白居易",
+                lines: [
+                    "汉皇重色思倾国",
+                    "御宇多年求不得",
+                    "杨家有女初长成",
+                    "养在深闺人未识",
+                    "天生丽质难自弃",
+                    "一朝选在君王侧",
+                    "回眸一笑百媚生",
+                    "六宫粉黛无颜色",
+                    "春寒赐浴华清池",
+                    "温泉水滑洗凝脂",
+                    "侍儿扶起娇无力",
+                    "始是新承恩泽时",
+                    "云鬓花颜金步摇",
+                    "芙蓉帐暖度春宵"
+                ]
+            },
+            {
+                title: "水调歌头",
+                author: "苏轼",
+                lines: [
+                    "明月几时有",
+                    "把酒问青天",
+                    "不知天上宫阙",
+                    "今夕是何年",
+                    "我欲乘风归去",
+                    "又恐琼楼玉宇",
+                    "高处不胜寒",
+                    "起舞弄清影",
+                    "何似在人间",
+                    "转朱阁，低绮户",
+                    "照无眠",
+                    "不应有恨",
+                    "何事长向别时圆"
+                ]
+            }
+        ];
+
+        // ==================== 核心矩阵函数 ====================
+        function createMat4() { return new Float32Array(16); }
+        function identityMat4(m) {
+            m[0] = 1; m[1] = 0; m[2] = 0; m[3] = 0; m[4] = 0; m[5] = 1; m[6] = 0; m[7] = 0;
+            m[8] = 0; m[9] = 0; m[10] = 1; m[11] = 0; m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
+            return m;
+        }
+        function perspectiveMat4(m, fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const nf = 1 / (near - far);
+            m[0] = f / aspect; m[5] = f; m[10] = (far + near) * nf; m[11] = -1;
+            m[14] = (2 * far * near) * nf; m[15] = 0;
+            return m;
+        }
+        function translateMat4(m, x, y, z) {
+            m[12] = x; m[13] = y; m[14] = z; return m;
+        }
+        function rotateYMat4(m, angle) {
+            const s = Math.sin(angle), c = Math.cos(angle);
+            const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3];
+            const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
+            m[0] = a00 * c - a20 * s; m[1] = a01 * c - a21 * s;
+            m[2] = a02 * c - a22 * s; m[3] = a03 * c - a23 * s;
+            m[8] = a00 * s + a20 * c; m[9] = a01 * s + a21 * c;
+            m[10] = a02 * s + a22 * c; m[11] = a03 * s + a23 * c;
+            return m;
+        }
+        function rotateXMat4(m, angle) {
+            const s = Math.sin(angle), c = Math.cos(angle);
+            const a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+            const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
+            m[4] = a10 * c + a20 * s; m[5] = a11 * c + a21 * s;
+            m[6] = a12 * c + a22 * s; m[7] = a13 * c + a23 * s;
+            m[8] = a20 * c - a10 * s; m[9] = a21 * c - a11 * s;
+            m[10] = a22 * c - a12 * s; m[11] = a23 * c - a13 * s;
+            return m;
+        }
+        function scaleMat4(m, sx, sy, sz) {
+            m[0] *= sx; m[1] *= sx; m[2] *= sx; m[3] *= sx;
+            m[4] *= sy; m[5] *= sy; m[6] *= sy; m[7] *= sy;
+            m[8] *= sz; m[9] *= sz; m[10] *= sz; m[11] *= sz;
+            return m;
+        }
+
+        // ==================== WebGL 2 参数可调三维诗歌 ====================
+        class WebGL2Poetry3D {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.gl = this.canvas.getContext('webgl2');
+                if (!this.gl) {
+                    alert('您的浏览器不支持WebGL 2.0');
+                    return;
+                }
+
+                this.setupCanvas();
+                this.compileShaders();
+                this.createTextures();
+                this.createGeometry();
+                this.initState();
+                this.setupControls();
+                this.setupParameterPanel();
+                this.animate();
+            }
+
+            setupCanvas() {
+                const canvas = this.canvas;
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                this.gl.viewport(0, 0, canvas.width, canvas.height);
+                window.addEventListener('resize', () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    this.gl.viewport(0, 0, canvas.width, canvas.height);
+                });
+            }
+
+            compileShaders() {
+                const gl = this.gl;
+
+                // 顶点着色器 - 添加更多uniform用于参数控制
+                const vertexShaderSource = `#version 300 es
+                precision highp float;
+
+                in vec3 aPosition;
+                in vec2 aTexCoord;
+
+                uniform mat4 uModel;
+                uniform mat4 uView;
+                uniform mat4 uProjection;
+                uniform float uTime;
+                uniform float uCharIndex;
+                uniform float uAnimationProgress;
+                uniform float uScale;
+                uniform float uFloatAmount;
+                uniform float uFloatSpeed;
+
+                out vec2 vTexCoord;
+                out vec3 vPosition;
+                out float vAlpha;
+
+                void main() {
+                    float alpha = uAnimationProgress;
+
+                    // 使用参数控制的浮动动画
+                    float wave = sin(uTime * uFloatSpeed + uCharIndex * 0.5) * uFloatAmount * alpha;
+
+                    // 从下方升起的效果
+                    float riseEffect = 3.0 * (1.0 - alpha);
+
+                    vec3 pos = aPosition;
+                    pos.y += wave;
+                    pos.y -= riseEffect;
+
+                    // 应用缩放
+                    pos *= uScale;
+
+                    gl_Position = uProjection * uView * uModel * vec4(pos, 1.0);
+                    vTexCoord = aTexCoord;
+                    vPosition = pos;
+                    vAlpha = alpha;
+                }
+            `;
+
+                // 片元着色器 - 添加参数控制
+                const fragmentShaderSource = `#version 300 es
+                precision highp float;
+
+                in vec2 vTexCoord;
+                in vec3 vPosition;
+                in float vAlpha;
+
+                uniform sampler2D uTexture;
+                uniform float uTime;
+                uniform vec3 uColor;
+                uniform vec3 uGlowColor;
+                uniform float uCharIndex;
+                uniform float uGlowIntensity;
+
+                out vec4 fragColor;
+
+                void main() {
+                    // 修复纹理翻转
+                    vec2 fixedTexCoord = vec2(vTexCoord.x, 1.0 - vTexCoord.y);
+
+                    // 从纹理采样
+                    vec4 texColor = texture(uTexture, fixedTexCoord);
+
+                    if (texColor.a < 0.1) discard;
+
+                    // 脉动效果
+                    float pulse = sin(uTime * 0.002 + uCharIndex * 0.3) * 0.15 + 0.85;
+
+                    // 边缘光效果
+                    float edge = smoothstep(0.4, 0.6, texColor.r);
+
+                    // 组合颜色
+                    vec3 finalColor = mix(uColor, uColor * 1.5, edge) * pulse;
+
+                    // 根据动画进度调整透明度
+                    float finalAlpha = texColor.a * vAlpha;
+
+                    // 使用参数控制的发光效果
+                    float glow = texColor.a * 0.5 + 0.5;
+                    finalColor += uGlowColor * glow * uGlowIntensity;
+
+                    fragColor = vec4(finalColor, finalAlpha);
+                }
+            `;
+
+                // 编译着色器
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexShaderSource);
+                gl.compileShader(vertexShader);
+
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentShaderSource);
+                gl.compileShader(fragmentShader);
+
+                // 检查编译状态
+                if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                    console.error('顶点着色器编译错误:', gl.getShaderInfoLog(vertexShader));
+                    return;
+                }
+                if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                    console.error('片元着色器编译错误:', gl.getShaderInfoLog(fragmentShader));
+                    return;
+                }
+
+                // 创建程序
+                this.program = gl.createProgram();
+                gl.attachShader(this.program, vertexShader);
+                gl.attachShader(this.program, fragmentShader);
+                gl.linkProgram(this.program);
+
+                if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+                    console.error('程序链接失败:', gl.getProgramInfoLog(this.program));
+                    return;
+                }
+
+                gl.useProgram(this.program);
+
+                // 获取属性位置
+                this.aPosition = gl.getAttribLocation(this.program, 'aPosition');
+                this.aTexCoord = gl.getAttribLocation(this.program, 'aTexCoord');
+
+                // 获取uniform位置
+                this.uModel = gl.getUniformLocation(this.program, 'uModel');
+                this.uView = gl.getUniformLocation(this.program, 'uView');
+                this.uProjection = gl.getUniformLocation(this.program, 'uProjection');
+                this.uTime = gl.getUniformLocation(this.program, 'uTime');
+                this.uCharIndex = gl.getUniformLocation(this.program, 'uCharIndex');
+                this.uAnimationProgress = gl.getUniformLocation(this.program, 'uAnimationProgress');
+                this.uScale = gl.getUniformLocation(this.program, 'uScale');
+                this.uFloatAmount = gl.getUniformLocation(this.program, 'uFloatAmount');
+                this.uFloatSpeed = gl.getUniformLocation(this.program, 'uFloatSpeed');
+                this.uTexture = gl.getUniformLocation(this.program, 'uTexture');
+                this.uColor = gl.getUniformLocation(this.program, 'uColor');
+                this.uGlowColor = gl.getUniformLocation(this.program, 'uGlowColor');
+                this.uGlowIntensity = gl.getUniformLocation(this.program, 'uGlowIntensity');
+            }
+
+            createTextures(fontSize = CURRENT_CONFIG.FONT_SIZE) {
+                const gl = this.gl;
+
+                // 收集所有不重复的文字
+                const chars = new Set();
+                POEMS.forEach(poem => {
+                    poem.lines.forEach(line => {
+                        line.split('').forEach(char => chars.add(char));
+                    });
+                });
+
+                // 创建离屏canvas绘制文字
+                const canvas = document.createElement('canvas');
+                canvas.width = CURRENT_CONFIG.TEXTURE_SIZE;
+                canvas.height = CURRENT_CONFIG.TEXTURE_SIZE;
+                const ctx = canvas.getContext('2d');
+
+                this.textures = {};
+
+                Array.from(chars).forEach(char => {
+                    // 清空画布
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                    // 使用当前配置的字体大小
+                    ctx.font = `bold ${fontSize}px Arial`;
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+
+                    // 黑色描边
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = Math.max(4, fontSize / 15);
+                    ctx.lineJoin = 'round';
+                    ctx.strokeText(char, canvas.width / 2, canvas.height / 2);
+
+                    // 使用当前配置的文字颜色
+                    const textColor = CURRENT_CONFIG.TEXT_COLOR;
+                    const rgbColor = `rgb(${Math.round(textColor[0] * 255)}, ${Math.round(textColor[1] * 255)}, ${Math.round(textColor[2] * 255)})`;
+                    ctx.fillStyle = rgbColor;
+                    ctx.fillText(char, canvas.width / 2, canvas.height / 2);
+
+                    // 创建WebGL纹理
+                    const texture = gl.createTexture();
+                    gl.bindTexture(gl.TEXTURE_2D, texture);
+                    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+                    this.textures[char] = texture;
+                });
+
+                // 创建默认纹理
+                const defaultTexture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, defaultTexture);
+                const whitePixel = new Uint8Array([255, 255, 255, 255]);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, whitePixel);
+                this.textures['default'] = defaultTexture;
+            }
+
+            createGeometry() {
+                const gl = this.gl;
+
+                // 创建平面几何（用于文字贴图）
+                const vertices = new Float32Array([
+                    // 位置 (x, y, z), 纹理坐标 (u, v)
+                    -0.5, -0.5, 0.0, 0.0, 0.0,
+                    0.5, -0.5, 0.0, 1.0, 0.0,
+                    0.5, 0.5, 0.0, 1.0, 1.0,
+                    -0.5, 0.5, 0.0, 0.0, 1.0
+                ]);
+
+                const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+                // 创建顶点缓冲区
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+                // 创建索引缓冲区
+                this.indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+                this.indexCount = indices.length;
+            }
+
+            initState() {
+                // 相机状态
+                this.rotationX = CURRENT_CONFIG.ROTATION_X;
+                this.rotationY = CURRENT_CONFIG.ROTATION_Y;
+                this.zoom = CURRENT_CONFIG.ZOOM;
+                this.autoRotate = true;
+                this.rotateSpeed = CURRENT_CONFIG.ROTATE_SPEED;
+
+                // 动画状态
+                this.currentPoem = 0;
+                this.time = 0;
+                this.animationStartTime = Date.now();
+                this.animationActive = true;
+
+                // 鼠标交互状态
+                this.isDragging = false;
+                this.lastX = 0;
+                this.lastY = 0;
+
+                // 更新参数显示
+                this.updateParameterDisplay();
+
+                // 创建诗歌文字对象
+                this.createPoemLetters();
+            }
+
+            createPoemLetters() {
+                const poem = POEMS[this.currentPoem];
+                document.getElementById('poem-info').textContent = `《${poem.title}》 - ${poem.author}`;
+
+                this.letters = [];
+                let totalCharIndex = 0;
+
+                // 计算总行数
+                const totalLines = poem.lines.length;
+
+                // 从上到下排列行
+                for (let lineIndex = 0; lineIndex < totalLines; lineIndex++) {
+                    const line = poem.lines[lineIndex];
+
+                    // 从左到右排列每个字
+                    for (let charPos = 0; charPos < line.length; charPos++) {
+                        const char = line[charPos];
+
+                        // 使用当前配置的间距
+                        const x = (charPos - line.length / 2 + 0.5) * CURRENT_CONFIG.CHAR_SPACING;
+
+                        // 从中心点开始向上向下排列
+                        const centerLine = Math.floor(totalLines / 2);
+                        const y = (centerLine - lineIndex) * CURRENT_CONFIG.LINE_SPACING;
+
+                        const z = lineIndex * 0.1;
+
+                        // 使用当前配置的颜色和饱和度
+                        let hue;
+                        switch (lineIndex % 6) {
+                            case 0: hue = 0; break;
+                            case 1: hue = 60; break;
+                            case 2: hue = 120; break;
+                            case 3: hue = 180; break;
+                            case 4: hue = 240; break;
+                            case 5: hue = 300; break;
+                        }
+                        const color = this.hslToRgb(hue, CURRENT_CONFIG.SATURATION, 0.65);
+
+                        this.letters.push({
+                            char: char,
+                            position: [x, y, z],
+                            lineIndex: lineIndex,
+                            charPos: charPos,
+                            totalCharIndex: totalCharIndex,
+                            scale: CURRENT_CONFIG.SCALE,
+                            color: color,
+                            floatSpeed: 0.5 + Math.random() * 0.5,
+                            floatOffset: totalCharIndex * 0.3,
+                            animationProgress: 0,
+                            lineStartTime: lineIndex * CURRENT_CONFIG.LINE_ANIMATION_DURATION,
+                            charStartTime: lineIndex * CURRENT_CONFIG.LINE_ANIMATION_DURATION +
+                                charPos * CURRENT_CONFIG.CHAR_ANIMATION_DURATION
+                        });
+
+                        totalCharIndex++;
+                    }
+                }
+
+                // 重置动画状态
+                this.animationStartTime = Date.now();
+                this.animationActive = true;
+            }
+
+            hslToRgb(h, s, l) {
+                h /= 360;
+                let r, g, b;
+
+                if (s === 0) {
+                    r = g = b = l;
+                } else {
+                    const hue2rgb = (p, q, t) => {
+                        if (t < 0) t += 1;
+                        if (t > 1) t -= 1;
+                        if (t < 1 / 6) return p + (q - p) * 6 * t;
+                        if (t < 1 / 2) return q;
+                        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                        return p;
+                    };
+
+                    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                    const p = 2 * l - q;
+
+                    r = hue2rgb(p, q, h + 1 / 3);
+                    g = hue2rgb(p, q, h);
+                    b = hue2rgb(p, q, h - 1 / 3);
+                }
+
+                return [r, g, b];
+            }
+
+            setupControls() {
+                const canvas = this.canvas;
+
+                // 鼠标拖拽 - 旋转
+                canvas.addEventListener('mousedown', (e) => {
+                    if (e.button === 0) {
+                        this.isDragging = true;
+                        this.lastX = e.clientX;
+                        this.lastY = e.clientY;
+                    }
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isDragging) return;
+
+                    const dx = e.clientX - this.lastX;
+                    const dy = e.clientY - this.lastY;
+
+                    this.rotationY += dx * 0.005;
+                    this.rotationX += dy * 0.005;
+
+                    this.lastX = e.clientX;
+                    this.lastY = e.clientY;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    this.isDragging = false;
+                });
+
+                // 滚轮缩放
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    this.zoom += e.deltaY * 0.05;
+                    this.zoom = Math.max(10, Math.min(60, this.zoom));
+
+                    // 更新显示
+                    document.getElementById('zoomValue').textContent = this.zoom.toFixed(0);
+                    document.getElementById('zoom').value = this.zoom;
+                });
+
+                // 基本控制按钮
+                document.getElementById('reset').addEventListener('click', () => {
+                    this.rotationX = CURRENT_CONFIG.ROTATION_X;
+                    this.rotationY = CURRENT_CONFIG.ROTATION_Y;
+                    this.zoom = CURRENT_CONFIG.ZOOM;
+
+                    // 更新面板显示
+                    document.getElementById('rotationXValue').textContent = this.rotationX.toFixed(2);
+                    document.getElementById('rotationX').value = this.rotationX;
+                    document.getElementById('rotationYValue').textContent = this.rotationY.toFixed(2);
+                    document.getElementById('rotationY').value = this.rotationY;
+                    document.getElementById('zoomValue').textContent = this.zoom.toFixed(0);
+                    document.getElementById('zoom').value = this.zoom;
+                });
+
+                document.getElementById('change-poem').addEventListener('click', () => {
+                    this.currentPoem = (this.currentPoem + 1) % POEMS.length;
+                    this.createPoemLetters();
+                });
+            }
+
+            setupParameterPanel() {
+                const panel = document.getElementById('controlPanel');
+                const toggleBtn = document.getElementById('toggleBtn');
+                const panelToggle = document.getElementById('panelToggle');
+
+                // 面板展开/折叠
+                panelToggle.addEventListener('click', () => {
+                    panel.classList.toggle('panel-collapsed');
+                    toggleBtn.textContent = panel.classList.contains('panel-collapsed') ? '▶' : '▼';
+                });
+
+                // 初始化参数显示
+                this.updateParameterDisplay();
+
+                // 应用更改按钮
+                document.getElementById('applyChanges').addEventListener('click', () => {
+                    this.applyParameterChanges();
+                });
+
+                // 重置参数按钮
+                document.getElementById('resetParams').addEventListener('click', () => {
+                    this.resetParameters();
+                });
+
+                // 旋转控制按钮
+                document.getElementById('toggleAutoRotate').addEventListener('click', (e) => {
+                    this.autoRotate = !this.autoRotate;
+                    e.target.textContent = this.autoRotate ? '暂停旋转' : '继续旋转';
+                });
+
+                // 重新动画按钮
+                document.getElementById('resetAnimation').addEventListener('click', () => {
+                    this.animationStartTime = Date.now();
+                    this.animationActive = true;
+                });
+
+                // 实时更新数值显示
+                const sliders = document.querySelectorAll('input[type="range"]');
+                sliders.forEach(slider => {
+                    slider.addEventListener('input', (e) => {
+                        const valueDisplay = document.getElementById(e.target.id + 'Value');
+                        if (valueDisplay) {
+                            valueDisplay.textContent = parseFloat(e.target.value).toFixed(2);
+                        }
+                    });
+                });
+
+                // 颜色选择器实时预览
+                const colorPickers = document.querySelectorAll('input[type="color"]');
+                colorPickers.forEach(picker => {
+                    picker.addEventListener('input', (e) => {
+                        // 可以在这里添加实时预览效果
+                    });
+                });
+            }
+
+            updateParameterDisplay() {
+                // 更新所有参数的显示
+                document.getElementById('fontSizeValue').textContent = CURRENT_CONFIG.FONT_SIZE;
+                document.getElementById('fontSize').value = CURRENT_CONFIG.FONT_SIZE;
+
+                document.getElementById('charSpacingValue').textContent = CURRENT_CONFIG.CHAR_SPACING.toFixed(1);
+                document.getElementById('charSpacing').value = CURRENT_CONFIG.CHAR_SPACING;
+
+                document.getElementById('lineSpacingValue').textContent = CURRENT_CONFIG.LINE_SPACING.toFixed(1);
+                document.getElementById('lineSpacing').value = CURRENT_CONFIG.LINE_SPACING;
+
+                document.getElementById('scaleValue').textContent = CURRENT_CONFIG.SCALE.toFixed(1);
+                document.getElementById('scale').value = CURRENT_CONFIG.SCALE;
+
+                document.getElementById('saturationValue').textContent = CURRENT_CONFIG.SATURATION.toFixed(2);
+                document.getElementById('saturation').value = CURRENT_CONFIG.SATURATION;
+
+                document.getElementById('floatAmountValue').textContent = CURRENT_CONFIG.FLOAT_AMOUNT.toFixed(2);
+                document.getElementById('floatAmount').value = CURRENT_CONFIG.FLOAT_AMOUNT;
+
+                document.getElementById('floatSpeedValue').textContent = CURRENT_CONFIG.FLOAT_SPEED.toFixed(4);
+                document.getElementById('floatSpeed').value = CURRENT_CONFIG.FLOAT_SPEED;
+
+                document.getElementById('rotateSpeedValue').textContent = CURRENT_CONFIG.ROTATE_SPEED.toFixed(5);
+                document.getElementById('rotateSpeed').value = CURRENT_CONFIG.ROTATE_SPEED;
+
+                document.getElementById('glowIntensityValue').textContent = CURRENT_CONFIG.GLOW_INTENSITY.toFixed(2);
+                document.getElementById('glowIntensity').value = CURRENT_CONFIG.GLOW_INTENSITY;
+
+                document.getElementById('zoomValue').textContent = CURRENT_CONFIG.ZOOM;
+                document.getElementById('zoom').value = CURRENT_CONFIG.ZOOM;
+
+                document.getElementById('rotationXValue').textContent = CURRENT_CONFIG.ROTATION_X.toFixed(2);
+                document.getElementById('rotationX').value = CURRENT_CONFIG.ROTATION_X;
+
+                document.getElementById('rotationYValue').textContent = CURRENT_CONFIG.ROTATION_Y.toFixed(2);
+                document.getElementById('rotationY').value = CURRENT_CONFIG.ROTATION_Y;
+
+                // 颜色选择器
+                const bgColor = CURRENT_CONFIG.BG_COLOR;
+                const bgHex = `#${Math.round(bgColor[0] * 255).toString(16).padStart(2, '0')}${Math.round(bgColor[1] * 255).toString(16).padStart(2, '0')}${Math.round(bgColor[2] * 255).toString(16).padStart(2, '0')}`;
+                document.getElementById('bgColor').value = bgHex;
+
+                const textColor = CURRENT_CONFIG.TEXT_COLOR;
+                const textHex = `#${Math.round(textColor[0] * 255).toString(16).padStart(2, '0')}${Math.round(textColor[1] * 255).toString(16).padStart(2, '0')}${Math.round(textColor[2] * 255).toString(16).padStart(2, '0')}`;
+                document.getElementById('textColor').value = textHex;
+
+                const glowColor = CURRENT_CONFIG.GLOW_COLOR;
+                const glowHex = `#${Math.round(glowColor[0] * 255).toString(16).padStart(2, '0')}${Math.round(glowColor[1] * 255).toString(16).padStart(2, '0')}${Math.round(glowColor[2] * 255).toString(16).padStart(2, '0')}`;
+                document.getElementById('glowColor').value = glowHex;
+            }
+
+            applyParameterChanges() {
+                // 从面板获取新值并更新配置
+                CURRENT_CONFIG.FONT_SIZE = parseInt(document.getElementById('fontSize').value);
+                CURRENT_CONFIG.CHAR_SPACING = parseFloat(document.getElementById('charSpacing').value);
+                CURRENT_CONFIG.LINE_SPACING = parseFloat(document.getElementById('lineSpacing').value);
+                CURRENT_CONFIG.SCALE = parseFloat(document.getElementById('scale').value);
+                CURRENT_CONFIG.ZOOM = parseFloat(document.getElementById('zoom').value);
+                CURRENT_CONFIG.ROTATION_X = parseFloat(document.getElementById('rotationX').value);
+                CURRENT_CONFIG.ROTATION_Y = parseFloat(document.getElementById('rotationY').value);
+                CURRENT_CONFIG.SATURATION = parseFloat(document.getElementById('saturation').value);
+                CURRENT_CONFIG.FLOAT_AMOUNT = parseFloat(document.getElementById('floatAmount').value);
+                CURRENT_CONFIG.FLOAT_SPEED = parseFloat(document.getElementById('floatSpeed').value);
+                CURRENT_CONFIG.ROTATE_SPEED = parseFloat(document.getElementById('rotateSpeed').value);
+                CURRENT_CONFIG.GLOW_INTENSITY = parseFloat(document.getElementById('glowIntensity').value);
+
+                // 更新颜色配置
+                const bgHex = document.getElementById('bgColor').value;
+                CURRENT_CONFIG.BG_COLOR = this.hexToRgb(bgHex);
+
+                const textHex = document.getElementById('textColor').value;
+                CURRENT_CONFIG.TEXT_COLOR = this.hexToRgb(textHex);
+
+                const glowHex = document.getElementById('glowColor').value;
+                CURRENT_CONFIG.GLOW_COLOR = this.hexToRgb(glowHex);
+
+                // 应用相机参数
+                this.zoom = CURRENT_CONFIG.ZOOM;
+                this.rotationX = CURRENT_CONFIG.ROTATION_X;
+                this.rotationY = CURRENT_CONFIG.ROTATION_Y;
+                this.rotateSpeed = CURRENT_CONFIG.ROTATE_SPEED;
+
+                // 重新创建纹理（如果字体大小改变）
+                this.createTextures(CURRENT_CONFIG.FONT_SIZE);
+
+                // 重新创建诗歌文字（应用新间距和颜色）
+                this.createPoemLetters();
+
+                // 显示成功消息
+                this.showMessage('参数已应用！');
+            }
+
+            resetParameters() {
+                // 重置为默认配置
+                CURRENT_CONFIG = { ...DEFAULT_CONFIG };
+
+                // 更新显示
+                this.updateParameterDisplay();
+
+                // 应用默认配置
+                this.applyParameterChanges();
+
+                // 显示成功消息
+                this.showMessage('参数已重置为默认值！');
+            }
+
+            hexToRgb(hex) {
+                // 转换 #RRGGBB 为 [r, g, b, 1.0]
+                const r = parseInt(hex.slice(1, 3), 16) / 255;
+                const g = parseInt(hex.slice(3, 5), 16) / 255;
+                const b = parseInt(hex.slice(5, 7), 16) / 255;
+                return [r, g, b, 1.0];
+            }
+
+            showMessage(text) {
+                // 创建临时消息提示
+                const message = document.createElement('div');
+                message.textContent = text;
+                message.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: #0ff;
+                padding: 15px 30px;
+                border-radius: 8px;
+                border: 1px solid #0ff;
+                z-index: 2000;
+                font-size: 16px;
+                animation: fadeOut 2s forwards;
+            `;
+
+                // 添加淡出动画
+                const style = document.createElement('style');
+                style.textContent = `
+                @keyframes fadeOut {
+                    0% { opacity: 1; }
+                    70% { opacity: 1; }
+                    100% { opacity: 0; }
+                }
+            `;
+                document.head.appendChild(style);
+
+                document.body.appendChild(message);
+
+                // 2秒后移除消息
+                setTimeout(() => {
+                    document.body.removeChild(message);
+                    document.head.removeChild(style);
+                }, 2000);
+            }
+
+            updateAnimation() {
+                if (!this.animationActive) return;
+
+                const now = Date.now();
+                const elapsed = now - this.animationStartTime;
+
+                // 更新所有文字的动画进度
+                for (let i = 0; i < this.letters.length; i++) {
+                    const letter = this.letters[i];
+                    const charElapsed = Math.max(0, elapsed - letter.charStartTime);
+
+                    // 计算动画进度
+                    const lineProgress = Math.min(1, Math.max(0,
+                        (elapsed - letter.lineStartTime) / CURRENT_CONFIG.LINE_ANIMATION_DURATION));
+
+                    const charProgress = Math.min(1, Math.max(0,
+                        charElapsed / 800));
+
+                    letter.animationProgress = Math.min(lineProgress * charProgress, 1);
+                }
+            }
+
+            animate(timestamp = 0) {
+                const gl = this.gl;
+
+                if (!this.program) return;
+
+                this.time = timestamp;
+                this.updateAnimation();
+
+                // 使用当前背景颜色
+                const bgColor = CURRENT_CONFIG.BG_COLOR;
+                gl.clearColor(bgColor[0], bgColor[1], bgColor[2], bgColor[3]);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                gl.enable(gl.DEPTH_TEST);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                // 自动旋转
+                if (this.autoRotate) {
+                    this.rotationY += this.rotateSpeed;
+                }
+
+                // 设置矩阵
+                const model = createMat4();
+                const view = identityMat4(createMat4());
+                const projection = identityMat4(createMat4());
+
+                // 视图矩阵
+                translateMat4(view, 0, 0, -this.zoom);
+                rotateXMat4(view, this.rotationX);
+                rotateYMat4(view, this.rotationY);
+
+                // 投影矩阵
+                const aspect = this.canvas.width / this.canvas.height;
+                perspectiveMat4(projection, Math.PI / 3.5, aspect, 0.1, 200);
+
+                // 绑定几何数据
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+
+                gl.vertexAttribPointer(this.aPosition, 3, gl.FLOAT, false, 20, 0);
+                gl.vertexAttribPointer(this.aTexCoord, 2, gl.FLOAT, false, 20, 12);
+
+                gl.enableVertexAttribArray(this.aPosition);
+                gl.enableVertexAttribArray(this.aTexCoord);
+
+                // 设置uniform
+                gl.uniformMatrix4fv(this.uView, false, view);
+                gl.uniformMatrix4fv(this.uProjection, false, projection);
+                gl.uniform1f(this.uTime, this.time);
+                gl.uniform1f(this.uScale, CURRENT_CONFIG.SCALE);
+                gl.uniform1f(this.uFloatAmount, CURRENT_CONFIG.FLOAT_AMOUNT);
+                gl.uniform1f(this.uFloatSpeed, CURRENT_CONFIG.FLOAT_SPEED);
+                gl.uniform3fv(this.uGlowColor, CURRENT_CONFIG.GLOW_COLOR);
+                gl.uniform1f(this.uGlowIntensity, CURRENT_CONFIG.GLOW_INTENSITY);
+
+                // 激活纹理单元0
+                gl.activeTexture(gl.TEXTURE0);
+                gl.uniform1i(this.uTexture, 0);
+
+                // 渲染每个文字
+                for (let i = 0; i < this.letters.length; i++) {
+                    const letter = this.letters[i];
+
+                    if (letter.animationProgress <= 0) continue;
+
+                    // 计算浮动效果
+                    const floatY = Math.sin(this.time * 0.001 * letter.floatSpeed + letter.floatOffset) * CURRENT_CONFIG.FLOAT_AMOUNT;
+                    const floatX = Math.cos(this.time * 0.001 * letter.floatSpeed * 0.7 + letter.floatOffset) * CURRENT_CONFIG.FLOAT_AMOUNT * 0.4;
+
+                    // 创建模型矩阵
+                    identityMat4(model);
+
+                    // 应用位置和浮动
+                    const floatedPosition = [
+                        letter.position[0] + floatX,
+                        letter.position[1] + floatY,
+                        letter.position[2]
+                    ];
+
+                    translateMat4(model, ...floatedPosition);
+
+                    // 设置uniform
+                    gl.uniformMatrix4fv(this.uModel, false, model);
+                    gl.uniform3fv(this.uColor, letter.color);
+                    gl.uniform1f(this.uCharIndex, letter.totalCharIndex);
+                    gl.uniform1f(this.uAnimationProgress, letter.animationProgress);
+
+                    // 绑定文字纹理
+                    const texture = this.textures[letter.char] || this.textures['default'];
+                    gl.bindTexture(gl.TEXTURE_2D, texture);
+
+                    // 绘制
+                    gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+                }
+
+                // 下一帧
+                requestAnimationFrame((t) => this.animate(t));
+            }
+        }
+
+        // 启动程序
+        window.addEventListener('load', () => {
+            new WebGL2Poetry3D();
+        });
+    </script>
+</body>
+</html>
