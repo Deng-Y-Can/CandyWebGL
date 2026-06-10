@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js 学习教程导航</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #fff;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 0 0 20px rgba(78, 205, 196, 0.5);
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #aaa;
+            font-size: 1rem;
+            margin-bottom: 40px;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            text-decoration: none;
+            color: #fff;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .card:hover {
+            background: rgba(78, 205, 196, 0.15);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(78, 205, 196, 0.2);
+            border-color: rgba(78, 205, 196, 0.3);
+        }
+        
+        .card .number {
+            display: inline-block;
+            background: linear-gradient(135deg, #00ff88, #4ecdc4);
+            color: #1a1a2e;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+            text-align: center;
+            line-height: 36px;
+            font-weight: bold;
+            font-size: 1rem;
+            margin-bottom: 15px;
+        }
+        
+        .card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 10px;
+            color: #fff;
+        }
+        
+        .card p {
+            font-size: 0.9rem;
+            color: #aaa;
+            line-height: 1.5;
+        }
+        
+        .card .arrow {
+            display: inline-block;
+            margin-top: 15px;
+            color: #4ecdc4;
+            font-size: 0.85rem;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover .arrow {
+            transform: translateX(5px);
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 50px;
+            color: #666;
+            font-size: 0.85rem;
+        }
+        
+        .tech-stack {
+            display: inline-flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        
+        .tech-tag {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Three.js 学习教程</h1>
+        <p class="subtitle">掌握 WebGL 3D 图形编程的完整路径</p>
+        
+        <div class="grid">
+            <a href="01-基础场景/index.html" class="card">
+                <span class="number">01</span>
+                <h3>基础场景搭建</h3>
+                <p>学习创建 Three.js 基础场景，包括场景、相机、渲染器和基本几何体的创建与使用。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="02-几何体/index.html" class="card">
+                <span class="number">02</span>
+                <h3>各种几何体展示</h3>
+                <p>探索 Three.js 内置的各种几何体，包括立方体、球体、圆锥、圆环、圆柱体等。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="03-材质与纹理/index.html" class="card">
+                <span class="number">03</span>
+                <h3>材质与纹理使用</h3>
+                <p>学习不同材质类型的使用，包括 MeshBasicMaterial、MeshStandardMaterial 和纹理贴图。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="04-光照系统/index.html" class="card">
+                <span class="number">04</span>
+                <h3>光照效果系统</h3>
+                <p>掌握环境光、方向光、点光源、聚光灯等不同类型光源的使用和效果调整。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="05-动画系统/index.html" class="card">
+                <span class="number">05</span>
+                <h3>Three.js 动画</h3>
+                <p>学习使用 requestAnimationFrame 创建流畅的 3D 动画，包括旋转、移动和缩放动画。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="06-相机控制/index.html" class="card">
+                <span class="number">06</span>
+                <h3>轨道控制器</h3>
+                <p>使用 OrbitControls 实现交互式相机控制，支持旋转、平移和缩放操作。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="07-模型加载/index.html" class="card">
+                <span class="number">07</span>
+                <h3>加载外部模型</h3>
+                <p>学习使用 GLTFLoader 加载外部 3D 模型文件，实现复杂场景的构建。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="08-粒子系统/index.html" class="card">
+                <span class="number">08</span>
+                <h3>粒子系统效果</h3>
+                <p>创建粒子系统实现星空效果，学习粒子的创建、着色和动画控制。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+            
+            <a href="09-后期处理/index.html" class="card">
+                <span class="number">09</span>
+                <h3>后期处理效果</h3>
+                <p>使用 EffectComposer、UnrealBloomPass 和 FXAA 实现高级视觉效果。</p>
+                <span class="arrow">查看教程 →</span>
+            </a>
+        </div>
+        
+        <div class="footer">
+            <p>基于 Three.js r128 版本构建</p>
+            <div class="tech-stack">
+                <span class="tech-tag">Three.js</span>
+                <span class="tech-tag">WebGL</span>
+                <span class="tech-tag">JavaScript ES6</span>
+                <span class="tech-tag">HTML5</span>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

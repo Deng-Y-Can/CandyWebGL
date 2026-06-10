@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>03-材质与纹理 - Three.js学习教程</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+    </style>
+</head>
+<body>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
+
+        // 创建场景
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        // 创建相机
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 12;
+
+        // 创建渲染器
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // 创建纹理加载器
+        const textureLoader = new THREE.TextureLoader();
+
+        // 创建几何体
+        const geometry = new THREE.BoxGeometry(2, 2, 2);
+
+        // 1. MeshBasicMaterial - 基础材质（不受光照影响）
+        const basicMaterial = new THREE.MeshBasicMaterial({
+            color: 0x00ff88,
+            wireframe: false
+        });
+        const cube1 = new THREE.Mesh(geometry, basicMaterial);
+        cube1.position.set(-6, 2, 0);
+        scene.add(cube1);
+
+        // 2. MeshNormalMaterial - 法向量材质
+        const normalMaterial = new THREE.MeshNormalMaterial();
+        const cube2 = new THREE.Mesh(geometry, normalMaterial);
+        cube2.position.set(0, 2, 0);
+        scene.add(cube2);
+
+        // 3. MeshStandardMaterial - PBR标准材质
+        const standardMaterial = new THREE.MeshStandardMaterial({
+            color: 0xff6b6b,
+            roughness: 0.2,
+            metalness: 0.8
+        });
+        const cube3 = new THREE.Mesh(geometry, standardMaterial);
+        cube3.position.set(6, 2, 0);
+        scene.add(cube3);
+
+        // 4. 带纹理的材质
+        const textureMaterial = new THREE.MeshStandardMaterial({
+            map: textureLoader.load('https://threejs.org/examples/textures/uv_grid_opengl.jpg'),
+            roughness: 0.5,
+            metalness: 0.1
+        });
+        const cube4 = new THREE.Mesh(geometry, textureMaterial);
+        cube4.position.set(-3, -3, 0);
+        scene.add(cube4);
+
+        // 5. 透明材质
+        const transparentMaterial = new THREE.MeshStandardMaterial({
+            color: 0x4ecdc4,
+            transparent: true,
+            opacity: 0.5,
+            roughness: 0.3,
+            metalness: 0.2
+        });
+        const sphere = new THREE.Mesh(new THREE.SphereGeometry(1.5, 32, 32), transparentMaterial);
+        sphere.position.set(3, -3, 0);
+        scene.add(sphere);
+
+        // 添加环境光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+        scene.add(ambientLight);
+
+        // 添加方向光
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            // 旋转几何体
+            scene.children.forEach((child) => {
+                if (child instanceof THREE.Mesh) {
+                    child.rotation.x += 0.008;
+                    child.rotation.y += 0.008;
+                }
+            });
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>

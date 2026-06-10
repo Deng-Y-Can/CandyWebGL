@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>07-模型加载 - Three.js学习教程</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        .info { position: fixed; top: 10px; left: 10px; color: white; font-family: Arial; font-size: 14px; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
+        .loading { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-family: Arial; }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">正在加载模型...</div>
+    <div class="info">
+        <h3>GLTFLoader 模型加载</h3>
+        <p>加载外部 GLTF 3D模型</p>
+        <p>鼠标左键拖拽旋转视角</p>
+        <p>滚轮缩放</p>
+    </div>
+    <script type="module">
+        import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
+        import { GLTFLoader } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/loaders/GLTFLoader.js';
+        import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/controls/OrbitControls.js';
+
+        // 创建场景
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x1a1a2e);
+
+        // 创建相机
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 2, 5);
+
+        // 创建渲染器
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        document.body.appendChild(renderer.domElement);
+
+        // 创建轨道控制器
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // 添加环境光
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        // 添加主光源
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // 添加点光源
+        const pointLight = new THREE.PointLight(0x4ecdc4, 0.5);
+        pointLight.position.set(-5, 5, -5);
+        scene.add(pointLight);
+
+        // 创建地面
+        const groundGeometry = new THREE.PlaneGeometry(20, 20);
+        const groundMaterial = new THREE.MeshStandardMaterial({ 
+            color: 0x2a2a4a,
+            roughness: 0.8,
+            metalness: 0.1,
+            side: THREE.DoubleSide
+        });
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.1;
+        scene.add(ground);
+
+        // 创建GLTF加载器
+        const loader = new GLTFLoader();
+
+        // 加载GLTF模型（使用Three.js官方示例模型）
+        loader.load(
+            // 模型URL
+            'https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf',
+            // 加载成功回调
+            function (gltf) {
+                // 获取模型
+                const model = gltf.scene;
+                
+                // 调整模型大小和位置
+                model.scale.set(2, 2, 2);
+                model.position.y = 0;
+                
+                // 添加到场景
+                scene.add(model);
+                
+                // 隐藏加载提示
+                document.getElementById('loading').style.display = 'none';
+                
+                console.log('模型加载成功!');
+            },
+            // 加载进度回调
+            function (xhr) {
+                console.log((xhr.loaded / xhr.total * 100) + '% 已加载');
+            },
+            // 加载错误回调
+            function (error) {
+                console.error('模型加载失败:', error);
+                document.getElementById('loading').innerHTML = '模型加载失败，请检查网络连接';
+            }
+        );
+
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            controls.update();
+            
+            // 旋转场景中的模型
+            scene.children.forEach((child) => {
+                if (child instanceof THREE.Group) {
+                    child.rotation.y += 0.005;
+                }
+            });
+            
+            renderer.render(scene, camera);
+        }
+        animate();
+
+        // 窗口大小调整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+</body>
+</html>
