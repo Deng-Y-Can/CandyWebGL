@@ -1,0 +1,195 @@
+<!doctype html>
+<html>
+
+<head>
+<title>实例化渲染 - 8x8x8 立方体网格</title>
+<style>
+@import url("./webgl-tutorials.css");
+body { margin: 0; }
+canvas { width: 100vw; height: 100vh; display: block; }
+#info { position: absolute; top: 10px; left: 10px; z-index: 10; font-family: monospace; color: white; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; }
+</style>
+</head>
+
+<body>
+<div id="info">
+  <div>模式: <span id="mode">循环绘制</span></div>
+  <div>立方体数量: 512</div>
+</div>
+<canvas id="candy"></canvas>
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+void main() {
+  gl_FragColor = v_color;
+}
+</script>
+<script id="vertex-shader-instance" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+attribute vec3 a_offset;
+uniform mat4 u_viewProjection;
+uniform float u_time;
+varying vec4 v_color;
+void main() {
+  vec3 offset = a_offset;
+  float t = u_time * 0.5 + (offset.x * 0.1 + offset.y * 0.1 + offset.z * 0.1);
+  float sx = sin(t) * 0.4 + 0.6;
+  float sy = cos(t * 1.2) * 0.4 + 0.6;
+  float sz = sin(t * 0.8) * 0.4 + 0.6;
+  vec3 scaled = a_position.xyz * vec3(sx, sy, sz);
+  float rot = t;
+  float cr = cos(rot), sr = sin(rot);
+  vec3 rotated = vec3(
+    scaled.x * cr - scaled.z * sr,
+    scaled.y,
+    scaled.x * sr + scaled.z * cr
+  );
+  gl_Position = u_viewProjection * vec4(rotated + offset, 1.0);
+  v_color = a_color;
+}
+</script>
+<script id="fragment-shader-instance" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+void main() {
+  gl_FragColor = v_color;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) { return; }
+
+  var instancedExt = gl.getExtension('ANGLE_instanced_arrays');
+  var useInstanced = !!instancedExt;
+  document.getElementById('mode').textContent = useInstanced ? '实例化渲染 (ANGLE_instanced_arrays)' : '循环绘制 (回退模式)';
+
+  var singleProgramInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+  var instanceProgramInfo = useInstanced ? webglUtils.createProgramInfo(gl, ["vertex-shader-instance", "fragment-shader-instance"]) : null;
+
+  var cubeBufferInfo = primitives.createCubeWithVertexColorsBufferInfo(gl, 0.8);
+
+  var gridSize = 8;
+  var totalCubes = gridSize * gridSize * gridSize;
+  var positions = new Float32Array(totalCubes * 3);
+  var idx = 0;
+  var spacing = 1.5;
+  for (var z = 0; z < gridSize; z++) {
+    for (var y = 0; y < gridSize; y++) {
+      for (var x = 0; x < gridSize; x++) {
+        positions[idx++] = (x - gridSize / 2 + 0.5) * spacing;
+        positions[idx++] = (y - gridSize / 2 + 0.5) * spacing;
+        positions[idx++] = (z - gridSize / 2 + 0.5) * spacing;
+      }
+    }
+  }
+
+  var offsetBuffer = null;
+  if (useInstanced) {
+    offsetBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, offsetBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+  }
+
+  function degToRad(d) { return d * Math.PI / 180; }
+  var fieldOfViewRadians = degToRad(60);
+  var camAngle = 0;
+  var then = 0;
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+    var deltaTime = time - then;
+    then = time;
+    camAngle += deltaTime * 0.2;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.08, 0.08, 0.12, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+    var camDist = 18;
+    var cameraPosition = [Math.sin(camAngle) * camDist, 5, Math.cos(camAngle) * camDist];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    if (useInstanced) {
+      gl.useProgram(instanceProgramInfo.program);
+      gl.bindBuffer(gl.ARRAY_BUFFER, cubeBufferInfo.attribs.a_position.buffer);
+      gl.enableVertexAttribArray(instanceProgramInfo.attribSetters.a_position.location);
+      gl.vertexAttribPointer(instanceProgramInfo.attribSetters.a_position.location,
+        cubeBufferInfo.attribs.a_position.numComponents, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, cubeBufferInfo.attribs.a_color.buffer);
+      gl.enableVertexAttribArray(instanceProgramInfo.attribSetters.a_color.location);
+      gl.vertexAttribPointer(instanceProgramInfo.attribSetters.a_color.location,
+        cubeBufferInfo.attribs.a_color.numComponents, gl.UNSIGNED_BYTE, true, 0, 0);
+
+      var offsetLoc = gl.getAttribLocation(instanceProgramInfo.program, 'a_offset');
+      gl.bindBuffer(gl.ARRAY_BUFFER, offsetBuffer);
+      gl.enableVertexAttribArray(offsetLoc);
+      gl.vertexAttribPointer(offsetLoc, 3, gl.FLOAT, false, 0, 0);
+      instancedExt.vertexAttribDivisorANGLE(offsetLoc, 1);
+
+      gl.uniformMatrix4fv(gl.getUniformLocation(instanceProgramInfo.program, 'u_viewProjection'), false, viewProjectionMatrix);
+      gl.uniform1f(gl.getUniformLocation(instanceProgramInfo.program, 'u_time'), time);
+
+      instancedExt.drawArraysInstancedANGLE(gl.TRIANGLES, 0, cubeBufferInfo.numElements, totalCubes);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, null);
+      instancedExt.vertexAttribDivisorANGLE(offsetLoc, 0);
+    } else {
+      gl.useProgram(singleProgramInfo.program);
+      webglUtils.setBuffersAndAttributes(gl, singleProgramInfo, cubeBufferInfo);
+      for (var i = 0; i < totalCubes; i++) {
+        var ox = positions[i * 3];
+        var oy = positions[i * 3 + 1];
+        var oz = positions[i * 3 + 2];
+        var t = time * 0.5 + (ox * 0.1 + oy * 0.1 + oz * 0.1);
+        var mat = m4.translate(viewProjectionMatrix, ox, oy, oz);
+        var rot = t;
+        mat = m4.yRotate(mat, rot);
+        mat = m4.xRotate(mat, rot * 0.7);
+        var sx = Math.sin(t) * 0.4 + 0.6;
+        var sy = Math.cos(t * 1.2) * 0.4 + 0.6;
+        var sz = Math.sin(t * 0.8) * 0.4 + 0.6;
+        mat = m4.scale(mat, sx, sy, sz);
+        webglUtils.setUniforms(singleProgramInfo, { u_matrix: mat });
+        gl.drawArrays(gl.TRIANGLES, 0, cubeBufferInfo.numElements);
+      }
+    }
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+</script>
+</body>
+
+</html>

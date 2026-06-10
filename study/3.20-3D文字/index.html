@@ -1,0 +1,294 @@
+<!doctype html>
+<html>
+
+<head>
+<title>3D文字</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+   var TRS = function() {
+     this.translation = [0, 0, 0];
+     this.rotation = [0, 0, 0];
+     this.scale = [1, 1, 1];
+   };
+
+   TRS.prototype.getMatrix = function(dst) {
+     dst = dst || new Float32Array(16);
+     var t = this.translation;
+     var r = this.rotation;
+     var s = this.scale;
+     m4.translation(t[0], t[1], t[2], dst);
+     m4.xRotate(dst, r[0], dst);
+     m4.yRotate(dst, r[1], dst);
+     m4.zRotate(dst, r[2], dst);
+     m4.scale(dst, s[0], s[1], s[2], dst);
+     return dst;
+   };
+
+   var Node = function(source) {
+     this.children = [];
+     this.localMatrix = m4.identity();
+     this.worldMatrix = m4.identity();
+     this.source = source;
+   };
+
+   Node.prototype.setParent = function(parent) {
+     if (this.parent) {
+       var ndx = this.parent.children.indexOf(this);
+       if (ndx >= 0) {
+         this.parent.children.splice(ndx, 1);
+       }
+     }
+
+     if (parent) {
+       parent.children.push(this);
+     }
+     this.parent = parent;
+   };
+
+   Node.prototype.updateWorldMatrix = function(parentWorldMatrix) {
+
+     var source = this.source;
+     if (source) {
+       source.getMatrix(this.localMatrix);
+     }
+
+     if (parentWorldMatrix) {
+       m4.multiply(parentWorldMatrix, this.localMatrix, this.worldMatrix);
+     } else {
+       m4.copy(this.localMatrix, this.worldMatrix);
+     }
+     var worldMatrix = this.worldMatrix;
+     this.children.forEach(function(child) {
+       child.updateWorldMatrix(worldMatrix);
+     });
+   };
+
+
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  const cubeBufferInfo   = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var letterNodes = [];
+
+  // 定义字母 HELLO 的点阵图案（每个字母5行5列）
+  // 1 = 显示立方体, 0 = 不显示
+  var letters = {
+    "H": [
+      [1,0,0,0,1],
+      [1,0,0,0,1],
+      [1,1,1,1,1],
+      [1,0,0,0,1],
+      [1,0,0,0,1],
+    ],
+    "E": [
+      [1,1,1,1,1],
+      [1,0,0,0,0],
+      [1,1,1,1,0],
+      [1,0,0,0,0],
+      [1,1,1,1,1],
+    ],
+    "L": [
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,1,1,1,1],
+    ],
+    "L2": [
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,0,0,0,0],
+      [1,1,1,1,1],
+    ],
+    "O": [
+      [0,1,1,1,0],
+      [1,0,0,0,1],
+      [1,0,0,0,1],
+      [1,0,0,0,1],
+      [0,1,1,1,0],
+    ],
+  };
+
+  var letterColors = {
+    "H": [1.0, 0.3, 0.3, 1.0],
+    "E": [1.0, 0.7, 0.2, 1.0],
+    "L": [0.8, 1.0, 0.3, 1.0],
+    "L2": [0.3, 1.0, 0.5, 1.0],
+    "O": [0.3, 0.6, 1.0, 1.0],
+  };
+
+  var letterOrder = ["H", "E", "L", "L2", "O"];
+  var letterSpacing = 7;
+  var cubeSize = 1;
+  var totalWidth = letterOrder.length * letterSpacing;
+  var startX = -totalWidth / 2 + letterSpacing / 2;
+
+  // 为每个字母创建一个父节点，然后在其下创建构成字母的小立方体
+  letterOrder.forEach(function(letterKey, letterIndex) {
+    var letterRootTRS = new TRS();
+    var letterRoot = new Node(letterRootTRS);
+    letterRootTRS.translation = [startX + letterIndex * letterSpacing, 0, 0];
+
+    // 给字母根节点也添加一个可绘制标识（便于动画）但不绘制
+    letterRoot.drawInfo = null;
+
+    var pattern = letters[letterKey];
+    for (var row = 0; row < pattern.length; row++) {
+      for (var col = 0; col < pattern[row].length; col++) {
+        if (pattern[row][col] === 1) {
+          var cubeTRS = new TRS();
+          // row 0 是顶部，所以 y 应该大；让立方体组成5行5列网格，中心在(0,0,0)
+          var localX = (col - 2) * cubeSize * 1.1;
+          var localY = (2 - row) * cubeSize * 1.1;
+          cubeTRS.translation = [localX, localY, 0];
+          cubeTRS.scale = [cubeSize * 0.9, cubeSize * 0.9, cubeSize * 0.9];
+
+          var cubeNode = new Node(cubeTRS);
+          cubeNode.drawInfo = {
+            uniforms: {
+              u_colorOffset: [0.1, 0.1, 0.1, 0],
+              u_colorMult: letterColors[letterKey],
+            },
+            programInfo: programInfo,
+            bufferInfo: cubeBufferInfo,
+          };
+          objectsToDraw.push(cubeNode.drawInfo);
+          objects.push(cubeNode);
+          cubeNode.setParent(letterRoot);
+        }
+      }
+    }
+    // 添加到字母节点列表（用于动画）
+    letterNodes.push({ root: letterRoot, trs: letterRootTRS, baseY: 0, phase: letterIndex * 0.5, color: letterColors[letterKey] });
+  });
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.1, 0.05, 0.15, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    var cameraPosition = [0, 0, 30];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    // 字母旋转 + 漂浮
+    letterNodes.forEach(function(ln, idx) {
+      ln.trs.translation[1] = Math.sin(time * 1.5 + ln.phase) * 2;
+      ln.trs.translation[2] = Math.sin(time + ln.phase) * 2;
+      ln.trs.rotation[1] = time * 0.8 + ln.phase;
+      ln.trs.rotation[0] = Math.sin(time * 0.5 + ln.phase) * 0.3;
+      ln.root.updateWorldMatrix();
+    });
+
+    objects.forEach(function(object) {
+      object.drawInfo.uniforms.u_matrix = m4.multiply(viewProjectionMatrix, object.worldMatrix);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+
+</script>
+</body>
+
+</html>

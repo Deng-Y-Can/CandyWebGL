@@ -1,0 +1,251 @@
+<!doctype html>
+<html>
+
+<head>
+<title>法线展示</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script src="chroma.min.js"></script>
+<script>
+"use strict";
+
+   var TRS = function() {
+     this.translation = [0, 0, 0];
+     this.rotation = [0, 0, 0];
+     this.scale = [1, 1, 1];
+   };
+
+   TRS.prototype.getMatrix = function(dst) {
+     dst = dst || new Float32Array(16);
+     var t = this.translation;
+     var r = this.rotation;
+     var s = this.scale;
+     m4.translation(t[0], t[1], t[2], dst);
+     m4.xRotate(dst, r[0], dst);
+     m4.yRotate(dst, r[1], dst);
+     m4.zRotate(dst, r[2], dst);
+     m4.scale(dst, s[0], s[1], s[2], dst);
+     return dst;
+   };
+
+   var Node = function(source) {
+     this.children = [];
+     this.localMatrix = m4.identity();
+     this.worldMatrix = m4.identity();
+     this.source = source;
+   };
+
+   Node.prototype.setParent = function(parent) {
+     if (this.parent) {
+       var ndx = this.parent.children.indexOf(this);
+       if (ndx >= 0) {
+         this.parent.children.splice(ndx, 1);
+       }
+     }
+
+     if (parent) {
+       parent.children.push(this);
+     }
+     this.parent = parent;
+   };
+
+   Node.prototype.updateWorldMatrix = function(parentWorldMatrix) {
+
+     var source = this.source;
+     if (source) {
+       source.getMatrix(this.localMatrix);
+     }
+
+     if (parentWorldMatrix) {
+       m4.multiply(parentWorldMatrix, this.localMatrix, this.worldMatrix);
+     } else {
+       m4.copy(this.localMatrix, this.worldMatrix);
+     }
+     var worldMatrix = this.worldMatrix;
+     this.children.forEach(function(child) {
+       child.updateWorldMatrix(worldMatrix);
+     });
+   };
+
+
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  // 用多个小立方体拼成大立方体的不同面，每个面不同颜色表示法线方向
+  const cubeBufferInfo   = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var nodeInfosByName = {};
+
+  // 构建一个大立方体：由小立方体排列在6个面上。每个面颜色不同，以展示法线方向
+  // 为简化，直接创建多个子节点来表示立方体的每个面
+  var faceSize = 6;  // 6x6 小立方体组成每个面
+  var cubeSize = 1;  // 每个小立方体大小
+  var gap = 1.05;    // 间距
+  var halfFace = (faceSize - 1) / 2 * gap;
+
+  // 6个面分别代表：+X(红), -X(青), +Y(绿), -Y(品红), +Z(蓝), -Z(黄)
+  var faceColors = {
+    "posX": [1.0, 0.2, 0.2, 1.0],
+    "negX": [0.2, 1.0, 1.0, 1.0],
+    "posY": [0.2, 1.0, 0.2, 1.0],
+    "negY": [1.0, 0.2, 1.0, 1.0],
+    "posZ": [0.2, 0.2, 1.0, 1.0],
+    "negZ": [1.0, 1.0, 0.2, 1.0],
+  };
+
+  function createFaceCubes(faceName, color) {
+    for (var i = -halfFace; i <= halfFace; i += gap) {
+      for (var j = -halfFace; j <= halfFace; j += gap) {
+        var tx = 0, ty = 0, tz = 0;
+        if (faceName === "posX") { tx = halfFace + 0.5; ty = i; tz = j; }
+        if (faceName === "negX") { tx = -halfFace - 0.5; ty = i; tz = j; }
+        if (faceName === "posY") { tx = i; ty = halfFace + 0.5; tz = j; }
+        if (faceName === "negY") { tx = i; ty = -halfFace - 0.5; tz = j; }
+        if (faceName === "posZ") { tx = i; ty = j; tz = halfFace + 0.5; }
+        if (faceName === "negZ") { tx = i; ty = j; tz = -halfFace - 0.5; }
+
+        var trs = new TRS();
+        trs.translation = [tx, ty, tz];
+        var node = new Node(trs);
+        node.drawInfo = {
+          uniforms: {
+            u_colorOffset: [0, 0, 0, 0],
+            u_colorMult: color,
+          },
+          programInfo: programInfo,
+          bufferInfo: cubeBufferInfo,
+        };
+        objectsToDraw.push(node.drawInfo);
+        objects.push(node);
+      }
+    }
+  }
+
+  createFaceCubes("posX", faceColors["posX"]);
+  createFaceCubes("negX", faceColors["negX"]);
+  createFaceCubes("posY", faceColors["posY"]);
+  createFaceCubes("negY", faceColors["negY"]);
+  createFaceCubes("posZ", faceColors["posZ"]);
+  createFaceCubes("negZ", faceColors["negZ"]);
+
+  requestAnimationFrame(drawScene);
+
+  var camAngle = 0;
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.9, 0.9, 0.95, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    // 摄像机缓慢环绕物体
+    var camRadius = 25;
+    camAngle = time * 0.3;
+    var cameraPosition = [Math.cos(camAngle) * camRadius, 8 + Math.sin(time * 0.2) * 3, Math.sin(camAngle) * camRadius];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    objects.forEach(function(object) {
+      object.drawInfo.uniforms.u_matrix = m4.multiply(viewProjectionMatrix, object.worldMatrix);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+
+</script>
+</body>
+
+</html>

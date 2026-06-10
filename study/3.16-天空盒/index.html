@@ -1,0 +1,276 @@
+<!doctype html>
+<html>
+
+<head>
+<title>天空盒</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+   var TRS = function() {
+     this.translation = [0, 0, 0];
+     this.rotation = [0, 0, 0];
+     this.scale = [1, 1, 1];
+   };
+
+   TRS.prototype.getMatrix = function(dst) {
+     dst = dst || new Float32Array(16);
+     var t = this.translation;
+     var r = this.rotation;
+     var s = this.scale;
+     m4.translation(t[0], t[1], t[2], dst);
+     m4.xRotate(dst, r[0], dst);
+     m4.yRotate(dst, r[1], dst);
+     m4.zRotate(dst, r[2], dst);
+     m4.scale(dst, s[0], s[1], s[2], dst);
+     return dst;
+   };
+
+   var Node = function(source) {
+     this.children = [];
+     this.localMatrix = m4.identity();
+     this.worldMatrix = m4.identity();
+     this.source = source;
+   };
+
+   Node.prototype.setParent = function(parent) {
+     if (this.parent) {
+       var ndx = this.parent.children.indexOf(this);
+       if (ndx >= 0) {
+         this.parent.children.splice(ndx, 1);
+       }
+     }
+
+     if (parent) {
+       parent.children.push(this);
+     }
+     this.parent = parent;
+   };
+
+   Node.prototype.updateWorldMatrix = function(parentWorldMatrix) {
+
+     var source = this.source;
+     if (source) {
+       source.getMatrix(this.localMatrix);
+     }
+
+     if (parentWorldMatrix) {
+       m4.multiply(parentWorldMatrix, this.localMatrix, this.worldMatrix);
+     } else {
+       m4.copy(this.localMatrix, this.worldMatrix);
+     }
+     var worldMatrix = this.worldMatrix;
+     this.children.forEach(function(child) {
+       child.updateWorldMatrix(worldMatrix);
+     });
+   };
+
+
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  const cubeBufferInfo   = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+  const sphereBufferInfo = primitives.createSphereWithVertexColorsBufferInfo(gl, 1, 16, 8);
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var nodeInfosByName = {};
+
+  // 天空盒：6个大立方体（或一个翻转的大立方体，这里用大立方体的6个面，从内部看）
+  // 为简洁起见：用一个巨大的立方体作为天空盒，摄像机在内部
+  var skyboxScale = 100;
+
+  var sceneNodes =
+    {
+      name: "root",
+      draw: false,
+      children: [
+        {
+          name: "skybox",
+          translation: [0, 0, 0],
+          scale: [skyboxScale, skyboxScale, skyboxScale],
+          colorMult: [0.6, 0.6, 0.9, 1],
+          colorOffset: [0.3, 0.2, 0.5, 0],
+        },
+        {
+          name: "central-sphere",
+          translation: [0, 0, 0],
+          scale: [3, 3, 3],
+          colorMult: [1.0, 0.8, 0.3, 1],
+          colorOffset: [0.1, 0.05, 0, 0],
+        },
+      ],
+    };
+
+  function makeNode(nodeDescription, bufferInfoOverride) {
+    var trs  = new TRS();
+    var node = new Node(trs);
+    nodeInfosByName[nodeDescription.name] = {
+      trs: trs,
+      node: node,
+    };
+    trs.translation = nodeDescription.translation || trs.translation;
+    trs.scale = nodeDescription.scale || trs.scale;
+    if (nodeDescription.draw !== false) {
+      var colorMult = nodeDescription.colorMult || [0.4, 0.4, 0.4, 1];
+      var colorOffset = nodeDescription.colorOffset || [0, 0, 0.6, 0];
+      var bufferInfo = bufferInfoOverride || cubeBufferInfo;
+      node.drawInfo = {
+        uniforms: {
+          u_colorOffset: colorOffset,
+          u_colorMult: colorMult,
+        },
+        programInfo: programInfo,
+        bufferInfo: bufferInfo,
+      };
+      objectsToDraw.push(node.drawInfo);
+      objects.push(node);
+    }
+    if (nodeDescription.children) {
+      makeNodes(nodeDescription.children).forEach(function(child) {
+        child.setParent(node);
+      });
+    }
+    return node;
+  }
+
+  function makeNodes(nodeDescriptions) {
+    return nodeDescriptions ? nodeDescriptions.map(function(n) {
+      // skybox用cube，中间物体用sphere
+      if (n.name === "central-sphere") {
+        return makeNode(n, sphereBufferInfo);
+      }
+      return makeNode(n);
+    }) : [];
+  }
+
+  var scene = makeNode(sceneNodes);
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.5, 0.6, 0.9, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    // 摄像机缓慢环绕天空盒中心，但在内部
+    var camRadius = 20;
+    var cameraPosition = [Math.cos(time * 0.3) * camRadius, 5 + Math.sin(time * 0.2) * 3, Math.sin(time * 0.3) * camRadius];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    // 让天空盒有淡蓝-淡紫渐变效果：让每个面不同色调（通过多个小立方体拼合的方式）
+    // 简化：让天空盒缓慢旋转，增加渐变感
+    var skyboxTRS = nodeInfosByName["skybox"].trs;
+    skyboxTRS.rotation[1] = time * 0.05;
+
+    // 中间物体旋转
+    var sphereTRS = nodeInfosByName["central-sphere"].trs;
+    sphereTRS.rotation[1] = time * 0.8;
+    sphereTRS.rotation[0] = time * 0.4;
+
+    scene.updateWorldMatrix();
+
+    objects.forEach(function(object) {
+      object.drawInfo.uniforms.u_matrix = m4.multiply(viewProjectionMatrix, object.worldMatrix);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+
+</script>
+</body>
+
+</html>

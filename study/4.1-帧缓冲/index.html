@@ -1,0 +1,157 @@
+<!doctype html>
+<html>
+
+<head>
+<title>帧缓冲 - 离屏渲染到纹理</title>
+<style>
+@import url("./webgl-tutorials.css");
+body { margin: 0; }
+canvas { width: 100vw; height: 100vh; display: block; }
+</style>
+</head>
+
+<body>
+<canvas id="candy"></canvas>
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+void main() {
+  gl_FragColor = v_color;
+}
+</script>
+<script id="vertex-shader-quad" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec2 a_texcoord;
+uniform mat4 u_matrix;
+varying vec2 v_texcoord;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_texcoord = a_texcoord;
+}
+</script>
+<script id="fragment-shader-quad" type="x-shader/x-fragment">
+precision mediump float;
+varying vec2 v_texcoord;
+uniform sampler2D u_texture;
+void main() {
+  gl_FragColor = texture2D(u_texture, v_texcoord);
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) { return; }
+
+  var cubeProgramInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+  var quadProgramInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-quad", "fragment-shader-quad"]);
+
+  var cubeBufferInfo = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+
+  var quadArrays = {
+    position: { numComponents: 2, data: [-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1] },
+    texcoord: { numComponents: 2, data: [0,0, 1,0, 0,1, 0,1, 1,0, 1,1] },
+  };
+  var quadBufferInfo = webglUtils.createBufferInfoFromArrays(gl, quadArrays);
+
+  var fboWidth = 512;
+  var fboHeight = 512;
+  var fboTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, fboTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fboWidth, fboHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  var framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTexture, 0);
+
+  var depthBuffer = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, fboWidth, fboHeight);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  function degToRad(d) { return d * Math.PI / 180; }
+
+  var fieldOfViewRadians = degToRad(60);
+  var cubeRotation = 0;
+  var quadRotation = 0;
+  var then = 0;
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+    var deltaTime = time - then;
+    then = time;
+    cubeRotation += deltaTime * 0.5;
+    quadRotation += deltaTime * 0.3;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.viewport(0, 0, fboWidth, fboHeight);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.2, 0.3, 0.5, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = fboWidth / fboHeight;
+    var projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+    var cameraPosition = [0, 0, 4];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    gl.useProgram(cubeProgramInfo.program);
+    var cubeMatrix = m4.xRotate(viewProjectionMatrix, cubeRotation);
+    cubeMatrix = m4.yRotate(cubeMatrix, cubeRotation * 1.5);
+    webglUtils.setBuffersAndAttributes(gl, cubeProgramInfo, cubeBufferInfo);
+    webglUtils.setUniforms(cubeProgramInfo, { u_matrix: cubeMatrix });
+    gl.drawArrays(gl.TRIANGLES, 0, cubeBufferInfo.numElements);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.clearColor(0.1, 0.1, 0.15, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var screenAspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var screenProjection = m4.perspective(fieldOfViewRadians, screenAspect, 1, 2000);
+    var screenCameraMatrix = m4.lookAt([0, 0, 3], [0, 0, 0], [0, 1, 0]);
+    var screenViewMatrix = m4.inverse(screenCameraMatrix);
+    var screenViewProjection = m4.multiply(screenProjection, screenViewMatrix);
+
+    gl.useProgram(quadProgramInfo.program);
+    var quadMatrix = m4.yRotate(screenViewProjection, quadRotation);
+    quadMatrix = m4.xRotate(quadMatrix, Math.sin(quadRotation * 0.5) * 0.3);
+    webglUtils.setBuffersAndAttributes(gl, quadProgramInfo, quadBufferInfo);
+    webglUtils.setUniforms(quadProgramInfo, { u_matrix: quadMatrix, u_texture: fboTexture });
+    gl.drawArrays(gl.TRIANGLES, 0, quadBufferInfo.numElements);
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+</script>
+</body>
+
+</html>

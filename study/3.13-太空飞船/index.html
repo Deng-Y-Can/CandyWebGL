@@ -1,0 +1,337 @@
+<!doctype html>
+<html>
+
+<head>
+<title>太空飞船</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  background: #000010;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+   var TRS = function() {
+     this.translation = [0, 0, 0];
+     this.rotation = [0, 0, 0];
+     this.scale = [1, 1, 1];
+   };
+
+   TRS.prototype.getMatrix = function(dst) {
+     dst = dst || new Float32Array(16);
+     var t = this.translation;
+     var r = this.rotation;
+     var s = this.scale;
+     m4.translation(t[0], t[1], t[2], dst);
+     m4.xRotate(dst, r[0], dst);
+     m4.yRotate(dst, r[1], dst);
+     m4.zRotate(dst, r[2], dst);
+     m4.scale(dst, s[0], s[1], s[2], dst);
+     return dst;
+   };
+
+   var Node = function(source) {
+     this.children = [];
+     this.localMatrix = m4.identity();
+     this.worldMatrix = m4.identity();
+     this.source = source;
+   };
+
+   Node.prototype.setParent = function(parent) {
+     if (this.parent) {
+       var ndx = this.parent.children.indexOf(this);
+       if (ndx >= 0) {
+         this.parent.children.splice(ndx, 1);
+       }
+     }
+
+     if (parent) {
+       parent.children.push(this);
+     }
+     this.parent = parent;
+   };
+
+   Node.prototype.updateWorldMatrix = function(parentWorldMatrix) {
+
+     var source = this.source;
+     if (source) {
+       source.getMatrix(this.localMatrix);
+     }
+
+     if (parentWorldMatrix) {
+       m4.multiply(parentWorldMatrix, this.localMatrix, this.worldMatrix);
+     } else {
+       m4.copy(this.localMatrix, this.worldMatrix);
+     }
+     var worldMatrix = this.worldMatrix;
+     this.children.forEach(function(child) {
+       child.updateWorldMatrix(worldMatrix);
+     });
+   };
+
+
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  const cubeBufferInfo   = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function emod(x, n) {
+    return x >= 0 ? (x % n) : ((n - (-x % n)) % n);
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var nodeInfosByName = {};
+
+  // 创建星空背景节点（大量小星星）
+  var starNodes = [];
+  var numStars = 100;
+  for (var ii = 0; ii < numStars; ii++) {
+    var trs = new TRS();
+    var node = new Node(trs);
+    trs.translation = [rand(-100, 100), rand(-60, 60), rand(-200, -10)];
+    trs.scale = [rand(0.3, 1.0), rand(0.3, 1.0), rand(0.3, 1.0)];
+    trs.rotation = [rand(0, Math.PI*2), rand(0, Math.PI*2), rand(0, Math.PI*2)];
+    node.drawInfo = {
+      uniforms: {
+        u_colorOffset: [0.8, 0.8, 1.0, 0],
+        u_colorMult: [0.5, 0.5, 0.5, 1],
+      },
+      programInfo: programInfo,
+      bufferInfo: cubeBufferInfo,
+    };
+    objectsToDraw.push(node.drawInfo);
+    objects.push(node);
+    starNodes.push({node: node, trs: trs, speed: rand(0.5, 1.5)});
+  }
+
+  // 飞船node层级结构
+  var spaceshipNodeDescriptions =
+    {
+      name: "ship-root",
+      draw: false,
+      children: [
+        {
+          name: "body",
+          translation: [0, 0, 0],
+          scale: [2, 1, 4],
+          colorMult: [0.8, 0.3, 0.3, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "left-wing",
+          translation: [-3, 0, 0],
+          scale: [2, 0.3, 3],
+          colorMult: [0.3, 0.3, 0.8, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "right-wing",
+          translation: [3, 0, 0],
+          scale: [2, 0.3, 3],
+          colorMult: [0.3, 0.3, 0.8, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "cockpit",
+          translation: [0, 1, 1],
+          scale: [1.2, 1.2, 2],
+          colorMult: [0.3, 0.8, 0.8, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "tail",
+          translation: [0, 1.5, -2],
+          scale: [0.5, 1.5, 1],
+          colorMult: [0.8, 0.8, 0.3, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "engine-left",
+          translation: [-1.5, -0.5, -2],
+          scale: [0.5, 0.5, 1],
+          colorMult: [1.0, 0.5, 0.0, 1],
+          colorOffset: [0.5, 0.2, 0, 0],
+        },
+        {
+          name: "engine-right",
+          translation: [1.5, -0.5, -2],
+          scale: [0.5, 0.5, 1],
+          colorMult: [1.0, 0.5, 0.0, 1],
+          colorOffset: [0.5, 0.2, 0, 0],
+        },
+      ],
+    };
+
+  function makeNode(nodeDescription) {
+    var trs  = new TRS();
+    var node = new Node(trs);
+    nodeInfosByName[nodeDescription.name] = {
+      trs: trs,
+      node: node,
+    };
+    trs.translation = nodeDescription.translation || trs.translation;
+    trs.scale = nodeDescription.scale || trs.scale;
+    if (nodeDescription.draw !== false) {
+      var colorMult = nodeDescription.colorMult || [0.4, 0.4, 0.4, 1];
+      var colorOffset = nodeDescription.colorOffset || [0, 0, 0.6, 0];
+      node.drawInfo = {
+        uniforms: {
+          u_colorOffset: colorOffset,
+          u_colorMult: colorMult,
+        },
+        programInfo: programInfo,
+        bufferInfo: cubeBufferInfo,
+      };
+      objectsToDraw.push(node.drawInfo);
+      objects.push(node);
+    }
+    makeNodes(nodeDescription.children).forEach(function(child) {
+      child.setParent(node);
+    });
+    return node;
+  }
+
+  function makeNodes(nodeDescriptions) {
+    return nodeDescriptions ? nodeDescriptions.map(makeNode) : [];
+  }
+
+  var scene = makeNode(spaceshipNodeDescriptions);
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.0, 0.0, 0.06, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    var cameraPosition = [0, 2, 15];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    // 更新星星：向摄像机方向移动，制造飞行感
+    starNodes.forEach(function(s) {
+      s.trs.translation[2] += s.speed;
+      if (s.trs.translation[2] > 10) {
+        s.trs.translation[2] = -200;
+        s.trs.translation[0] = rand(-100, 100);
+        s.trs.translation[1] = rand(-60, 60);
+      }
+      s.trs.rotation[0] += 0.01 * s.speed;
+      s.trs.rotation[1] += 0.01 * s.speed;
+    });
+
+    // 飞船整体移动和旋转
+    var shipTRS = nodeInfosByName["ship-root"].trs;
+    shipTRS.translation[2] = Math.sin(time * 0.5) * 2;
+    shipTRS.translation[1] = Math.sin(time * 0.7) * 1;
+    shipTRS.rotation[1] = time * 0.3;
+    shipTRS.rotation[0] = Math.sin(time * 0.5) * 0.2;
+
+    // 引擎闪烁
+    var flicker = 0.5 + Math.sin(time * 20) * 0.3;
+    nodeInfosByName["engine-left"].node.drawInfo.uniforms.u_colorOffset = [flicker, flicker*0.6, 0, 0];
+    nodeInfosByName["engine-right"].node.drawInfo.uniforms.u_colorOffset = [flicker, flicker*0.6, 0, 0];
+
+    scene.updateWorldMatrix();
+
+    objects.forEach(function(object) {
+      object.drawInfo.uniforms.u_matrix = m4.multiply(viewProjectionMatrix, object.worldMatrix);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+
+</script>
+</body>
+
+</html>

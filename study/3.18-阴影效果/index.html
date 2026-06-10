@@ -1,0 +1,302 @@
+<!doctype html>
+<html>
+
+<head>
+<title>阴影效果</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+   var TRS = function() {
+     this.translation = [0, 0, 0];
+     this.rotation = [0, 0, 0];
+     this.scale = [1, 1, 1];
+   };
+
+   TRS.prototype.getMatrix = function(dst) {
+     dst = dst || new Float32Array(16);
+     var t = this.translation;
+     var r = this.rotation;
+     var s = this.scale;
+     m4.translation(t[0], t[1], t[2], dst);
+     m4.xRotate(dst, r[0], dst);
+     m4.yRotate(dst, r[1], dst);
+     m4.zRotate(dst, r[2], dst);
+     m4.scale(dst, s[0], s[1], s[2], dst);
+     return dst;
+   };
+
+   var Node = function(source) {
+     this.children = [];
+     this.localMatrix = m4.identity();
+     this.worldMatrix = m4.identity();
+     this.source = source;
+   };
+
+   Node.prototype.setParent = function(parent) {
+     if (this.parent) {
+       var ndx = this.parent.children.indexOf(this);
+       if (ndx >= 0) {
+         this.parent.children.splice(ndx, 1);
+       }
+     }
+
+     if (parent) {
+       parent.children.push(this);
+     }
+     this.parent = parent;
+   };
+
+   Node.prototype.updateWorldMatrix = function(parentWorldMatrix) {
+
+     var source = this.source;
+     if (source) {
+       source.getMatrix(this.localMatrix);
+     }
+
+     if (parentWorldMatrix) {
+       m4.multiply(parentWorldMatrix, this.localMatrix, this.worldMatrix);
+     } else {
+       m4.copy(this.localMatrix, this.worldMatrix);
+     }
+     var worldMatrix = this.worldMatrix;
+     this.children.forEach(function(child) {
+       child.updateWorldMatrix(worldMatrix);
+     });
+   };
+
+
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  const cubeBufferInfo   = primitives.createCubeWithVertexColorsBufferInfo(gl, 1);
+  const sphereBufferInfo = primitives.createSphereWithVertexColorsBufferInfo(gl, 1, 16, 8);
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var nodeInfosByName = {};
+
+  // 场景：地板 + 光源标识 + 球体 + 阴影投影
+  var sceneDescriptions =
+    {
+      name: "root",
+      draw: false,
+      children: [
+        {
+          name: "floor",
+          translation: [0, -5, 0],
+          scale: [20, 1, 20],
+          colorMult: [0.6, 0.6, 0.55, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "light-marker", // 用一个小立方体表示光源位置
+          translation: [5, 10, 5],
+          scale: [0.8, 0.8, 0.8],
+          colorMult: [1.0, 1.0, 0.3, 1],
+          colorOffset: [0.3, 0.3, 0.1, 0],
+        },
+        {
+          name: "shadow", // 在地板上画一个暗色扁平球体表示阴影
+          translation: [0, -4.3, 0],
+          scale: [3, 0.3, 3],
+          colorMult: [0.1, 0.1, 0.1, 1],
+          colorOffset: [0, 0, 0, 0],
+        },
+        {
+          name: "sphere",
+          translation: [0, 0, 0],
+          scale: [3, 3, 3],
+          colorMult: [0.3, 0.6, 1.0, 1],
+          colorOffset: [0.1, 0.1, 0.2, 0],
+        },
+      ],
+    };
+
+  function makeNode(nodeDescription, bufferInfoOverride) {
+    var trs  = new TRS();
+    var node = new Node(trs);
+    nodeInfosByName[nodeDescription.name] = {
+      trs: trs,
+      node: node,
+    };
+    trs.translation = nodeDescription.translation || trs.translation;
+    trs.scale = nodeDescription.scale || trs.scale;
+    if (nodeDescription.draw !== false) {
+      var colorMult = nodeDescription.colorMult || [0.4, 0.4, 0.4, 1];
+      var colorOffset = nodeDescription.colorOffset || [0, 0, 0.6, 0];
+      var bufferInfo = bufferInfoOverride || cubeBufferInfo;
+      node.drawInfo = {
+        uniforms: {
+          u_colorOffset: colorOffset,
+          u_colorMult: colorMult,
+        },
+        programInfo: programInfo,
+        bufferInfo: bufferInfo,
+      };
+      objectsToDraw.push(node.drawInfo);
+      objects.push(node);
+    }
+    if (nodeDescription.children) {
+      makeNodes(nodeDescription.children).forEach(function(child) {
+        child.setParent(node);
+      });
+    }
+    return node;
+  }
+
+  function makeNodes(nodeDescriptions) {
+    return nodeDescriptions ? nodeDescriptions.map(function(n) {
+      if (n.name === "sphere" || n.name === "shadow") {
+        return makeNode(n, sphereBufferInfo);
+      }
+      return makeNode(n);
+    }) : [];
+  }
+
+  var scene = makeNode(sceneDescriptions);
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.85, 0.85, 0.9, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    var cameraPosition = [10, 10, 25];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    // 光源围绕旋转，制造阴影变化
+    var lightTRS = nodeInfosByName["light-marker"].trs;
+    var lightRadius = 15;
+    var lightAngle = time * 0.5;
+    lightTRS.translation[0] = Math.cos(lightAngle) * lightRadius;
+    lightTRS.translation[2] = Math.sin(lightAngle) * lightRadius;
+    lightTRS.translation[1] = 10 + Math.sin(time) * 2;
+
+    // 球体上下弹跳和水平运动
+    var sphereTRS = nodeInfosByName["sphere"].trs;
+    sphereTRS.translation[0] = Math.sin(time * 0.7) * 6;
+    sphereTRS.translation[1] = Math.abs(Math.sin(time * 1.5)) * 3 - 2;
+    sphereTRS.translation[2] = Math.cos(time * 0.5) * 4;
+    sphereTRS.rotation[1] = time;
+
+    // 阴影投影到地板上：位置=球体的(x,地板y, z)，大小根据球体与光源距离调整
+    var shadowTRS = nodeInfosByName["shadow"].trs;
+    shadowTRS.translation[0] = sphereTRS.translation[0];
+    shadowTRS.translation[2] = sphereTRS.translation[2];
+    shadowTRS.translation[1] = -4.3;
+
+    // 根据球体高度计算阴影大小和深浅（高度越高，阴影越大越淡）
+    var sphereHeight = sphereTRS.translation[1] + 5; // 相对地板的高度
+    var shadowSize = 2.5 + sphereHeight * 0.3;
+    var shadowAlpha = Math.max(0.1, 0.8 - sphereHeight * 0.05);
+    shadowTRS.scale = [shadowSize, 0.3, shadowSize];
+    nodeInfosByName["shadow"].node.drawInfo.uniforms.u_colorMult = [0.15, 0.1, 0.15, shadowAlpha];
+
+    scene.updateWorldMatrix();
+
+    objects.forEach(function(object) {
+      object.drawInfo.uniforms.u_matrix = m4.multiply(viewProjectionMatrix, object.worldMatrix);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+
+</script>
+</body>
+
+</html>

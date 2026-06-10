@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+
+<head>
+<title>程序化地形生成</title>
+<style>
+@import url("./webgl-tutorials.css");
+body { margin: 0; }
+canvas { width: 100vw; height: 100vh; display: block; }
+</style>
+</head>
+
+<body>
+<canvas id="candy"></canvas>
+<script id="vertex-shader-terrain" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+attribute vec3 a_normal;
+uniform mat4 u_matrix;
+uniform mat4 u_normalMatrix;
+varying vec4 v_color;
+varying vec3 v_normal;
+varying vec3 v_pos;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_normal = (u_normalMatrix * vec4(a_normal, 0.0)).xyz;
+  v_color = a_color;
+  v_pos = a_position.xyz;
+}
+</script>
+<script id="fragment-shader-terrain" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+varying vec3 v_normal;
+varying vec3 v_pos;
+uniform vec3 u_lightDir;
+void main() {
+  vec3 normal = normalize(v_normal);
+  float light = max(dot(normal, normalize(u_lightDir)), 0.0) * 0.7 + 0.3;
+  gl_FragColor = vec4(v_color.rgb * light, 1.0);
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) { return; }
+
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-terrain", "fragment-shader-terrain"]);
+
+  var gridSize = 64;
+  var terrainSize = 30;
+  var halfSize = terrainSize / 2;
+  var positions = [];
+  var normals = [];
+  var colors = [];
+  var indices = [];
+
+  function pseudoNoise(x, z, seed) {
+    var n = Math.sin(x * 12.9898 + z * 78.233 + seed * 37.719) * 43758.5453;
+    return n - Math.floor(n);
+  }
+
+  function smoothNoise(x, z, seed) {
+    var corners = (pseudoNoise(x-1, z-1, seed) + pseudoNoise(x+1, z-1, seed) + pseudoNoise(x-1, z+1, seed) + pseudoNoise(x+1, z+1, seed)) / 16;
+    var sides = (pseudoNoise(x-1, z, seed) + pseudoNoise(x+1, z, seed) + pseudoNoise(x, z-1, seed) + pseudoNoise(x, z+1, seed)) / 8;
+    var center = pseudoNoise(x, z, seed) / 4;
+    return corners + sides + center;
+  }
+
+  function heightAt(x, z) {
+    var h = 0;
+    h += Math.sin(x * 0.3) * Math.cos(z * 0.3) * 2.0;
+    h += smoothNoise(x * 0.2, z * 0.2, 1.0) * 3.0;
+    h += smoothNoise(x * 0.4, z * 0.4, 2.5) * 1.5;
+    h += Math.sin(x * 0.8 + z * 0.5) * 0.5;
+    return h;
+  }
+
+  function colorForHeight(y) {
+    if (y < -0.5) return [0.3, 0.5, 0.2];
+    if (y < 0.8) return [0.45, 0.55, 0.25];
+    if (y < 2.0) return [0.55, 0.45, 0.3];
+    if (y < 3.0) return [0.65, 0.55, 0.4];
+    return [0.95, 0.95, 1.0];
+  }
+
+  for (var z = 0; z <= gridSize; z++) {
+    for (var x = 0; x <= gridSize; x++) {
+      var wx = (x / gridSize) * terrainSize - halfSize;
+      var wz = (z / gridSize) * terrainSize - halfSize;
+      var y = heightAt(wx, wz);
+      positions.push(wx, y, wz);
+      var c = colorForHeight(y);
+      colors.push(c[0] * 255, c[1] * 255, c[2] * 255, 255);
+    }
+  }
+
+  for (var z = 0; z < gridSize; z++) {
+    for (var x = 0; x < gridSize; x++) {
+      var i0 = z * (gridSize + 1) + x;
+      var i1 = i0 + 1;
+      var i2 = i0 + (gridSize + 1);
+      var i3 = i2 + 1;
+      indices.push(i0, i2, i1);
+      indices.push(i1, i2, i3);
+    }
+  }
+
+  for (var z = 0; z <= gridSize; z++) {
+    for (var x = 0; x <= gridSize; x++) {
+      var wx = (x / gridSize) * terrainSize - halfSize;
+      var wz = (z / gridSize) * terrainSize - halfSize;
+      var hL = heightAt(wx - 0.2, wz);
+      var hR = heightAt(wx + 0.2, wz);
+      var hD = heightAt(wx, wz - 0.2);
+      var hU = heightAt(wx, wz + 0.2);
+      var nx = hL - hR;
+      var nz = hD - hU;
+      var ny = 2.0;
+      var len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+      normals.push(nx/len, ny/len, nz/len);
+    }
+  }
+
+  var terrainArrays = {
+    position: { numComponents: 3, data: new Float32Array(positions) },
+    color: { numComponents: 4, data: new Uint8Array(colors) },
+    normal: { numComponents: 3, data: new Float32Array(normals) },
+    indices: { data: new Uint16Array(indices) },
+  };
+  var terrainBufferInfo = webglUtils.createBufferInfoFromArrays(gl, terrainArrays);
+
+  function degToRad(d) { return d * Math.PI / 180; }
+  var fieldOfViewRadians = degToRad(60);
+  var camAngle = 0;
+  var camHeight = 8;
+  var then = 0;
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+    var deltaTime = time - then;
+    then = time;
+    camAngle += deltaTime * 0.15;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.CULL_FACE);
+    gl.clearColor(0.6, 0.8, 1.0, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+    var camDist = 25;
+    var cameraPosition = [Math.sin(camAngle) * camDist, camHeight, Math.cos(camAngle) * camDist];
+    var target = [0, 1, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+    var normalMatrix = m4.inverse(m4.transpose(viewProjectionMatrix));
+
+    gl.useProgram(programInfo.program);
+    webglUtils.setBuffersAndAttributes(gl, programInfo, terrainBufferInfo);
+    webglUtils.setUniforms(programInfo, {
+      u_matrix: viewProjectionMatrix,
+      u_normalMatrix: normalMatrix,
+      u_lightDir: [0.5, 1.0, 0.3]
+    });
+    gl.drawElements(gl.TRIANGLES, terrainBufferInfo.numElements, gl.UNSIGNED_SHORT, 0);
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+</script>
+</body>
+
+</html>

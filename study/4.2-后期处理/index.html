@@ -1,0 +1,219 @@
+<!doctype html>
+<html>
+
+<head>
+<title>后期处理 - 纹理滤镜效果</title>
+<style>
+@import url("./webgl-tutorials.css");
+body { margin: 0; }
+canvas { width: 100vw; height: 100vh; display: block; }
+#ui { position: absolute; top: 10px; left: 10px; z-index: 10; font-family: monospace; color: white; background: rgba(0,0,0,0.5); padding: 10px; border-radius: 5px; }
+#ui select { font-size: 14px; padding: 4px; }
+</style>
+</head>
+
+<body>
+<div id="ui">
+  <div>滤镜效果: <select id="filterSelect">
+    <option value="0">正常</option>
+    <option value="1">颜色反转</option>
+    <option value="2">灰度</option>
+    <option value="3">模糊</option>
+    <option value="4">边缘检测</option>
+    <option value="5">浮雕</option>
+    <option value="6">锐利化</option>
+  </select></div>
+</div>
+<canvas id="candy"></canvas>
+<script id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+void main() {
+  gl_FragColor = v_color;
+}
+</script>
+<script id="vertex-shader-filter" type="x-shader/x-vertex">
+attribute vec2 a_position;
+attribute vec2 a_texcoord;
+varying vec2 v_texcoord;
+void main() {
+  gl_Position = vec4(a_position, 0.0, 1.0);
+  v_texcoord = a_texcoord;
+}
+</script>
+<script id="fragment-shader-filter" type="x-shader/x-fragment">
+precision mediump float;
+varying vec2 v_texcoord;
+uniform sampler2D u_texture;
+uniform int u_filter;
+uniform vec2 u_resolution;
+void main() {
+  vec4 color = texture2D(u_texture, v_texcoord);
+  if (u_filter == 1) {
+    gl_FragColor = vec4(1.0 - color.rgb, color.a);
+  } else if (u_filter == 2) {
+    float gray = color.r * 0.3 + color.g * 0.59 + color.b * 0.11;
+    gl_FragColor = vec4(gray, gray, gray, color.a);
+  } else if (u_filter == 3) {
+    vec2 texel = 1.0 / u_resolution;
+    vec4 sum = vec4(0.0);
+    sum += texture2D(u_texture, v_texcoord + vec2(-texel.x, -texel.y)) * 0.0625;
+    sum += texture2D(u_texture, v_texcoord + vec2(0.0, -texel.y)) * 0.125;
+    sum += texture2D(u_texture, v_texcoord + vec2(texel.x, -texel.y)) * 0.0625;
+    sum += texture2D(u_texture, v_texcoord + vec2(-texel.x, 0.0)) * 0.125;
+    sum += texture2D(u_texture, v_texcoord + vec2(0.0, 0.0)) * 0.25;
+    sum += texture2D(u_texture, v_texcoord + vec2(texel.x, 0.0)) * 0.125;
+    sum += texture2D(u_texture, v_texcoord + vec2(-texel.x, texel.y)) * 0.0625;
+    sum += texture2D(u_texture, v_texcoord + vec2(0.0, texel.y)) * 0.125;
+    sum += texture2D(u_texture, v_texcoord + vec2(texel.x, texel.y)) * 0.0625;
+    gl_FragColor = sum;
+  } else if (u_filter == 4) {
+    vec2 texel = 1.0 / u_resolution;
+    vec4 c0 = texture2D(u_texture, v_texcoord + vec2(-texel.x, -texel.y));
+    vec4 c1 = texture2D(u_texture, v_texcoord + vec2(0.0, -texel.y));
+    vec4 c2 = texture2D(u_texture, v_texcoord + vec2(texel.x, -texel.y));
+    vec4 c3 = texture2D(u_texture, v_texcoord + vec2(-texel.x, 0.0));
+    vec4 c5 = texture2D(u_texture, v_texcoord + vec2(texel.x, 0.0));
+    vec4 c6 = texture2D(u_texture, v_texcoord + vec2(-texel.x, texel.y));
+    vec4 c7 = texture2D(u_texture, v_texcoord + vec2(0.0, texel.y));
+    vec4 c8 = texture2D(u_texture, v_texcoord + vec2(texel.x, texel.y));
+    vec4 gx = -c0 - 2.0*c3 - c6 + c2 + 2.0*c5 + c8;
+    vec4 gy = -c0 - 2.0*c1 - c2 + c6 + 2.0*c7 + c8;
+    float g = length(vec2(length(gx.rgb), length(gy.rgb)));
+    gl_FragColor = vec4(vec3(g), 1.0);
+  } else if (u_filter == 5) {
+    vec2 texel = 1.0 / u_resolution;
+    vec4 c0 = texture2D(u_texture, v_texcoord + vec2(-texel.x, -texel.y));
+    vec4 c2 = texture2D(u_texture, v_texcoord + vec2(texel.x, texel.y));
+    gl_FragColor = vec4((c0.rgb - c2.rgb) + 0.5, 1.0);
+  } else if (u_filter == 6) {
+    vec2 texel = 1.0 / u_resolution;
+    vec4 c0 = texture2D(u_texture, v_texcoord + vec2(0.0, -texel.y));
+    vec4 c1 = texture2D(u_texture, v_texcoord + vec2(-texel.x, 0.0));
+    vec4 c2 = texture2D(u_texture, v_texcoord);
+    vec4 c3 = texture2D(u_texture, v_texcoord + vec2(texel.x, 0.0));
+    vec4 c4 = texture2D(u_texture, v_texcoord + vec2(0.0, texel.y));
+    gl_FragColor = vec4(clamp(-c0.rgb - c1.rgb + 5.0*c2.rgb - c3.rgb - c4.rgb, 0.0, 1.0), 1.0);
+  } else {
+    gl_FragColor = color;
+  }
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) { return; }
+
+  var sceneProgramInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+  var filterProgramInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-filter", "fragment-shader-filter"]);
+
+  var sphereBufferInfo = primitives.createSphereWithVertexColorsBufferInfo(gl, 1.5, 32, 16);
+
+  var quadArrays = {
+    position: { numComponents: 2, data: [-1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1] },
+    texcoord: { numComponents: 2, data: [0,0, 1,0, 0,1, 0,1, 1,0, 1,1] },
+  };
+  var quadBufferInfo = webglUtils.createBufferInfoFromArrays(gl, quadArrays);
+
+  var fboWidth = 1024;
+  var fboHeight = 1024;
+  var fboTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, fboTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fboWidth, fboHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  var framebuffer = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fboTexture, 0);
+
+  var depthBuffer = gl.createRenderbuffer();
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depthBuffer);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, fboWidth, fboHeight);
+  gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, depthBuffer);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+  var currentFilter = 0;
+  document.getElementById("filterSelect").addEventListener('change', function(e) {
+    currentFilter = parseInt(e.target.value);
+  });
+
+  function degToRad(d) { return d * Math.PI / 180; }
+  var fieldOfViewRadians = degToRad(60);
+  var rotation = 0;
+  var then = 0;
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+    var deltaTime = time - then;
+    then = time;
+    rotation += deltaTime * 0.5;
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.viewport(0, 0, fboWidth, fboHeight);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.1, 0.2, 0.4, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = fboWidth / fboHeight;
+    var projectionMatrix = m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+    var cameraPosition = [0, 1, 5];
+    var target = [0, 0, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    gl.useProgram(sceneProgramInfo.program);
+    var matrix = m4.yRotate(viewProjectionMatrix, rotation);
+    matrix = m4.xRotate(matrix, Math.sin(rotation * 0.7) * 0.5);
+    webglUtils.setBuffersAndAttributes(gl, sceneProgramInfo, sphereBufferInfo);
+    webglUtils.setUniforms(sceneProgramInfo, { u_matrix: matrix });
+    gl.drawArrays(gl.TRIANGLES, 0, sphereBufferInfo.numElements);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+
+    gl.useProgram(filterProgramInfo.program);
+    webglUtils.setBuffersAndAttributes(gl, filterProgramInfo, quadBufferInfo);
+    webglUtils.setUniforms(filterProgramInfo, {
+      u_texture: fboTexture,
+      u_filter: currentFilter,
+      u_resolution: [fboWidth, fboHeight]
+    });
+    gl.drawArrays(gl.TRIANGLES, 0, quadBufferInfo.numElements);
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+</script>
+</body>
+
+</html>

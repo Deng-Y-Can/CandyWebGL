@@ -1,0 +1,194 @@
+<!doctype html>
+<html>
+
+<head>
+<title>3D粒子系统</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  background: #0a0a15;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script src="chroma.min.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  var smallSphereBufferInfo  = primitives.createSphereWithVertexColorsBufferInfo(gl, 0.5, 8, 4);
+  var midSphereBufferInfo    = primitives.createSphereWithVertexColorsBufferInfo(gl, 1.0, 8, 4);
+  var bigSphereBufferInfo    = primitives.createSphereWithVertexColorsBufferInfo(gl, 1.5, 10, 5);
+
+  var shapes = [smallSphereBufferInfo, midSphereBufferInfo, bigSphereBufferInfo];
+
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function emod(x, n) {
+    return x >= 0 ? (x % n) : ((n - (-x % n)) % n);
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var numParticles = 150;
+
+  for (var ii = 0; ii < numParticles; ++ii) {
+    var object = {
+      uniforms: {
+        u_colorMult: chroma.hsv(rand(0, 360), rand(0.7, 1), rand(0.6, 1)).gl(),
+        u_matrix: m4.identity(),
+      },
+      baseX: rand(-30, 30),
+      baseZ: rand(-30, 30),
+      y: rand(-20, 30),
+      xOffset: rand(0, Math.PI * 2),
+      zOffset: rand(0, Math.PI * 2),
+      xSpeed: rand(0.3, 0.8),
+      zSpeed: rand(0.3, 0.8),
+      upSpeed: rand(0.5, 1.5),
+      rotSpeedX: rand(0.5, 1.5),
+      rotSpeedY: rand(0.5, 1.5),
+      rotX: 0,
+      rotY: 0,
+      shapeIdx: ii % shapes.length,
+      size: rand(0.5, 1.8),
+    };
+    objects.push(object);
+    objectsToDraw.push({
+      programInfo: programInfo,
+      bufferInfo: shapes[object.shapeIdx],
+      uniforms: object.uniforms,
+    });
+  }
+
+  function computeMatrix(viewProjectionMatrix, tx, ty, tz, rx, ry, size) {
+    var matrix = m4.translate(viewProjectionMatrix, tx, ty, tz);
+    matrix = m4.xRotate(matrix, rx);
+    matrix = m4.yRotate(matrix, ry);
+    matrix = m4.scale(matrix, size, size, size);
+    return matrix;
+  }
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.04, 0.04, 0.08, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    var cameraPosition = [0, 5, 60];
+    var target = [0, 5, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    objects.forEach(function(object) {
+      // 螺旋上升运动
+      object.y += object.upSpeed * 0.1;
+      if (object.y > 40) {
+        object.y = -20;
+      }
+      var tx = object.baseX + Math.sin(time * object.xSpeed + object.xOffset) * 5;
+      var tz = object.baseZ + Math.cos(time * object.zSpeed + object.zOffset) * 5;
+      var ty = object.y;
+
+      object.rotX = time * object.rotSpeedX;
+      object.rotY = time * object.rotSpeedY;
+
+      object.uniforms.u_matrix = computeMatrix(
+          viewProjectionMatrix,
+          tx, ty, tz,
+          object.rotX, object.rotY,
+          object.size);
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+</script>
+</body>
+
+</html>

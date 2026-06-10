@@ -1,0 +1,209 @@
+<!doctype html>
+<html>
+
+<head>
+<title>烟雾效果</title>
+
+<style>
+@import url("./webgl-tutorials.css");
+body {
+  margin: 0;
+}
+canvas {
+  width: 100vw;
+  height: 100vh;
+  display: block;
+  background: #1a0d0a;
+}
+
+</style>
+</head>
+<body >
+<canvas id="candy"></canvas>
+<script  id="vertex-shader-3d" type="x-shader/x-vertex">
+attribute vec4 a_position;
+attribute vec4 a_color;
+uniform mat4 u_matrix;
+varying vec4 v_color;
+
+void main() {
+  gl_Position = u_matrix * a_position;
+  v_color = a_color;
+}
+</script>
+<script  id="fragment-shader-3d" type="x-shader/x-fragment">
+precision mediump float;
+varying vec4 v_color;
+uniform vec4 u_colorMult;
+uniform vec4 u_colorOffset;
+
+void main() {
+   gl_FragColor = v_color * u_colorMult + u_colorOffset;
+}
+</script>
+<script src="webgl-utils.js"></script>
+<script src="m4.js"></script>
+<script src="primitives.js"></script>
+<script>
+"use strict";
+
+function main() {
+  var canvas = document.querySelector("#candy");
+  var gl = canvas.getContext("webgl");
+  if (!gl) {
+    return;
+  }
+
+  // 使用锥体模拟烟雾/火焰
+  var coneBufferInfo   = primitives.createTruncatedConeWithVertexColorsBufferInfo(gl, 1.5, 0, 6, 12, 1, true, false);
+  var smallConeBufferInfo = primitives.createTruncatedConeWithVertexColorsBufferInfo(gl, 1.0, 0, 4, 12, 1, true, false);
+
+  var shapes = [coneBufferInfo, smallConeBufferInfo];
+
+  var programInfo = webglUtils.createProgramInfo(gl, ["vertex-shader-3d", "fragment-shader-3d"]);
+
+  function degToRad(d) {
+    return d * Math.PI / 180;
+  }
+
+  function rand(min, max) {
+    return Math.random() * (max - min) + min;
+  }
+
+  function emod(x, n) {
+    return x >= 0 ? (x % n) : ((n - (-x % n)) % n);
+  }
+
+  var fieldOfViewRadians = degToRad(60);
+  var objectsToDraw = [];
+  var objects = [];
+  var numSmoke = 60;
+
+  for (var ii = 0; ii < numSmoke; ++ii) {
+    var object = {
+      uniforms: {
+        u_colorMult: [1.0, 0.4, 0.0, 1],
+        u_colorOffset: [0, 0, 0, 0],
+        u_matrix: m4.identity(),
+      },
+      baseX: rand(-8, 8),
+      baseZ: rand(-8, 8),
+      y: rand(-20, 20),
+      xOffset: rand(0, Math.PI * 2),
+      zOffset: rand(0, Math.PI * 2),
+      upSpeed: rand(0.8, 2.0),
+      rotSpeed: rand(0.3, 0.8),
+      rot: rand(0, Math.PI * 2),
+      shapeIdx: ii % shapes.length,
+      size: rand(0.6, 1.8),
+    };
+    objects.push(object);
+    objectsToDraw.push({
+      programInfo: programInfo,
+      bufferInfo: shapes[object.shapeIdx],
+      uniforms: object.uniforms,
+    });
+  }
+
+  function computeMatrix(viewProjectionMatrix, tx, ty, tz, rot, size) {
+    var matrix = m4.translate(viewProjectionMatrix, tx, ty, tz);
+    matrix = m4.yRotate(matrix, rot);
+    matrix = m4.scale(matrix, size, size * 1.5, size);
+    return matrix;
+  }
+
+  requestAnimationFrame(drawScene);
+
+  function drawScene(time) {
+    time *= 0.001;
+
+    webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+    gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+    gl.enable(gl.CULL_FACE);
+    gl.enable(gl.DEPTH_TEST);
+    gl.clearColor(0.1, 0.05, 0.04, 1.0);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    var aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
+    var projectionMatrix =
+        m4.perspective(fieldOfViewRadians, aspect, 1, 2000);
+
+    var cameraPosition = [15, 15, 40];
+    var target = [0, 10, 0];
+    var up = [0, 1, 0];
+    var cameraMatrix = m4.lookAt(cameraPosition, target, up);
+    var viewMatrix = m4.inverse(cameraMatrix);
+    var viewProjectionMatrix = m4.multiply(projectionMatrix, viewMatrix);
+
+    objects.forEach(function(object) {
+      // 上升：一旦超出顶部就重置到底部
+      object.y += object.upSpeed * 0.1;
+      if (object.y > 30) {
+        object.y = -10;
+        object.baseX = rand(-8, 8);
+        object.baseZ = rand(-8, 8);
+      }
+
+      var tx = object.baseX + Math.sin(time * object.upSpeed * 0.3 + object.xOffset) * 1.5;
+      var tz = object.baseZ + Math.cos(time * object.upSpeed * 0.3 + object.zOffset) * 1.5;
+      var ty = object.y;
+      object.rot += 0.01 * object.rotSpeed;
+
+      // 根据高度计算颜色渐变：从红/橙色变为灰色
+      // y=-10 -> 红橙色, y=30 -> 灰色
+      var t = (ty + 10) / 40; // 0..1
+      t = Math.max(0, Math.min(1, t));
+      var r = 1.0 - t * 0.7;   // 1.0 -> 0.3
+      var g = 0.5 - t * 0.2;   // 0.5 -> 0.3
+      var b = 0.1 + t * 0.2;   // 0.1 -> 0.3
+      var alpha = 1.0 - t * 0.6; // 透明度逐渐降低
+
+      // 使用 colorMult 调整颜色（因为primitives有基础颜色，通过乘法+偏移调整）
+      var mult = [r, g, b, alpha];
+      object.uniforms.u_colorMult = mult;
+      object.uniforms.u_colorOffset = [0, 0, 0, 0];
+
+      // 越高越淡：通过降低 mult 强度
+      var fade = 1.0 - t * 0.7;
+      object.uniforms.u_colorMult = [r * fade, g * fade, b * fade, alpha];
+
+      object.uniforms.u_matrix = computeMatrix(
+          viewProjectionMatrix,
+          tx, ty, tz,
+          object.rot,
+          object.size * (1.0 + t * 0.5)); // 越高越大（扩散效果）
+    });
+
+    var lastUsedProgramInfo = null;
+    var lastUsedBufferInfo = null;
+
+    objectsToDraw.forEach(function(object) {
+      var programInfo = object.programInfo;
+      var bufferInfo = object.bufferInfo;
+      var bindBuffers = false;
+
+      if (programInfo !== lastUsedProgramInfo) {
+        lastUsedProgramInfo = programInfo;
+        gl.useProgram(programInfo.program);
+        bindBuffers = true;
+      }
+
+      if (bindBuffers || bufferInfo !== lastUsedBufferInfo) {
+        lastUsedBufferInfo = bufferInfo;
+        webglUtils.setBuffersAndAttributes(gl, programInfo, bufferInfo);
+      }
+
+      webglUtils.setUniforms(programInfo, object.uniforms);
+      gl.drawArrays(gl.TRIANGLES, 0, bufferInfo.numElements);
+    });
+
+    requestAnimationFrame(drawScene);
+  }
+}
+
+main();
+
+</script>
+</body>
+
+</html>
