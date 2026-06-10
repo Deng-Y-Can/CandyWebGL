@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Study - 学习目录导航</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0c0c1e 0%, #1a1a3e 50%, #2d1b4e 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 30px 20px;
+            margin-bottom: 30px;
+        }
+        
+        .header h1 {
+            color: #9d4edd;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            color: #a0a0a0;
+            font-size: 1.1em;
+        }
+        
+        .back-link {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: rgba(157, 78, 221, 0.2);
+            color: #9d4edd;
+            text-decoration: none;
+            border-radius: 25px;
+            border: 1px solid #9d4edd;
+            transition: all 0.3s ease;
+        }
+        
+        .back-link:hover {
+            background: #9d4edd;
+            color: white;
+        }
+        
+        .chapter {
+            max-width: 1200px;
+            margin: 0 auto 40px auto;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .chapter-title {
+            color: #9d4edd;
+            font-size: 1.5em;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(157, 78, 221, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .lesson-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+        }
+        
+        .lesson-item {
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+        
+        .lesson-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(157, 78, 221, 0.5);
+            transform: translateY(-3px);
+            box-shadow: 0 5px 20px rgba(157, 78, 221, 0.2);
+        }
+        
+        .lesson-item a {
+            color: #ffffff;
+            text-decoration: none;
+            display: block;
+        }
+        
+        .lesson-item .lesson-name {
+            font-size: 1.1em;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #9d4edd;
+        }
+        
+        .lesson-item .lesson-path {
+            font-size: 0.85em;
+            color: #888;
+            word-break: break-all;
+        }
+        
+        .stats {
+            text-align: center;
+            color: #888;
+            margin-top: 30px;
+            padding: 20px;
+        }
+        
+        .stats span {
+            color: #9d4edd;
+            font-weight: bold;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .chapter {
+                padding: 15px;
+            }
+            
+            .lesson-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📚 Study 学习目录</h1>
+        <p>WebGL 学习教程 - 从基础到进阶</p>
+        <a href="../index.html" class="back-link">← 返回主页</a>
+    </div>
+    
+    <!-- 第一章：2D图形基础 -->
+    <div class="chapter">
+        <h2 class="chapter-title">第一章：2D图形基础</h2>
+        <div class="lesson-grid">
+            <div class="lesson-item">
+                <a href="1.1.矩形框/index.html">
+                    <div class="lesson-name">1.1 矩形框</div>
+                    <div class="lesson-path">study/1.1.矩形框/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.2.浅绿矩形/index.html">
+                    <div class="lesson-name">1.2 浅绿矩形</div>
+                    <div class="lesson-path">study/1.2.浅绿矩形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.3.随机多矩形与三角形/index.html">
+                    <div class="lesson-name">1.3 随机多矩形与三角形</div>
+                    <div class="lesson-path">study/1.3.随机多矩形与三角形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.4-渐变三角形/index.html">
+                    <div class="lesson-name">1.4 渐变三角形</div>
+                    <div class="lesson-path">study/1.4-渐变三角形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.5-双色矩形/index.html">
+                    <div class="lesson-name">1.5 双色矩形</div>
+                    <div class="lesson-path">study/1.5-双色矩形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.6-渐变双色矩形/index.html">
+                    <div class="lesson-name">1.6 渐变双色矩形</div>
+                    <div class="lesson-path">study/1.6-渐变双色矩形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.7-双色矩形-颜色存储/index.html">
+                    <div class="lesson-name">1.7 双色矩形-颜色存储</div>
+                    <div class="lesson-path">study/1.7-双色矩形-颜色存储/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.8-2D纹理/index.html">
+                    <div class="lesson-name">1.8 2D纹理</div>
+                    <div class="lesson-path">study/1.8-2D纹理/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.9-2D纹理-模糊/index.html">
+                    <div class="lesson-name">1.9 2D纹理-模糊</div>
+                    <div class="lesson-path">study/1.9-2D纹理-模糊/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.10-2D纹理-卷积/index.html">
+                    <div class="lesson-name">1.10 2D纹理-卷积</div>
+                    <div class="lesson-path">study/1.10-2D纹理-卷积/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="1.11-2D纹理-多核/index.html">
+                    <div class="lesson-name">1.11 2D纹理-多核</div>
+                    <div class="lesson-path">study/1.11-2D纹理-多核/index.html</div>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 第二章：变换与3D基础 -->
+    <div class="chapter">
+        <h2 class="chapter-title">第二章：变换与3D基础</h2>
+        <div class="lesson-grid">
+            <div class="lesson-item">
+                <a href="2.1-平移旋转/index.html">
+                    <div class="lesson-name">2.1 平移旋转</div>
+                    <div class="lesson-path">study/2.1-平移旋转/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.2-平移旋转缩放/index.html">
+                    <div class="lesson-name">2.2 平移旋转缩放</div>
+                    <div class="lesson-path">study/2.2-平移旋转缩放/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.3-多个字母/index.html">
+                    <div class="lesson-name">2.3 多个字母</div>
+                    <div class="lesson-path">study/2.3-多个字母/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.4-三维-字母/index.html">
+                    <div class="lesson-name">2.4 三维-字母</div>
+                    <div class="lesson-path">study/2.4-三维-字母/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.5-三维-立体字母/index.html">
+                    <div class="lesson-name">2.5 三维-立体字母</div>
+                    <div class="lesson-path">study/2.5-三维-立体字母/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.6-三维-彩色字母/index.html">
+                    <div class="lesson-name">2.6 三维-彩色字母</div>
+                    <div class="lesson-path">study/2.6-三维-彩色字母/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="2.7-三维-透视投影/index.html">
+                    <div class="lesson-name">2.7 三维-透视投影</div>
+                    <div class="lesson-path">study/2.7-三维-透视投影/index.html</div>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 第三章：光照与场景 -->
+    <div class="chapter">
+        <h2 class="chapter-title">第三章：光照与场景</h2>
+        <div class="lesson-grid">
+            <div class="lesson-item">
+                <a href="3.1-方向光源/index.html">
+                    <div class="lesson-name">3.1 方向光源</div>
+                    <div class="lesson-path">study/3.1-方向光源/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.2-点光源1/index.html">
+                    <div class="lesson-name">3.2 点光源1</div>
+                    <div class="lesson-path">study/3.2-点光源1/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.3-点光源2/index.html">
+                    <div class="lesson-name">3.3 点光源2</div>
+                    <div class="lesson-path">study/3.3-点光源2/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.4-聚光灯1/index.html">
+                    <div class="lesson-name">3.4 聚光灯1</div>
+                    <div class="lesson-path">study/3.4-聚光灯1/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.5-聚光灯2/index.html">
+                    <div class="lesson-name">3.5 聚光灯2</div>
+                    <div class="lesson-path">study/3.5-聚光灯2/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.6-小原子/index.html">
+                    <div class="lesson-name">3.6 小原子</div>
+                    <div class="lesson-path">study/3.6-小原子/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.7-魔术三角形/index.html">
+                    <div class="lesson-name">3.7 魔术三角形</div>
+                    <div class="lesson-path">study/3.7-魔术三角形/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.8-魔术卡片/index.html">
+                    <div class="lesson-name">3.8 魔术卡片</div>
+                    <div class="lesson-path">study/3.8-魔术卡片/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.9-三足鼎立/index.html">
+                    <div class="lesson-name">3.9 三足鼎立</div>
+                    <div class="lesson-path">study/3.9-三足鼎立/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.10-立体空间/index.html">
+                    <div class="lesson-name">3.10 立体空间</div>
+                    <div class="lesson-path">study/3.10-立体空间/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.11-场景之行星运动/index.html">
+                    <div class="lesson-name">3.11 场景之行星运动</div>
+                    <div class="lesson-path">study/3.11-场景之行星运动/index.html</div>
+                </a>
+            </div>
+            <div class="lesson-item">
+                <a href="3.12-小蓝人/index.html">
+                    <div class="lesson-name">3.12 小蓝人</div>
+                    <div class="lesson-path">study/3.12-小蓝人/index.html</div>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="stats">
+        <p>共 <span>30</span> 个学习教程，分为 <span>3</span> 个章节</p>
+        <p style="margin-top:10px;color:#666;">Study 学习目录导航页面</p>
+    </div>
+</body>
+</html>

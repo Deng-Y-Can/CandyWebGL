@@ -1,122 +1,159 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Function Plotter with WebGL</title>
-   <link rel="stylesheet" href="css/styles.css"> 
-   
-</head>
+  <title>CandyWebGL - 主页</title>
   <style>
-    body {
+    * {
       margin: 0;
       padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
       min-height: 100vh;
-      background-color: #f0f0f0;
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+      font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
+      padding: 20px;
     }
 
-    #input-section {
+    .header {
+      text-align: center;
+      margin-bottom: 60px;
+    }
+
+    .header h1 {
+      color: #e94560;
+      font-size: 3em;
+      margin-bottom: 15px;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+    }
+
+    .header p {
+      color: #a0a0a0;
+      font-size: 1.2em;
+    }
+
+    .nav-container {
       display: flex;
-      flex-direction: column;
-      align-items: center;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 40px;
+      max-width: 900px;
+    }
+
+    .nav-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 50px 40px;
+      text-align: center;
+      text-decoration: none;
+      transition: all 0.3s ease;
+      min-width: 300px;
+      backdrop-filter: blur(10px);
+    }
+
+    .nav-card:hover {
+      background: rgba(255, 255, 255, 0.1);
+      transform: translateY(-8px);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .nav-card.main-function {
+      border-color: rgba(233, 69, 96, 0.3);
+    }
+
+    .nav-card.main-function:hover {
+      border-color: rgba(233, 69, 96, 0.8);
+    }
+
+    .nav-card.study {
+      border-color: rgba(157, 78, 221, 0.3);
+    }
+
+    .nav-card.study:hover {
+      border-color: rgba(157, 78, 221, 0.8);
+    }
+
+    .nav-icon {
+      font-size: 4em;
       margin-bottom: 20px;
     }
 
-    #functionInput {
-      width: 300px;
-      padding: 10px;
-      margin-bottom: 10px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      font-size: 16px;
+    .nav-title {
+      font-size: 1.8em;
+      font-weight: bold;
+      margin-bottom: 15px;
     }
 
-    #plotButton {
-      padding: 10px 20px;
-      background-color: #007bff;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 16px;
+    .nav-card.main-function .nav-title {
+      color: #e94560;
     }
 
-    #glcanvas {
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      background-color: white;
+    .nav-card.study .nav-title {
+      color: #9d4edd;
+    }
+
+    .nav-desc {
+      color: #a0a0a0;
+      font-size: 1em;
+      line-height: 1.6;
+    }
+
+    .footer {
+      margin-top: 60px;
+      color: #666;
+      font-size: 0.9em;
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .header h1 {
+        font-size: 2em;
+      }
+
+      .nav-card {
+        min-width: 100%;
+        padding: 40px 30px;
+      }
+
+      .nav-container {
+        gap: 20px;
+      }
     }
   </style>
 </head>
 
 <body>
-      <div class="dropdown-container">
-         
-        <select class="horizontal-dropdown" id="menu1">
-			<option value="page_navigation.html">page网页</option> 
-            <option value="page/CandyModel/index.html">自定义模型</option>   			
-            <option value="page/modelLoader/plyLoader.html">PLY模型加载</option>
-            <option value="page/modelLoader/fpxLoader.html">FPX模型加载</option>	
-            <option value="page/modelLoader/objLoader.html">OBJ模型加载</option>	
-            <option value="page/modelLoader/pcdLoader.html">PCD模型加载</option>	
-            <option value="page/modelLoader/stlLoader.html">STL模型加载</option>
-            <option value="page/modelLoader/modelLoader.html">多格式模型加载</option>				
-        </select>      
-        <select class="horizontal-dropdown" id="menu2">
-            <option value="./study/1.1.矩形框/index.html">矩形框</option> 
-		    <option value="./study/1.2.浅绿矩形/index.html">浅绿矩形</option> 
-			<option value="./study/1.3.随机多矩形与三角形/index.html">随机多矩形与三角形</option> 
-			<option value="./study/1.4-渐变三角形/index.html">渐变三角形</option> 
-		    <option value="./study/1.5-双色矩形/index.html">双色矩形</option> 
-			<option value="./study/1.6-渐变双色矩形/index.html">渐变双色矩形</option> 
-			<option value="./study/1.7-双色矩形-颜色存储/index.html">双色矩形-颜色存储</option> 
-			<option value="./study/1.8-2D纹理/index.html">2D纹理</option> 
-			<option value="./study/1.9-2D纹理-模糊/index.html">2D纹理-模糊</option> 
-			<option value="./study/1.10-2D纹理-卷积/index.html">2D纹理-卷积</option> 	
-			<option value="./study/1.11-2D纹理-多核/index.html">2D纹理-多核</option> 
-		    <option value="./study/2.1-平移旋转/index.html">平移旋转</option> 
-			<option value="./study/2.2-平移旋转缩放/index.html">平移旋转缩放</option> 
-			<option value="./study/2.3-多个字母/index.html">多个字母</option> 
-			<option value="./study/2.4-三维-字母/index.html">三维-字母</option> 
-			<option value="./study/2.5-三维-立体字母/index.html">三维-立体字母</option> 
-			<option value="./study/2.6-三维-彩色字母/index.html">三维-彩色字母</option> 
-			<option value="./study/2.7-三维-透视投影/index.html">三维-透视投影</option> 
-			<option value="./study/3.1-方向光源/index.html">方向光源</option> 
-		    <option value="./study/3.2-点光源1/index.html">点光源1</option> 
-			<option value="./study/3.3-点光源2/index.html">点光源2</option> 
-			<option value="./study/3.4-聚光灯1/index.html">聚光灯1</option> 
-		    <option value="./study/3.5-聚光灯2/index.html">聚光灯2</option> 
-			<option value="./study/3.6-小原子/index.html">小原子</option> 
-			<option value="./study/3.7-魔术三角形/index.html">魔术三角形</option> 
-			<option value="./study/3.8-魔术卡片/index.html">魔术卡片</option> 
-			<option value="./study/3.9-三足鼎立/index.html">三足鼎立</option> 
-			<option value="./study/3.10-立体空间/index.html">立体空间</option> 	
-			<option value="./study/3.11-场景之行星运动/index.html">场景之行星运动</option> 
-			<option value="./study/3.12-小蓝人/index.html">小蓝人</option> 
-        </select>      
-        <details class="horizontal-dropdown details-dropdown" >
-            <summary>更多选项</summary>
-            <ul>
-                <li><a href="index.html">主页</a></li>              
-            </ul>
-        </details>
-     </div>
-
-
-   
-  <div id="input-section">
-    <input type="text" id="functionInput" placeholder="请输入函数，如 x*x">
-    <button id="plotButton">绘制函数图像</button>
+  <div class="header">
+    <h1>🎨 CandyWebGL</h1>
+    <p>WebGL 三维图形与可视化项目</p>
   </div>
-  <canvas id="glcanvas" width="600" height="600"></canvas>
-   <script src="js/script.js"></script>
-   <script src="js/menuscript.js"></script>
-   
+
+  <div class="nav-container">
+    <a href="MainFunction/导航.html" class="nav-card main-function">
+      <div class="nav-icon">🚀</div>
+      <div class="nav-title">主要功能</div>
+      <div class="nav-desc">模型加载器、CAD工具、3D可视化、图形API、实验项目、图元编辑等所有功能合集</div>
+    </a>
+
+    <a href="study/导航.html" class="nav-card study">
+      <div class="nav-icon">📚</div>
+      <div class="nav-title">学习教程</div>
+      <div class="nav-desc">WebGL从基础到进阶的系统学习教程，涵盖2D图形、3D变换、光照与场景</div>
+    </a>
+  </div>
+
+  <div class="footer">
+    <p>CandyWebGL 项目主页</p>
+  </div>
 </body>
 
 </html>

@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Advanced Multi-Function 3D/2D Plotter v6</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 100;
+            background-color: rgba(30, 30, 30, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            max-width: 350px;
+            backdrop-filter: blur(5px);
+            max-height: 90vh;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+            #ui-container.collapsed {
+                transform: translateX(370px);
+            }
+
+        .toggle-ui-btn {
+            position: absolute;
+            top: 10px;
+            right: 370px;
+            z-index: 101;
+            background: #bb86fc;
+            color: #121212;
+            border: none;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            font-weight: bold;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .function-item {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #222;
+            margin-bottom: 8px;
+        }
+
+            .function-item input[type="text"] {
+                flex-grow: 1;
+                min-width: 120px;
+            }
+
+        label {
+            white-space: nowrap;
+            font-size: 0.9em;
+        }
+
+        input[type="text"],
+        select,
+        input[type="number"],
+        input[type="range"] {
+            padding: 5px 8px;
+            font-size: 14px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        input[type="color"] {
+            width: 36px;
+            height: 26px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button {
+            padding: 6px 10px;
+            font-size: 13px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #bb86fc;
+            color: #121212;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+            button:hover {
+                background-color: #9a67ea;
+            }
+
+            button.small {
+                padding: 4px 6px;
+                font-size: 11px;
+            }
+
+        #help-toggle {
+            background: none;
+            border: 1px solid #666;
+            color: #ccc;
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+            #help-toggle:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+
+        #help-content {
+            margin-top: 10px;
+            font-size: 0.85em;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out;
+        }
+
+            #help-content.show {
+                max-height: 600px;
+            }
+
+            #help-content ul {
+                margin-top: 5px;
+                margin-bottom: 10px;
+                padding-left: 20px;
+            }
+
+            #help-content code {
+                background-color: #444;
+                padding: 1px 3px;
+                border-radius: 3px;
+                font-size: 0.9em;
+            }
+
+        #status,
+        #camera-info,
+        #measure-info {
+            margin-top: 6px;
+            font-style: italic;
+            color: #aaa;
+            word-break: break-all;
+            font-size: 0.85em;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <button class="toggle-ui-btn" id="toggle-ui">⚙️</button>
+    <div id="ui-container">
+        <div class="input-group">
+            <label for="mode-select">Mode:</label>
+            <select id="mode-select">
+                <option value="3d">3D Surface</option>
+                <option value="2d">2D Curve (XoY)</option>
+            </select>
+
+            <label for="coord-system">Coord:</label>
+            <select id="coord-system">
+                <option value="cartesian">Cartesian</option>
+                <option value="polar">Polar (2D)</option>
+                <option value="cylindrical">Cylindrical (3D)</option>
+                <option value="spherical">Spherical (3D)</option>
+            </select>
+        </div>
+
+        <div class="input-group">
+            <label for="grid-size">Grid:</label>
+            <input type="number" id="grid-size" value="30" min="5" max="100" />
+
+            <label for="axis-range">Range:</label>
+            <input type="number" id="axis-range" value="6" step="0.5" min="1" max="50" />
+
+            <label for="tick-spacing">Ticks:</label>
+            <input type="number" id="tick-spacing" value="2" step="0.5" min="0.1" max="20" />
+        </div>
+
+        <div class="input-group">
+            <label for="axis-text-size">Text Size:</label>
+            <input type="range" id="axis-text-size" min="0.1" max="1.0" step="0.05" value="0.3" />
+            <span id="text-size-val">0.3</span>
+        </div>
+
+        <div class="input-group">
+            <label for="axis-line-width">Axis Width:</label>
+            <input type="range" id="axis-line-width" min="0.01" max="0.1" step="0.01" value="0.02" />
+            <span id="axis-width-val">0.02</span>
+        </div>
+
+        <div class="input-group">
+            <label for="func-line-width">Func Width:</label>
+            <input type="range" id="func-line-width" min="1" max="5" step="0.5" value="2" />
+            <span id="func-width-val">2</span>
+        </div>
+
+        <div class="input-group">
+            <button id="add-function-btn">+ Add Function</button>
+            <button id="plot-all-btn">Plot All</button>
+            <button id="six-view-btn">Six Views</button>
+            <button id="measure-btn">Measure</button>
+            <button id="theme-toggle">🌓 Theme</button>
+            <button id="help-toggle">?</button>
+        </div>
+
+        <div id="functions-container"></div>
+
+        <div id="help-content">
+            <p><strong>Instructions:</strong></p>
+            <ul>
+                <li>Add functions using "+ Add Function".</li>
+                <li><strong>3D</strong>: Use <code>x,y</code>; <strong>2D</strong>: use <code>x</code>.</li>
+                <li>In <strong>Polar</strong>: expr = f(θ); in <strong>Cyl/Sph</strong>: f(r,θ) or f(ρ,θ,φ).</li>
+                <li>Click "Measure", then click two points to get distance.</li>
+                <li>"Six Views" shows standard orthographic projections.</li>
+            </ul>
+            <p><strong>Functions:</strong> sin, cos, tan, asin, acos, atan, log, log10, sqrt, exp, abs, pow(^)</p>
+        </div>
+
+        <div id="status">Ready. Add a function and click 'Plot All'.</div>
+        <div id="camera-info">Camera: Pos(0,0,0) Rot(0°,0°,0°)</div>
+        <div id="measure-info"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.1/math.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121212);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 8, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // Lighting
+        const ambientLight = new THREE.AmbientLight(0x606060, 2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        let axesAndLabelsGroup = new THREE.Group();
+        scene.add(axesAndLabelsGroup);
+
+        // --- UI Elements ---
+        const modeSelect = document.getElementById('mode-select');
+        const coordSystemSelect = document.getElementById('coord-system');
+        const gridSizeInput = document.getElementById('grid-size');
+        const axisRangeInput = document.getElementById('axis-range');
+        const tickSpacingInput = document.getElementById('tick-spacing');
+        const axisTextSizeSlider = document.getElementById('axis-text-size');
+        const axisLineWidthSlider = document.getElementById('axis-line-width');
+        const funcLineWidthSlider = document.getElementById('func-line-width');
+        const addFunctionBtn = document.getElementById('add-function-btn');
+        const plotAllBtn = document.getElementById('plot-all-btn');
+        const sixViewBtn = document.getElementById('six-view-btn');
+        const measureBtn = document.getElementById('measure-btn');
+        const themeToggle = document.getElementById('theme-toggle');
+        const helpToggle = document.getElementById('help-toggle');
+        const helpContent = document.getElementById('help-content');
+        const functionsContainer = document.getElementById('functions-container');
+        const statusDiv = document.getElementById('status');
+        const cameraInfoDiv = document.getElementById('camera-info');
+        const measureInfoDiv = document.getElementById('measure-info');
+        const toggleUiBtn = document.getElementById('toggle-ui');
+        const uiContainer = document.getElementById('ui-container');
+
+        // Update slider value displays
+        axisTextSizeSlider.addEventListener('input', () => document.getElementById('text-size-val').textContent = axisTextSizeSlider.value);
+        axisLineWidthSlider.addEventListener('input', () => document.getElementById('axis-width-val').textContent = axisLineWidthSlider.value);
+        funcLineWidthSlider.addEventListener('input', () => document.getElementById('func-width-val').textContent = funcLineWidthSlider.value);
+
+        // Toggle UI
+        toggleUiBtn.addEventListener('click', () => uiContainer.classList.toggle('collapsed'));
+
+        // Help toggle
+        helpToggle.addEventListener('click', () => helpContent.classList.toggle('show'));
+
+        // Theme toggle
+        let isDark = true;
+        themeToggle.addEventListener('click', () => {
+            isDark = !isDark;
+            scene.background = new THREE.Color(isDark ? 0x121212 : 0xf5f5f5);
+            document.body.style.backgroundColor = isDark ? '#121212' : '#f5f5f5';
+            document.body.style.color = isDark ? '#e0e0e0' : '#222';
+            statusDiv.style.color = isDark ? '#aaa' : '#555';
+            cameraInfoDiv.style.color = isDark ? '#888' : '#444';
+            measureInfoDiv.style.color = isDark ? '#aaa' : '#444';
+        });
+
+        // --- Plotting State ---
+        let animationId = null;
+        let isAnimating = false;
+        let plotQueue = [];
+        let globalCurrentIndex = 0;
+        let measurementMode = false;
+        let firstPoint = null;
+
+        // Default settings
+        let GRID_SIZE = parseInt(gridSizeInput.value) || 30;
+        let GRID_RANGE = parseFloat(axisRangeInput.value) || 6;
+        let TICK_SPACING = parseFloat(tickSpacingInput.value) || 2;
+        let PLOT_MODE = modeSelect.value;
+        let COORD_SYSTEM = coordSystemSelect.value;
+        let AXIS_TEXT_SIZE = parseFloat(axisTextSizeSlider.value);
+        let AXIS_LINE_WIDTH = parseFloat(axisLineWidthSlider.value);
+        let FUNC_LINE_WIDTH = parseFloat(funcLineWidthSlider.value);
+
+        // --- Create Axes & Labels ---
+        function createAxesAndLabels(range, tickSpacing) {
+            scene.remove(axesAndLabelsGroup);
+            axesAndLabelsGroup = new THREE.Group();
+            scene.add(axesAndLabelsGroup);
+
+            const axisRadius = AXIS_LINE_WIDTH;
+            const tickRadius = axisRadius * 0.75;
+            const fontSize = AXIS_TEXT_SIZE;
+
+            const red = new THREE.Color(0xff3333);
+            const green = new THREE.Color(0x33ff33);
+            const blue = new THREE.Color(0x5555ff);
+
+            const makeTextSprite = (message, parameters = {}) => {
+                const fontface = "Arial";
+                const fontsize = parameters.fontsize || fontSize * 100;
+                const textColor = parameters.textColor || { r: 255, g: 255, b: 255, a: 1 };
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = `Bold ${fontsize}px ${fontface}`;
+                const metrics = context.measureText(message);
+                const textWidth = metrics.width;
+                canvas.width = textWidth + 10;
+                canvas.height = fontsize + 10;
+                context.fillStyle = `rgba(${textColor.r},${textColor.g},${textColor.b},${textColor.a})`;
+                context.fillText(message, 5, fontsize + 3);
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(canvas.width / 100, canvas.height / 100, 1.0);
+                return sprite;
+            };
+
+            const xAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+            const xAxisMesh = new THREE.Mesh(xAxisGeo, new THREE.MeshBasicMaterial({ color: red }));
+            xAxisMesh.rotation.z = Math.PI / 2;
+            xAxisMesh.position.x = range;
+            axesAndLabelsGroup.add(xAxisMesh);
+
+            const yAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+            const yAxisMesh = new THREE.Mesh(yAxisGeo, new THREE.MeshBasicMaterial({ color: green }));
+            yAxisMesh.position.y = range;
+            axesAndLabelsGroup.add(yAxisMesh);
+
+            if (PLOT_MODE === '3d') {
+                const zAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+                const zAxisMesh = new THREE.Mesh(zAxisGeo, new THREE.MeshBasicMaterial({ color: blue }));
+                zAxisMesh.rotation.x = Math.PI / 2;
+                zAxisMesh.position.z = range;
+                axesAndLabelsGroup.add(zAxisMesh);
+            }
+
+            for (let val = -range; val <= range; val += tickSpacing) {
+                if (Math.abs(val) < 0.001) continue;
+
+                const xTick = new THREE.Mesh(new THREE.SphereGeometry(tickRadius, 8, 8), new THREE.MeshBasicMaterial({ color: red }));
+                xTick.position.set(val, 0, PLOT_MODE === '3d' ? 0 : -0.05);
+                axesAndLabelsGroup.add(xTick);
+
+                const xLabel = makeTextSprite(val.toFixed(1), { textColor: { r: 255, g: 150, b: 150, a: 1 }, fontsize: fontSize * 100 });
+                xLabel.position.set(val, -0.4, PLOT_MODE === '3d' ? 0 : -0.1);
+                axesAndLabelsGroup.add(xLabel);
+
+                const yTick = new THREE.Mesh(new THREE.SphereGeometry(tickRadius, 8, 8), new THREE.MeshBasicMaterial({ color: green }));
+                yTick.position.set(0, val, PLOT_MODE === '3d' ? 0 : -0.05);
+                axesAndLabelsGroup.add(yTick);
+
+                const yLabel = makeTextSprite(val.toFixed(1), { textColor: { r: 150, g: 255, b: 150, a: 1 }, fontsize: fontSize * 100 });
+                yLabel.position.set(-0.5, val, PLOT_MODE === '3d' ? 0 : -0.1);
+                axesAndLabelsGroup.add(yLabel);
+
+                if (PLOT_MODE === '3d') {
+                    const zTick = new THREE.Mesh(new THREE.SphereGeometry(tickRadius, 8, 8), new THREE.MeshBasicMaterial({ color: blue }));
+                    zTick.position.set(0, -0.05, val);
+                    axesAndLabelsGroup.add(zTick);
+
+                    const zLabel = makeTextSprite(val.toFixed(1), { textColor: { r: 150, g: 150, b: 255, a: 1 }, fontsize: fontSize * 100 });
+                    zLabel.position.set(0, -0.6, val);
+                    axesAndLabelsGroup.add(zLabel);
+                }
+            }
+
+            const xLabelSprite = makeTextSprite("X", { textColor: { r: 255, g: 50, b: 50, a: 1 }, fontsize: fontSize * 150 });
+            xLabelSprite.position.set(range + 0.7, -0.7, PLOT_MODE === '3d' ? 0 : -0.1);
+            axesAndLabelsGroup.add(xLabelSprite);
+
+            const yLabelSprite = makeTextSprite("Y", { textColor: { r: 50, g: 255, b: 50, a: 1 }, fontsize: fontSize * 150 });
+            yLabelSprite.position.set(-0.7, range + 0.7, PLOT_MODE === '3d' ? 0 : -0.1);
+            axesAndLabelsGroup.add(yLabelSprite);
+
+            if (PLOT_MODE === '3d') {
+                const zLabelSprite = makeTextSprite("Z", { textColor: { r: 100, g: 150, b: 255, a: 1 }, fontsize: fontSize * 150 });
+                zLabelSprite.position.set(0, -0.9, range + 0.7);
+                axesAndLabelsGroup.add(zLabelSprite);
+            }
+        }
+
+        // --- Compile Function ---
+        function compileUserFunction(expr) {
+            try {
+                const node = math.parse(expr);
+                return node.compile(math);
+            } catch (err) {
+                console.error(err);
+                statusDiv.textContent = `Compile error: ${err.message}`;
+                statusDiv.style.color = "#f44336";
+                return null;
+            }
+        }
+
+        // --- Add Function UI Item ---
+        function addFunctionItem(expr = "", color = "#00FFFF") {
+            const item = document.createElement('div');
+            item.className = 'function-item';
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = (PLOT_MODE === '3d') ? "e.g., x^2 + y^2" : "e.g., sin(x)";
+            input.value = expr;
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.value = color;
+            const visible = document.createElement('input');
+            visible.type = 'checkbox';
+            visible.checked = true;
+            const del = document.createElement('button');
+            del.textContent = '×';
+            del.className = 'small';
+            del.onclick = () => item.remove();
+            item.append(input, colorPicker, visible, del);
+            functionsContainer.appendChild(item);
+        }
+
+        addFunctionBtn.addEventListener('click', () => addFunctionItem());
+
+        // --- Coordinate Transform Helpers ---
+        function cartesianFromPolar(theta, r) {
+            return { x: r * Math.cos(theta), y: r * Math.sin(theta) };
+        }
+
+        function cartesianFromCylindrical(r, theta, z) {
+            return { x: r * Math.cos(theta), y: r * Math.sin(theta), z };
+        }
+
+        function cartesianFromSpherical(rho, theta, phi) {
+            return {
+                x: rho * Math.sin(phi) * Math.cos(theta),
+                y: rho * Math.sin(phi) * Math.sin(theta),
+                z: rho * Math.cos(phi)
+            };
+        }
+
+        // --- Main Plot Function ---
+        function plotAllFunctions() {
+            if (animationId) cancelAnimationFrame(animationId);
+            scene.children.forEach(child => {
+                if (child.userData && child.userData.isFunctionPlot) scene.remove(child);
+            });
+            plotQueue = []; globalCurrentIndex = 0;
+
+            GRID_SIZE = parseInt(gridSizeInput.value) || 30;
+            GRID_RANGE = parseFloat(axisRangeInput.value) || 6;
+            TICK_SPACING = parseFloat(tickSpacingInput.value) || 2;
+            PLOT_MODE = modeSelect.value;
+            COORD_SYSTEM = coordSystemSelect.value;
+            AXIS_TEXT_SIZE = parseFloat(axisTextSizeSlider.value);
+            AXIS_LINE_WIDTH = parseFloat(axisLineWidthSlider.value);
+            FUNC_LINE_WIDTH = parseFloat(funcLineWidthSlider.value);
+
+            createAxesAndLabels(GRID_RANGE, TICK_SPACING);
+
+            const items = functionsContainer.querySelectorAll('.function-item');
+            if (!items.length) {
+                statusDiv.textContent = "No functions to plot.";
+                statusDiv.style.color = "#f44336";
+                animate();
+                return;
+            }
+
+            statusDiv.textContent = "Calculating...";
+            statusDiv.style.color = "#FFC107";
+
+            setTimeout(() => {
+                try {
+                    for (const item of items) {
+                        const input = item.querySelector('input[type="text"]');
+                        const colorPicker = item.querySelector('input[type="color"]');
+                        const visible = item.querySelector('input[type="checkbox"]');
+                        if (!visible.checked || !input.value.trim()) continue;
+
+                        const compiled = compileUserFunction(input.value.trim());
+                        if (!compiled) continue;
+
+                        const vertices = [];
+                        const scope = { x: 0, y: 0, r: 0, theta: 0, phi: 0, z: 0 };
+
+                        if (PLOT_MODE === '2d') {
+                            if (COORD_SYSTEM === 'polar') {
+                                for (let i = 0; i <= GRID_SIZE; i++) {
+                                    const theta = (i / GRID_SIZE) * 2 * Math.PI;
+                                    scope.theta = theta;
+                                    let r;
+                                    try { r = compiled.evaluate(scope); } catch { r = NaN; }
+                                    if (!isFinite(r)) r = NaN;
+                                    const cart = cartesianFromPolar(theta, r);
+                                    vertices.push(new THREE.Vector3(cart.x, cart.y, 0));
+                                }
+                            } else {
+                                for (let i = 0; i <= GRID_SIZE; i++) {
+                                    const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                    scope.x = x;
+                                    let y;
+                                    try { y = compiled.evaluate(scope); } catch { y = NaN; }
+                                    if (!isFinite(y)) y = NaN;
+                                    vertices.push(new THREE.Vector3(x, y, 0));
+                                }
+                            }
+                        } else if (PLOT_MODE === '3d') {
+                            if (COORD_SYSTEM === 'cylindrical') {
+                                for (let i = 0; i <= GRID_SIZE; i++) {
+                                    const r = (i / GRID_SIZE) * GRID_RANGE;
+                                    for (let j = 0; j <= GRID_SIZE; j++) {
+                                        const theta = (j / GRID_SIZE) * 2 * Math.PI;
+                                        scope.r = r; scope.theta = theta;
+                                        let z;
+                                        try { z = compiled.evaluate(scope); } catch { z = NaN; }
+                                        if (!isFinite(z)) z = NaN;
+                                        const cart = cartesianFromCylindrical(r, theta, z);
+                                        vertices.push(new THREE.Vector3(cart.x, cart.y, cart.z));
+                                    }
+                                }
+                            } else if (COORD_SYSTEM === 'spherical') {
+                                for (let i = 0; i <= GRID_SIZE; i++) {
+                                    const rho = (i / GRID_SIZE) * GRID_RANGE;
+                                    for (let j = 0; j <= GRID_SIZE; j++) {
+                                        const theta = (j / GRID_SIZE) * 2 * Math.PI;
+                                        for (let k = 0; k <= GRID_SIZE; k++) {
+                                            const phi = (k / GRID_SIZE) * Math.PI;
+                                            scope.rho = rho; scope.theta = theta; scope.phi = phi;
+                                            let unused;
+                                            try { unused = compiled.evaluate(scope); } catch { unused = NaN; }
+                                            if (!isFinite(unused)) unused = NaN;
+                                            const cart = cartesianFromSpherical(rho, theta, phi);
+                                            vertices.push(new THREE.Vector3(cart.x, cart.y, cart.z));
+                                        }
+                                    }
+                                }
+                            } else {
+                                for (let i = 0; i <= GRID_SIZE; i++) {
+                                    const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                    for (let j = 0; j <= GRID_SIZE; j++) {
+                                        const y = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                        scope.x = x; scope.y = y;
+                                        let z;
+                                        try { z = compiled.evaluate(scope); } catch { z = NaN; }
+                                        if (!isFinite(z)) z = NaN;
+                                        vertices.push(new THREE.Vector3(x, y, z));
+                                    }
+                                }
+                            }
+                        }
+
+                        const group = new THREE.Group();
+                        group.userData.isFunctionPlot = true;
+                        scene.add(group);
+
+                        const material = new THREE.LineBasicMaterial({
+                            color: new THREE.Color(colorPicker.value),
+                            linewidth: FUNC_LINE_WIDTH
+                        });
+
+                        if (PLOT_MODE === '2d' || COORD_SYSTEM === 'polar') {
+                            for (let i = 0; i < vertices.length - 1; i++) {
+                                const geo = new THREE.BufferGeometry();
+                                const line = new THREE.Line(geo, material.clone());
+                                line.visible = false;
+                                plotQueue.push({ line, vertices, index: i, mode: '2d', totalLines: vertices.length - 1 });
+                                group.add(line);
+                            }
+                        } else {
+                            // For 3D grid surface (wireframe)
+                            const gridSizePlusOne = GRID_SIZE + 1;
+                            const totalH = GRID_SIZE * gridSizePlusOne;
+                            const totalV = GRID_SIZE * gridSizePlusOne;
+                            const totalLines = totalH + totalV;
+                            for (let idx = 0; idx < totalLines; idx++) {
+                                const geo = new THREE.BufferGeometry();
+                                const line = new THREE.Line(geo, material.clone());
+                                line.visible = false;
+                                plotQueue.push({ line, vertices, index: idx, mode: '3d', totalLines, gridSize: GRID_SIZE });
+                                group.add(line);
+                            }
+                        }
+                    }
+
+                    statusDiv.textContent = `Plotting ${plotQueue.length} segments...`;
+                    statusDiv.style.color = "#4CAF50";
+                    isAnimating = plotQueue.length > 0;
+                    globalCurrentIndex = 0;
+                    animate();
+
+                } catch (err) {
+                    console.error(err);
+                    statusDiv.textContent = `Error: ${err.message}`;
+                    statusDiv.style.color = "#f44336";
+                    animate();
+                }
+            }, 50);
+        }
+
+        // --- Six Orthographic Views ---
+        const sixViews = [
+            { pos: [0, 0, 20], target: [0, 0, 0] },   // Front
+            { pos: [0, 0, -20], target: [0, 0, 0] },  // Back
+            { pos: [20, 0, 0], target: [0, 0, 0] },   // Right
+            { pos: [-20, 0, 0], target: [0, 0, 0] },  // Left
+            { pos: [0, 20, 0], target: [0, 0, 0] },   // Top
+            { pos: [0, -20, 0], target: [0, 0, 0] }   // Bottom
+        ];
+
+        let currentViewIndex = -1;
+        sixViewBtn.addEventListener('click', () => {
+            currentViewIndex = (currentViewIndex + 1) % sixViews.length;
+            const view = sixViews[currentViewIndex];
+            camera.position.set(...view.pos);
+            controls.target.set(...view.target);
+            controls.update();
+        });
+
+        // --- Measurement Tool ---
+        measureBtn.addEventListener('click', () => {
+            measurementMode = !measurementMode;
+            measureBtn.textContent = measurementMode ? "Measuring..." : "Measure";
+            measureInfoDiv.textContent = measurementMode ? "Click first point..." : "";
+            firstPoint = null;
+        });
+
+        const raycaster = new THREE.Raycaster();
+        const mouse = new THREE.Vector2();
+
+        function onMouseClick(event) {
+            if (!measurementMode) return;
+
+            mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+            mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+            raycaster.setFromCamera(mouse, camera);
+            const intersects = raycaster.intersectObjects(scene.children, true);
+
+            if (intersects.length > 0) {
+                const point = intersects[0].point;
+                if (!firstPoint) {
+                    firstPoint = point.clone();
+                    measureInfoDiv.textContent = `First point: (${point.x.toFixed(2)}, ${point.y.toFixed(2)}, ${point.z.toFixed(2)})`;
+                } else {
+                    const dist = firstPoint.distanceTo(point);
+                    measureInfoDiv.textContent = `Distance: ${dist.toFixed(3)} units`;
+                    firstPoint = null;
+                }
+            }
+        }
+
+        renderer.domElement.addEventListener('click', onMouseClick);
+
+        // --- Animation & Render Loop ---
+        function animate() {
+            if (isAnimating && globalCurrentIndex < plotQueue.length) {
+                const item = plotQueue[globalCurrentIndex];
+                if (item.index < item.totalLines) {
+                    item.line.visible = true;
+                    if (item.mode === '2d') {
+                        const a = item.vertices[item.index];
+                        const b = item.vertices[item.index + 1];
+                        if (a && b && !isNaN(a.y) && !isNaN(b.y)) {
+                            item.line.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                a.x, a.y, a.z,
+                                b.x, b.y, b.z
+                            ], 3));
+                        } else {
+                            item.line.visible = false;
+                        }
+                    } else if (item.mode === '3d') {
+                        const gridSizePlusOne = item.gridSize + 1;
+                        if (item.index < item.gridSize * gridSizePlusOne) {
+                            const j = Math.floor(item.index / item.gridSize);
+                            const i = item.index % item.gridSize;
+                            const idx1 = j * gridSizePlusOne + i;
+                            const idx2 = idx1 + 1;
+                            if (item.vertices[idx1] && item.vertices[idx2] &&
+                                !isNaN(item.vertices[idx1].z) && !isNaN(item.vertices[idx2].z)) {
+                                item.line.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                    item.vertices[idx1].x, item.vertices[idx1].y, item.vertices[idx1].z,
+                                    item.vertices[idx2].x, item.vertices[idx2].y, item.vertices[idx2].z
+                                ], 3));
+                            } else {
+                                item.line.visible = false;
+                            }
+                        } else {
+                            const vIdx = item.index - item.gridSize * gridSizePlusOne;
+                            const i = Math.floor(vIdx / item.gridSize);
+                            const j = vIdx % item.gridSize;
+                            const idx1 = j * gridSizePlusOne + i;
+                            const idx2 = idx1 + gridSizePlusOne;
+                            if (item.vertices[idx1] && item.vertices[idx2] &&
+                                !isNaN(item.vertices[idx1].z) && !isNaN(item.vertices[idx2].z)) {
+                                item.line.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                    item.vertices[idx1].x, item.vertices[idx1].y, item.vertices[idx1].z,
+                                    item.vertices[idx2].x, item.vertices[idx2].y, item.vertices[idx2].z
+                                ], 3));
+                            } else {
+                                item.line.visible = false;
+                            }
+                        }
+                    }
+                    globalCurrentIndex++;
+                    if (globalCurrentIndex >= plotQueue.length) {
+                        isAnimating = false;
+                        statusDiv.textContent += " (Done)";
+                    }
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+
+            const pos = camera.position;
+            const rot = camera.rotation;
+            cameraInfoDiv.textContent = `Camera: Pos(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) | Rot(${THREE.MathUtils.radToDeg(rot.x).toFixed(1)}°, ${THREE.MathUtils.radToDeg(rot.y).toFixed(1)}°, ${THREE.MathUtils.radToDeg(rot.z).toFixed(1)}°)`;
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // --- Event Listeners ---
+        plotAllBtn.addEventListener('click', plotAllFunctions);
+
+        [modeSelect, coordSystemSelect, gridSizeInput, axisRangeInput, tickSpacingInput].forEach(el => {
+            el.addEventListener('change', () => {
+                if (el === modeSelect) {
+                    const ph = modeSelect.value === '3d' ? "e.g., x^2+y^2" : "e.g., sin(x)";
+                    functionsContainer.querySelectorAll('input[type="text"]').forEach(i => i.placeholder = ph);
+                }
+                plotAllFunctions();
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initial functions
+        addFunctionItem("sin(sqrt(x^2 + y^2))", "#00FFFF");
+        addFunctionItem("x^2 + y^2", "#FF4081");
+
+        animate();
+    </script>
+</body>
+</html>

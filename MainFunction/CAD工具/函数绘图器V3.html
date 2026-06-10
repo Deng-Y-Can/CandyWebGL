@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D几何图形查看器</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #165DFF;
+            --primary-light: #E8F3FF;
+            --primary-dark: #0E42D2;
+            --x-axis: #FF4D4F;
+            --y-axis: #52C41A;
+            --z-axis: #1890FF;
+            --bg-light: #F5F7FA;
+            --bg-white: #FFFFFF;
+            --text-primary: #1F2329;
+            --text-secondary: #6E7681;
+            --border-color: #E5E6EB;
+            --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            --transition: all 0.2s ease;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        
+        body {
+            background-color: var(--bg-light);
+            color: var(--text-primary);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        header {
+            background-color: var(--bg-white);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            z-index: 10;
+        }
+        
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-weight: 600;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        
+        .logo i {
+            font-size: 1.5rem;
+        }
+        
+        main {
+            display: flex;
+            flex: 1;
+            position: relative;
+        }
+        
+        #viewer-container {
+            flex: 1;
+            position: relative;
+        }
+        
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        .sidebar {
+            width: 320px;
+            background-color: var(--bg-white);
+            border-left: 1px solid var(--border-color);
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 28px;
+            transition: transform 0.3s ease;
+            z-index: 5;
+        }
+        
+        @media (max-width: 768px) {
+            .sidebar {
+                position: absolute;
+                right: 0;
+                top: 0;
+                height: 100%;
+                transform: translateX(100%);
+            }
+            
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            
+            .menu-toggle {
+                display: block !important;
+            }
+        }
+        
+        .menu-toggle {
+            position: absolute;
+            right: 20px;
+            top: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: var(--bg-white);
+            border: 1px solid var(--border-color);
+            box-shadow: var(--shadow);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 15;
+        }
+        
+        .panel {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+        
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            padding-bottom: 10px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .panel-title i {
+            color: var(--primary);
+        }
+        
+        .toggle-btn {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            padding: 3px 5px;
+            border-radius: 4px;
+            transition: var(--transition);
+        }
+        
+        .toggle-btn:hover {
+            color: var(--primary);
+            background-color: var(--primary-light);
+        }
+        
+        .model-buttons {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        
+        .model-btn {
+            background-color: var(--bg-white);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 14px 12px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            transition: var(--transition);
+        }
+        
+        .model-btn:hover {
+            background-color: var(--primary-light);
+            border-color: var(--primary);
+        }
+        
+        .model-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+        
+        .model-btn i {
+            font-size: 1.4rem;
+        }
+        
+        .function-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        
+        label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        label i {
+            font-size: 0.85rem;
+        }
+        
+        input, select {
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: var(--transition);
+            background-color: var(--bg-white);
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(22, 93, 255, 0.1);
+        }
+        
+        .btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        .controls-info {
+            background-color: var(--primary-light);
+            border-radius: 8px;
+            padding: 16px;
+            font-size: 0.9rem;
+            transition: max-height 0.3s ease, opacity 0.3s ease, margin 0.3s ease;
+            overflow: hidden;
+        }
+        
+        .controls-collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding: 0 16px;
+            margin: -16px 0;
+        }
+        
+        .controls-title {
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 10px;
+            padding-left: 4px;
+        }
+        
+        .control-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .control-item i {
+            width: 20px;
+            text-align: center;
+            color: var(--primary);
+            font-size: 1.1rem;
+        }
+        
+        #loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255,255,255,0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            transition: opacity 0.3s ease;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 5px solid var(--primary-light);
+            border-top: 5px solid var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        #status {
+            color: var(--text-primary);
+            font-size: 1.1rem;
+        }
+        
+        #error {
+            color: var(--x-axis);
+            text-align: center;
+            padding: 0 20px;
+            margin-top: 10px;
+            display: none;
+            max-width: 500px;
+            line-height: 1.5;
+        }
+        
+        #retry {
+            margin-top: 18px;
+            padding: 10px 20px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            display: none;
+            font-weight: 500;
+            transition: var(--transition);
+        }
+        
+        #retry:hover {
+            background-color: var(--primary-dark);
+        }
+        
+        .axis-legend {
+            position: absolute;
+            bottom: 24px;
+            right: 24px;
+            background: rgba(255,255,255,0.95);
+            padding: 12px 16px;
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            font-size: 0.9rem;
+            border: 1px solid var(--border-color);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+        
+        .axis-legend.hidden {
+            opacity: 0;
+            transform: translateY(10px);
+            pointer-events: none;
+        }
+        
+        .axis-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 6px;
+        }
+        
+        .axis-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        .axis-color {
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            display: inline-block;
+        }
+        
+        .x-color { background-color: var(--x-axis); }
+        .y-color { background-color: var(--y-axis); }
+        .z-color { background-color: var(--z-axis); }
+        
+        .function-error {
+            color: var(--x-axis);
+            font-size: 0.9rem;
+            margin-top: 6px;
+            display: none;
+            padding-left: 2px;
+            line-height: 1.4;
+        }
+        
+        .view-controls {
+            position: absolute;
+            bottom: 24px;
+            left: 24px;
+            background: var(--bg-white);
+            border-radius: 8px;
+            box-shadow: var(--shadow);
+            border: 1px solid var(--border-color);
+            display: flex;
+            overflow: hidden;
+            z-index: 5;
+        }
+        
+        .view-control-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            position: relative;
+        }
+        
+        .view-control-btn:hover {
+            background-color: var(--primary-light);
+            color: var(--primary);
+        }
+        
+        .view-control-btn .tooltip {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) scale(0.9);
+            background-color: var(--text-primary);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            margin-bottom: 5px;
+        }
+        
+        .view-control-btn:hover .tooltip {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+        
+        .divider {
+            width: 1px;
+            background-color: var(--border-color);
+            height: 24px;
+            align-self: center;
+        }
+        
+        .visibility-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .visibility-btn {
+            flex: 1;
+            padding: 8px;
+            background-color: var(--bg-white);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: var(--transition);
+        }
+        
+        .visibility-btn:hover {
+            background-color: var(--primary-light);
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        
+        .visibility-btn.active {
+            background-color: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <i class="fas fa-cube"></i>
+            <span>3D几何图形查看器</span>
+        </div>
+    </header>
+    
+    <main>
+        <div id="viewer-container">
+            <div class="menu-toggle" id="menu-toggle">
+                <i class="fas fa-sliders"></i>
+            </div>
+            
+            <div id="loading">
+                <div class="spinner"></div>
+                <div id="status">加载3D引擎...</div>
+                <div id="error">无法加载3D引擎，请检查网络连接或稍后再试</div>
+                <button id="retry">重试加载</button>
+            </div>
+            
+            <canvas id="glcanvas"></canvas>
+            
+            <div class="axis-legend" id="axis-legend">
+                <div class="axis-item">
+                    <span class="axis-color x-color"></span>
+                    <span>X 轴</span>
+                </div>
+                <div class="axis-item">
+                    <span class="axis-color y-color"></span>
+                    <span>Y 轴</span>
+                </div>
+                <div class="axis-item">
+                    <span class="axis-color z-color"></span>
+                    <span>Z 轴</span>
+                </div>
+            </div>
+            
+            <div class="view-controls">
+                <button class="view-control-btn" id="reset-view" title="重置视图">
+                    <i class="fas fa-redo"></i>
+                    <span class="tooltip">重置视图</span>
+                </button>
+                <div class="divider"></div>
+                <button class="view-control-btn" id="top-view" title="顶视图">
+                    <i class="fas fa-arrow-up"></i>
+                    <span class="tooltip">顶视图</span>
+                </button>
+                <button class="view-control-btn" id="front-view" title="正视图">
+                    <i class="fas fa-arrow-right"></i>
+                    <span class="tooltip">正视图</span>
+                </button>
+                <button class="view-control-btn" id="side-view" title="侧视图">
+                    <i class="fas fa-arrow-left"></i>
+                    <span class="tooltip">侧视图</span>
+                </button>
+                <div class="divider"></div>
+                <button class="view-control-btn" id="toggle-wireframe" title="切换线框模式">
+                    <i class="fas fa-border-all"></i>
+                    <span class="tooltip">线框模式</span>
+                </button>
+                <button class="view-control-btn" id="toggle-axis" title="显示/隐藏坐标轴">
+                    <i class="fas fa-compass"></i>
+                    <span class="tooltip">显示/隐藏坐标轴</span>
+                </button>
+                <button class="view-control-btn" id="toggle-function" title="显示/隐藏函数图像">
+                    <i class="fas fa-chart-line"></i>
+                    <span class="tooltip">显示/隐藏函数图像</span>
+                </button>
+            </div>
+        </div>
+        
+        <div class="sidebar" id="sidebar">
+            <div class="panel">
+                <div class="panel-title">
+                    <i class="fas fa-shapes"></i>
+                    基本立体模型
+                </div>
+                <div class="model-buttons">
+                    <button class="model-btn" data-model="cube">
+                        <i class="fas fa-cube"></i>
+                        <span>立方体</span>
+                    </button>
+                    <button class="model-btn" data-model="sphere">
+                        <i class="fas fa-circle"></i>
+                        <span>球体</span>
+                    </button>
+                    <button class="model-btn" data-model="cylinder">
+                        <i class="fas fa-wine-bottle"></i>
+                        <span>圆柱体</span>
+                    </button>
+                    <button class="model-btn" data-model="cone">
+                        <i class="fas fa-cone"></i>
+                        <span>圆锥体</span>
+                    </button>
+                    <button class="model-btn" data-model="torus">
+                        <i class="fas fa-doughnut"></i>
+                        <span>圆环体</span>
+                    </button>
+                    <button class="model-btn" data-model="pyramid">
+                        <i class="fas fa-chess-pyramid"></i>
+                        <span>金字塔</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fas fa-chart-line"></i>
+                        函数图像绘制
+                    </div>
+                </div>
+                <div class="function-input-group">
+                    <div class="form-group">
+                        <label for="function-input">
+                            <i class="fas fa-formula"></i>
+                            函数表达式 (例如: x*x 或 sin(x))
+                        </label>
+                        <input type="text" id="function-input" placeholder="输入函数，如 x*x" value="x*x">
+                    </div>
+                    <div class="form-group">
+                        <label for="variable-range">
+                            <i class="fas fa-arrows-h"></i>
+                            变量范围
+                        </label>
+                        <select id="variable-range">
+                            <option value="-10,10">-10 到 10</option>
+                            <option value="-5,5" selected>-5 到 5</option>
+                            <option value="-3,3">-3 到 3</option>
+                            <option value="-2,2">-2 到 2</option>
+                            <option value="-1,1">-1 到 1</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="resolution">
+                            <i class="fas fa-th"></i>
+                            分辨率 (点数)
+                        </label>
+                        <select id="resolution">
+                            <option value="20">低 (20×20)</option>
+                            <option value="40" selected>中 (40×40)</option>
+                            <option value="60">高 (60×60)</option>
+                            <option value="80">超高 (80×80)</option>
+                        </select>
+                    </div>
+                    <button class="btn btn-primary" id="plot-function">
+                        <i class="fas fa-pen"></i>
+                        绘制函数图像
+                    </button>
+                    <div class="visibility-controls">
+                        <button class="visibility-btn" id="show-function-btn">
+                            <i class="fas fa-eye"></i>
+                            显示函数
+                        </button>
+                        <button class="visibility-btn" id="hide-function-btn">
+                            <i class="fas fa-eye-slash"></i>
+                            隐藏函数
+                        </button>
+                    </div>
+                    <div class="function-error" id="function-error"></div>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <div class="panel-title">
+                        <i class="fas fa-keyboard"></i>
+                        操作指南
+                    </div>
+                    <button class="toggle-btn" id="toggle-controls">
+                        <i class="fas fa-chevron-up"></i>
+                        <span>收起</span>
+                    </button>
+                </div>
+                <div class="controls-info" id="controls-info">
+                    <div class="control-item">
+                        <i class="fas fa-mouse-pointer"></i>
+                        <span><strong>左键拖动:</strong> 旋转视图</span>
+                    </div>
+                    <div class="control-item">
+                        <i class="fas fa-search-plus"></i>
+                        <span><strong>鼠标滚轮:</strong> 缩放视图</span>
+                    </div>
+                    <div class="control-item">
+                        <i class="fas fa-hand-paper"></i>
+                        <span><strong>右键拖动:</strong> 平移视图</span>
+                    </div>
+                    <div class="control-item">
+                        <i class="fas fa-redo"></i>
+                        <span><strong>重置按钮:</strong> 恢复初始视图</span>
+                    </div>
+                    <div class="control-item">
+                        <i class="fas fa-cube"></i>
+                        <span><strong>视图按钮:</strong> 切换标准视角</span>
+                    </div>
+                    <div class="control-item">
+                        <i class="fas fa-eye-slash"></i>
+                        <span><strong>显示/隐藏:</strong> 控制元素可见性</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // 配置Three.js的CDN地址
+        const THREE_JS_URLS = [
+            "https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js",
+            "https://cdnjs.cloudflare.com/ajax/libs/three.js/r155/three.min.js",
+            "https://unpkg.com/three@0.155.0/build/three.min.js"
+        ];
+        
+        // DOM元素
+        const STATUS = document.getElementById('status');
+        const ERROR = document.getElementById('error');
+        const RETRY_BTN = document.getElementById('retry');
+        const LOADING = document.getElementById('loading');
+        const MODEL_BUTTONS = document.querySelectorAll('.model-btn');
+        const PLOT_BUTTON = document.getElementById('plot-function');
+        const FUNCTION_INPUT = document.getElementById('function-input');
+        const VARIABLE_RANGE = document.getElementById('variable-range');
+        const RESOLUTION = document.getElementById('resolution');
+        const FUNCTION_ERROR = document.getElementById('function-error');
+        const RESET_VIEW = document.getElementById('reset-view');
+        const TOP_VIEW = document.getElementById('top-view');
+        const FRONT_VIEW = document.getElementById('front-view');
+        const SIDE_VIEW = document.getElementById('side-view');
+        const TOGGLE_WIREFRAME = document.getElementById('toggle-wireframe');
+        const MENU_TOGGLE = document.getElementById('menu-toggle');
+        const SIDEBAR = document.getElementById('sidebar');
+        const TOGGLE_CONTROLS = document.getElementById('toggle-controls');
+        const CONTROLS_INFO = document.getElementById('controls-info');
+        const AXIS_LEGEND = document.getElementById('axis-legend');
+        const TOGGLE_AXIS = document.getElementById('toggle-axis');
+        const TOGGLE_FUNCTION = document.getElementById('toggle-function');
+        const SHOW_FUNCTION_BTN = document.getElementById('show-function-btn');
+        const HIDE_FUNCTION_BTN = document.getElementById('hide-function-btn');
+        
+        let currentUrlIndex = 0;
+        let scene, camera, renderer;
+        let currentObject = null;
+        let functionObject = null; // 单独存储函数对象
+        let axisObjects = []; // 存储坐标轴对象以便控制显示/隐藏
+        let isWireframe = false;
+        let controlsCollapsed = false;
+        let axisVisible = true;
+        let functionVisible = true;
+        
+        // 视图配置
+        const views = {
+            default: {
+                position: { x: 5, y: 5, z: 5 },
+                rotation: { x: -0.9, y: 0.5 }
+            },
+            top: {
+                position: { x: 0, y: 10, z: 0 },
+                rotation: { x: -Math.PI/2, y: 0 }
+            },
+            front: {
+                position: { x: 10, y: 0, z: 0 },
+                rotation: { x: 0, y: 0 }
+            },
+            side: {
+                position: { x: 0, y: 0, z: 10 },
+                rotation: { x: 0, y: Math.PI/2 }
+            }
+        };
+        
+        // 交互状态
+        const interactionState = {
+            isRotating: false,
+            isPanning: false,
+            previousMousePosition: { x: 0, y: 0 },
+            targetPosition: { x: 0, y: 0, z: 5 },
+            targetRotation: { x: 0, y: 0 },
+            initialState: null,
+            smoothness: 0.12  // 平滑系数
+        };
+        
+        // 显示错误信息
+        function showError(message) {
+            STATUS.style.display = 'none';
+            ERROR.textContent = message;
+            ERROR.style.display = 'block';
+            RETRY_BTN.style.display = 'block';
+        }
+        
+        // 隐藏错误信息
+        function hideError() {
+            ERROR.style.display = 'none';
+            RETRY_BTN.style.display = 'none';
+            STATUS.style.display = 'block';
+        }
+        
+        // 尝试加载Three.js
+        function loadThreeJS() {
+            if (currentUrlIndex >= THREE_JS_URLS.length) {
+                showError('无法加载3D引擎，请检查网络连接或稍后再试');
+                return;
+            }
+            
+            hideError();
+            STATUS.textContent = `正在加载 (${currentUrlIndex + 1}/${THREE_JS_URLS.length})...`;
+            
+            const script = document.createElement('script');
+            script.src = THREE_JS_URLS[currentUrlIndex];
+            script.type = 'text/javascript';
+            
+            // 超时处理
+            const timeout = setTimeout(() => {
+                script.onerror();
+            }, 15000);
+            
+            script.onload = () => {
+                clearTimeout(timeout);
+                if (window.THREE) {
+                    // 加载成功，初始化场景
+                    initScene();
+                } else {
+                    // 加载失败，尝试下一个URL
+                    currentUrlIndex++;
+                    loadThreeJS();
+                }
+            };
+            
+            script.onerror = () => {
+                clearTimeout(timeout);
+                currentUrlIndex++;
+                loadThreeJS();
+            };
+            
+            document.head.appendChild(script);
+        }
+        
+        // 初始化3D场景
+        function initScene() {
+            // 隐藏加载界面
+            LOADING.style.opacity = '0';
+            setTimeout(() => {
+                LOADING.style.display = 'none';
+            }, 500);
+            
+            // 创建场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf5f7fa);
+            
+            // 创建相机
+            const canvas = document.getElementById('glcanvas');
+            camera = new THREE.PerspectiveCamera(
+                75, 
+                canvas.clientWidth / canvas.clientHeight, 
+                0.1, 
+                1000
+            );
+            
+            // 初始化相机位置和旋转
+            setView('default');
+            
+            // 创建渲染器
+            renderer = new THREE.WebGLRenderer({
+                canvas: canvas,
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            
+            // 添加光源
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight1.position.set(5, 10, 7.5);
+            scene.add(directionalLight1);
+            
+            const directionalLight2 = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight2.position.set(-5, -10, -7.5);
+            scene.add(directionalLight2);
+            
+            // 添加带颜色的坐标轴
+            addColoredAxes();
+            
+            // 添加网格
+            const gridHelper = new THREE.GridHelper(10, 10, 0xe5e6eb, 0xf0f2f5);
+            scene.add(gridHelper);
+            
+            // 初始化交互控制
+            initInteraction();
+            
+            // 窗口大小调整
+            window.addEventListener('resize', onWindowResize);
+            
+            // 默认显示立方体
+            createModel('cube');
+            
+            // 动画循环
+            function animate() {
+                requestAnimationFrame(animate);
+                updateInteraction();
+                renderer.render(scene, camera);
+            }
+            
+            animate();
+        }
+        
+        // 添加带颜色的坐标轴
+        function addColoredAxes() {
+            // 清空现有坐标轴
+            axisObjects.forEach(obj => scene.remove(obj));
+            axisObjects = [];
+            
+            // 创建坐标轴材质
+            const xMaterial = new THREE.LineBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--x-axis') });
+            const yMaterial = new THREE.LineBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--y-axis') });
+            const zMaterial = new THREE.LineBasicMaterial({ color: getComputedStyle(document.documentElement).getPropertyValue('--z-axis') });
+            
+            // X轴
+            const xAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(3, 0, 0)
+            ]);
+            const xAxis = new THREE.Line(xAxisGeometry, xMaterial);
+            scene.add(xAxis);
+            axisObjects.push(xAxis);
+            
+            // X轴箭头
+            const xArrow = createArrow(
+                getComputedStyle(document.documentElement).getPropertyValue('--x-axis'),
+                new THREE.Vector3(3, 0, 0),
+                new THREE.Vector3(1, 0, 0)
+            );
+            scene.add(xArrow);
+            axisObjects.push(xArrow);
+            
+            // Y轴
+            const yAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 3, 0)
+            ]);
+            const yAxis = new THREE.Line(yAxisGeometry, yMaterial);
+            scene.add(yAxis);
+            axisObjects.push(yAxis);
+            
+            // Y轴箭头
+            const yArrow = createArrow(
+                getComputedStyle(document.documentElement).getPropertyValue('--y-axis'),
+                new THREE.Vector3(0, 3, 0),
+                new THREE.Vector3(0, 1, 0)
+            );
+            scene.add(yArrow);
+            axisObjects.push(yArrow);
+            
+            // Z轴
+            const zAxisGeometry = new THREE.BufferGeometry().setFromPoints([
+                new THREE.Vector3(0, 0, 0),
+                new THREE.Vector3(0, 0, 3)
+            ]);
+            const zAxis = new THREE.Line(zAxisGeometry, zMaterial);
+            scene.add(zAxis);
+            axisObjects.push(zAxis);
+            
+            // Z轴箭头
+            const zArrow = createArrow(
+                getComputedStyle(document.documentElement).getPropertyValue('--z-axis'),
+                new THREE.Vector3(0, 0, 3),
+                new THREE.Vector3(0, 0, 1)
+            );
+            scene.add(zArrow);
+            axisObjects.push(zArrow);
+        }
+        
+        // 创建箭头辅助函数
+        function createArrow(color, position, direction) {
+            const arrowGeometry = new THREE.ConeGeometry(0.12, 0.35, 16);
+            const arrowMaterial = new THREE.MeshBasicMaterial({ color: color });
+            const arrow = new THREE.Mesh(arrowGeometry, arrowMaterial);
+            
+            // 定位并旋转箭头
+            arrow.position.copy(position);
+            arrow.lookAt(position.clone().add(direction));
+            arrow.rotateX(Math.PI / 2);
+            
+            return arrow;
+        }
+        
+        // 初始化交互控制
+        function initInteraction() {
+            // 保存初始状态
+            interactionState.initialState = {
+                targetPosition: { ...interactionState.targetPosition },
+                targetRotation: { ...interactionState.targetRotation }
+            };
+            
+            const canvas = document.getElementById('glcanvas');
+            
+            // 鼠标按下事件
+            canvas.addEventListener('mousedown', (e) => {
+                if (e.button === 0) { // 左键 - 旋转
+                    interactionState.isRotating = true;
+                } else if (e.button === 2) { // 右键 - 平移
+                    interactionState.isPanning = true;
+                }
+                interactionState.previousMousePosition = {
+                    x: e.clientX,
+                    y: e.clientY
+                };
+                e.preventDefault();
+            });
+            
+            // 鼠标移动事件
+            window.addEventListener('mousemove', (e) => {
+                if (!interactionState.isRotating && !interactionState.isPanning) return;
+                
+                const deltaX = e.clientX - interactionState.previousMousePosition.x;
+                const deltaY = e.clientY - interactionState.previousMousePosition.y;
+                
+                if (interactionState.isRotating) {
+                    // 旋转
+                    interactionState.targetRotation.y += deltaX * 0.005;
+                    interactionState.targetRotation.x += deltaY * 0.005;
+                    
+                    // 限制X轴旋转角度
+                    interactionState.targetRotation.x = Math.max(
+                        -Math.PI / 2 + 0.1, 
+                        Math.min(Math.PI / 2 - 0.1, interactionState.targetRotation.x)
+                    );
+                }
+                
+                if (interactionState.isPanning) {
+                    // 平移
+                    const scale = interactionState.targetPosition.z / 200;
+                    interactionState.targetPosition.x -= deltaX * scale;
+                    interactionState.targetPosition.y += deltaY * scale;
+                }
+                
+                interactionState.previousMousePosition = {
+                    x: e.clientX,
+                    y: e.clientY
+                };
+            });
+            
+            // 鼠标释放事件
+            window.addEventListener('mouseup', () => {
+                interactionState.isRotating = false;
+                interactionState.isPanning = false;
+            });
+            
+            // 鼠标离开事件
+            window.addEventListener('mouseleave', () => {
+                interactionState.isRotating = false;
+                interactionState.isPanning = false;
+            });
+            
+            // 滚轮缩放事件
+            canvas.addEventListener('wheel', (e) => {
+                // 缩放速度与当前距离相关
+                const zoomFactor = 1 - e.deltaY * 0.0005;
+                interactionState.targetPosition.z *= zoomFactor;
+                
+                // 限制缩放范围
+                interactionState.targetPosition.z = Math.max(1, Math.min(20, interactionState.targetPosition.z));
+                e.preventDefault();
+            });
+            
+            // 阻止右键菜单
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+            });
+            
+            // 双击重置视图
+            canvas.addEventListener('dblclick', () => {
+                resetView();
+            });
+        }
+        
+        // 更新交互状态（用于平滑动画）
+        function updateInteraction() {
+            // 平滑过渡到目标位置
+            camera.position.x += (interactionState.targetPosition.x - camera.position.x) * interactionState.smoothness;
+            camera.position.y += (interactionState.targetPosition.y - camera.position.y) * interactionState.smoothness;
+            camera.position.z += (interactionState.targetPosition.z - camera.position.z) * interactionState.smoothness;
+            
+            // 平滑过渡到目标旋转
+            camera.rotation.x += (interactionState.targetRotation.x - camera.rotation.x) * interactionState.smoothness;
+            camera.rotation.y += (interactionState.targetRotation.y - camera.rotation.y) * interactionState.smoothness;
+        }
+        
+        // 设置视图
+        function setView(viewName) {
+            const view = views[viewName];
+            if (view) {
+                interactionState.targetPosition = { ...view.position };
+                interactionState.targetRotation = { ...view.rotation };
+            }
+        }
+        
+        // 重置视图
+        function resetView() {
+            setView('default');
+        }
+        
+        // 窗口大小调整处理
+        function onWindowResize() {
+            const canvas = document.getElementById('glcanvas');
+            camera.aspect = canvas.clientWidth / canvas.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(canvas.clientWidth, canvas.clientHeight);
+        }
+        
+        // 创建3D模型
+        function createModel(type) {
+            // 移除当前对象
+            if (currentObject) {
+                scene.remove(currentObject);
+                currentObject = null;
+            }
+            
+            // 隐藏函数对象
+            if (functionObject) {
+                functionObject.visible = false;
+            }
+            
+            // 重置视图
+            resetView();
+            
+            // 取消所有按钮的活跃状态
+            MODEL_BUTTONS.forEach(btn => btn.classList.remove('active'));
+            // 设置当前按钮为活跃状态
+            document.querySelector(`.model-btn[data-model="${type}"]`).classList.add('active');
+            
+            let geometry, material;
+            
+            // 创建基础材质
+            material = new THREE.MeshStandardMaterial({
+                color: 0x165DFF,
+                wireframe: isWireframe,
+                transparent: true,
+                opacity: 0.9,
+                metalness: 0.1,
+                roughness: 0.7
+            });
+            
+            // 根据类型创建不同的几何体
+            switch(type) {
+                case 'cube':
+                    geometry = new THREE.BoxGeometry(2, 2, 2);
+                    break;
+                case 'sphere':
+                    geometry = new THREE.SphereGeometry(1.5, 32, 32);
+                    break;
+                case 'cylinder':
+                    geometry = new THREE.CylinderGeometry(1, 1, 2, 32);
+                    break;
+                case 'cone':
+                    geometry = new THREE.ConeGeometry(1, 2, 32);
+                    break;
+                case 'torus':
+                    geometry = new THREE.TorusGeometry(1, 0.4, 16, 100);
+                    break;
+                case 'pyramid':
+                    geometry = new THREE.ConeGeometry(1.5, 2, 4);
+                    break;
+            }
+            
+            currentObject = new THREE.Mesh(geometry, material);
+            scene.add(currentObject);
+            
+            // 确保函数显示状态正确
+            if (functionObject) {
+                functionObject.visible = functionVisible;
+            }
+        }
+        
+        // 切换线框模式
+        function toggleWireframe() {
+            isWireframe = !isWireframe;
+            if (currentObject && currentObject.material) {
+                currentObject.material.wireframe = isWireframe;
+            }
+            if (functionObject && functionObject.material) {
+                functionObject.material.wireframe = isWireframe;
+            }
+        }
+        
+        // 切换坐标轴显示
+        function toggleAxis() {
+            axisVisible = !axisVisible;
+            axisObjects.forEach(obj => {
+                obj.visible = axisVisible;
+            });
+            AXIS_LEGEND.classList.toggle('hidden', !axisVisible);
+        }
+        
+        // 切换函数图像显示
+        function toggleFunction() {
+            functionVisible = !functionVisible;
+            if (functionObject) {
+                functionObject.visible = functionVisible;
+            }
+            updateFunctionVisibilityButtons();
+        }
+        
+        // 更新函数可见性按钮状态
+        function updateFunctionVisibilityButtons() {
+            if (functionVisible) {
+                SHOW_FUNCTION_BTN.classList.add('active');
+                HIDE_FUNCTION_BTN.classList.remove('active');
+            } else {
+                SHOW_FUNCTION_BTN.classList.remove('active');
+                HIDE_FUNCTION_BTN.classList.add('active');
+            }
+        }
+        
+        // 显示函数图像
+        function showFunction() {
+            functionVisible = true;
+            if (functionObject) {
+                functionObject.visible = true;
+            }
+            updateFunctionVisibilityButtons();
+        }
+        
+        // 隐藏函数图像
+        function hideFunction() {
+            functionVisible = false;
+            if (functionObject) {
+                functionObject.visible = false;
+            }
+            updateFunctionVisibilityButtons();
+        }
+        
+        // 切换操作指南显示
+        function toggleControls() {
+            controlsCollapsed = !controlsCollapsed;
+            if (controlsCollapsed) {
+                CONTROLS_INFO.classList.add('controls-collapsed');
+                TOGGLE_CONTROLS.innerHTML = '<i class="fas fa-chevron-down"></i><span>展开</span>';
+            } else {
+                CONTROLS_INFO.classList.remove('controls-collapsed');
+                TOGGLE_CONTROLS.innerHTML = '<i class="fas fa-chevron-up"></i><span>收起</span>';
+            }
+        }
+        
+        // 绘制函数图像
+        function plotFunction() {
+            const funcStr = FUNCTION_INPUT.value.trim();
+            if (!funcStr) {
+                showFunctionError('请输入函数表达式');
+                return;
+            }
+            
+            // 移除当前函数对象
+            if (functionObject) {
+                scene.remove(functionObject);
+                functionObject = null;
+            }
+            
+            // 隐藏模型对象
+            if (currentObject) {
+                currentObject.visible = false;
+            }
+            
+            // 取消所有模型按钮的活跃状态
+            MODEL_BUTTONS.forEach(btn => btn.classList.remove('active'));
+            
+            // 重置视图
+            resetView();
+            
+            try {
+                // 解析变量范围
+                const [minVal, maxVal] = VARIABLE_RANGE.value.split(',').map(Number);
+                const resolution = parseInt(RESOLUTION.value);
+                
+                // 创建函数评估器
+                const safeMath = {
+                    sin: Math.sin,
+                    cos: Math.cos,
+                    tan: Math.tan,
+                    asin: Math.asin,
+                    acos: Math.acos,
+                    atan: Math.atan,
+                    sinh: Math.sinh,
+                    cosh: Math.cosh,
+                    tanh: Math.tanh,
+                    sqrt: Math.sqrt,
+                    exp: Math.exp,
+                    log: Math.log,
+                    log10: Math.log10,
+                    abs: Math.abs,
+                    pow: Math.pow,
+                    PI: Math.PI,
+                    E: Math.E
+                };
+                
+                // 构建函数字符串
+                const funcCode = `with(safeMath) { return function(x) { return ${funcStr}; } }`;
+                const func = new Function('safeMath', funcCode)(safeMath);
+                
+                // 测试函数是否有效
+                func(0);
+                
+                // 创建函数图像的几何体
+                const geometry = new THREE.PlaneGeometry(
+                    maxVal - minVal, 
+                    maxVal - minVal, 
+                    resolution, 
+                    resolution
+                );
+                
+                // 计算每个点的高度
+                const positions = geometry.attributes.position.array;
+                for (let i = 0; i < positions.length; i += 3) {
+                    // 将平面坐标映射到实际变量范围
+                    const x = (positions[i] / (maxVal - minVal) * (maxVal - minVal)) + minVal;
+                    
+                    // 计算y值（函数值）
+                    let y;
+                    try {
+                        y = func(x);
+                    } catch (e) {
+                        throw new Error(`计算函数值时出错: ${e.message}`);
+                    }
+                    
+                    // 设置y坐标
+                    positions[i + 1] = y;
+                }
+                
+                geometry.computeVertexNormals();
+                
+                // 创建颜色映射材质
+                const material = new THREE.MeshStandardMaterial({
+                    vertexColors: THREE.VertexColors,
+                    wireframe: isWireframe,
+                    side: THREE.DoubleSide,
+                    metalness: 0.1,
+                    roughness: 0.8
+                });
+                
+                // 为每个顶点添加颜色（基于y值）
+                const colors = new Float32Array(positions.length);
+                const color = new THREE.Color();
+                
+                // 找到y值范围用于颜色映射
+                let minY = Infinity, maxY = -Infinity;
+                for (let i = 0; i < positions.length; i += 3) {
+                    const y = positions[i + 1];
+                    minY = Math.min(minY, y);
+                    maxY = Math.max(maxY, y);
+                }
+                
+                // 如果所有y值相同，设置一个默认范围
+                if (minY === maxY) {
+                    minY -= 0.5;
+                    maxY += 0.5;
+                }
+                
+                // 为每个顶点分配颜色
+                for (let i = 0; i < positions.length; i += 3) {
+                    const y = positions[i + 1];
+                    const ratio = (y - minY) / (maxY - minY);
+                    // 使用蓝色到红色的渐变
+                    color.setHSL(0.6 - ratio * 0.6, 0.9, 0.5);
+                    
+                    colors[i] = color.r;
+                    colors[i + 1] = color.g;
+                    colors[i + 2] = color.b;
+                }
+                
+                geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+                
+                // 创建网格并添加到场景
+                functionObject = new THREE.Mesh(geometry, material);
+                functionObject.visible = functionVisible; // 应用当前可见性设置
+                // 将平面旋转90度使其垂直
+                functionObject.rotation.x = -Math.PI / 2;
+                scene.add(functionObject);
+                
+                // 更新按钮状态
+                updateFunctionVisibilityButtons();
+                
+                // 隐藏错误信息
+                hideFunctionError();
+                
+            } catch (error) {
+                showFunctionError(`函数错误: ${error.message}`);
+                console.error('函数绘制错误:', error);
+                // 创建一个简单的错误标记
+                createErrorMarker();
+            }
+        }
+        
+        // 显示函数错误
+        function showFunctionError(message) {
+            FUNCTION_ERROR.textContent = message;
+            FUNCTION_ERROR.style.display = 'block';
+        }
+        
+        // 隐藏函数错误
+        function hideFunctionError() {
+            FUNCTION_ERROR.style.display = 'none';
+        }
+        
+        // 创建错误标记
+        function createErrorMarker() {
+            const geometry = new THREE.SphereGeometry(0.5, 16, 16);
+            const material = new THREE.MeshStandardMaterial({ 
+                color: 0xFF4D4F,
+                wireframe: isWireframe
+            });
+            functionObject = new THREE.Mesh(geometry, material);
+            functionObject.visible = functionVisible;
+            scene.add(functionObject);
+            updateFunctionVisibilityButtons();
+        }
+        
+        // 事件监听
+        RETRY_BTN.addEventListener('click', () => {
+            currentUrlIndex = 0;
+            loadThreeJS();
+        });
+        
+        // 模型按钮点击事件
+        MODEL_BUTTONS.forEach(btn => {
+            btn.addEventListener('click', () => {
+                createModel(btn.dataset.model);
+                hideFunctionError();
+            });
+        });
+        
+        // 绘制函数按钮点击事件
+        PLOT_BUTTON.addEventListener('click', plotFunction);
+        
+        // 按Enter键绘制函数
+        FUNCTION_INPUT.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                plotFunction();
+            }
+        });
+        
+        // 视图控制按钮
+        RESET_VIEW.addEventListener('click', resetView);
+        TOP_VIEW.addEventListener('click', () => setView('top'));
+        FRONT_VIEW.addEventListener('click', () => setView('front'));
+        SIDE_VIEW.addEventListener('click', () => setView('side'));
+        TOGGLE_WIREFRAME.addEventListener('click', toggleWireframe);
+        TOGGLE_AXIS.addEventListener('click', toggleAxis);
+        TOGGLE_FUNCTION.addEventListener('click', toggleFunction);
+        SHOW_FUNCTION_BTN.addEventListener('click', showFunction);
+        HIDE_FUNCTION_BTN.addEventListener('click', hideFunction);
+        
+        // 操作指南展开/收起
+        TOGGLE_CONTROLS.addEventListener('click', toggleControls);
+        
+        // 移动端菜单切换
+        MENU_TOGGLE.addEventListener('click', () => {
+            SIDEBAR.classList.toggle('open');
+        });
+        
+        // 开始加载
+        loadThreeJS();
+    </script>
+</body>
+</html>
+    

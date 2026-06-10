@@ -1,0 +1,2498 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>增强版3D粒子文本系统v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+
+        body {
+            background-color: #050510;
+            color: #e0e0e0;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+        }
+
+            #canvas-container.grabbing {
+                cursor: grabbing;
+            }
+
+        .main-controls {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 35, 0.9);
+            backdrop-filter: blur(10px);
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .control-btn {
+            background: #2d5bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+            .control-btn:hover:not(:disabled) {
+                background: #3a67ff;
+                transform: translateY(-1px);
+                box-shadow: 0 4px 12px rgba(45, 91, 255, 0.3);
+            }
+
+            .control-btn:disabled {
+                background: #444;
+                cursor: not-allowed;
+                transform: none;
+            }
+
+            .control-btn.secondary {
+                background: #444;
+            }
+
+                .control-btn.secondary:hover:not(:disabled) {
+                    background: #555;
+                }
+
+        .panel-toggle {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(20, 20, 35, 0.9);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            padding: 8px 16px;
+            z-index: 101;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+
+            .panel-toggle:hover {
+                background: rgba(30, 30, 45, 0.9);
+            }
+
+        .editor-panel {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            background: rgba(20, 20, 35, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            border-radius: 10px 0 0 0;
+            width: 90%;
+            max-width: 800px;
+            z-index: 100;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease-out;
+            transform: translateY(100%);
+            box-shadow: -5px 0 30px rgba(0, 0, 0, 0.3);
+        }
+
+            .editor-panel.expanded {
+                transform: translateY(0);
+            }
+
+        .panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel-title {
+            font-size: 18px;
+            font-weight: 500;
+        }
+
+        .panel-tabs {
+            display: flex;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 15px;
+        }
+
+        .panel-tab {
+            padding: 8px 16px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-bottom: 2px solid transparent;
+        }
+
+            .panel-tab.active {
+                border-bottom: 2px solid #2d5bff;
+                color: #2d5bff;
+            }
+
+        .panel-tab-content {
+            display: none;
+            overflow-y: auto;
+            flex: 1;
+            padding-right: 10px;
+        }
+
+            .panel-tab-content.active {
+                display: block;
+            }
+
+        .frame-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .frame-btn {
+            background: #333;
+            color: white;
+            border: none;
+            width: 30px;
+            height: 30px;
+            border-radius: 4px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.2s;
+        }
+
+            .frame-btn:hover:not(:disabled) {
+                background: #444;
+            }
+
+            .frame-btn:disabled {
+                background: #222;
+                cursor: not-allowed;
+            }
+
+        .frame-indicator {
+            font-size: 14px;
+            padding: 0 10px;
+        }
+
+        .panel-content {
+            display: flex;
+            gap: 20px;
+            overflow: hidden;
+            flex: 1;
+        }
+
+        .text-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .properties-section {
+            flex: 1;
+            overflow-y: auto;
+            padding-right: 10px;
+        }
+
+            .properties-section::-webkit-scrollbar,
+            .panel-tab-content::-webkit-scrollbar {
+                width: 6px;
+            }
+
+            .properties-section::-webkit-scrollbar-thumb,
+            .panel-tab-content::-webkit-scrollbar-thumb {
+                background: #444;
+                border-radius: 3px;
+            }
+
+            .properties-section::-webkit-scrollbar-track,
+            .panel-tab-content::-webkit-scrollbar-track {
+                background: #1a1a2e;
+            }
+
+        textarea {
+            width: 100%;
+            flex: 1;
+            min-height: 100px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            resize: none;
+            font-size: 15px;
+            line-height: 1.5;
+            transition: border 0.2s;
+        }
+
+            textarea:focus {
+                outline: none;
+                border-color: #2d5bff;
+            }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            margin-bottom: 6px;
+            color: #bbb;
+        }
+
+        .form-input, select {
+            width: 100%;
+            padding: 8px 10px;
+            background: #1a1a2e;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            border-radius: 4px;
+            font-size: 14px;
+            transition: border 0.2s;
+        }
+
+            .form-input:focus, select:focus {
+                outline: none;
+                border-color: #2d5bff;
+            }
+
+        .input-group {
+            display: flex;
+            gap: 10px;
+        }
+
+            .input-group .form-group {
+                flex: 1;
+                margin-bottom: 0;
+            }
+
+        .color-options {
+            display: flex;
+            gap: 10px;
+        }
+
+        .color-input {
+            height: 40px;
+            padding: 2px;
+            border: 1px solid #333;
+        }
+
+        .animation-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+            .animation-controls .control-btn {
+                flex: 1;
+            }
+
+        .status {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+            pointer-events: none;
+        }
+
+            .status.show {
+                opacity: 1;
+            }
+
+        .frame-transition, .effect-section {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(255, 255, 255, 0.1);
+        }
+
+        .range-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .preset-effects {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .preset-btn {
+            background: #1a1a2e;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 8px;
+            color: #e0e0e0;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 13px;
+            text-align: center;
+        }
+
+            .preset-btn:hover {
+                background: #2d5bff;
+                border-color: #2d5bff;
+            }
+
+        .preset-section {
+            margin-bottom: 20px;
+        }
+
+        .preset-title {
+            font-size: 15px;
+            margin-bottom: 10px;
+            color: #ccc;
+        }
+
+        @media (max-width: 768px) {
+            .panel-content {
+                flex-direction: column;
+            }
+
+            .main-controls {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+
+            .editor-panel {
+                width: 100%;
+                max-height: 90vh;
+            }
+
+            .preset-effects {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+
+    <div class="main-controls">
+        <button class="control-btn" id="renderCurrentBtn">
+            <i class="fas fa-magic"></i> 渲染当前帧
+        </button>
+        <button class="control-btn" id="playBtn" disabled>
+            <i class="fas fa-play"></i> 播放动画
+        </button>
+        <button class="control-btn" id="pauseBtn" disabled>
+            <i class="fas fa-pause"></i> 暂停
+        </button>
+        <button class="control-btn secondary" id="resetViewBtn">
+            <i class="fas fa-compress-arrows-alt"></i> 重置视角
+        </button>
+        <button class="control-btn secondary" id="clearBtn">
+            <i class="fas fa-eraser"></i> 清除
+        </button>
+    </div>
+
+    <div class="panel-toggle" id="panelToggle">
+        <i class="fas fa-sliders-h"></i>
+        <span>参数面板</span>
+    </div>
+
+    <div class="editor-panel" id="editorPanel">
+        <div class="panel-header">
+            <div class="panel-title">帧编辑器</div>
+            <div class="frame-controls">
+                <button class="frame-btn" id="prevFrameBtn">
+                    <i class="fas fa-chevron-left"></i>
+                </button>
+                <span class="frame-indicator" id="frameIndicator">帧 1 / 1</span>
+                <button class="frame-btn" id="nextFrameBtn">
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+                <button class="frame-btn" id="addFrameBtn">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="frame-btn" id="deleteFrameBtn" disabled>
+                    <i class="fas fa-trash"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="panel-tabs">
+            <div class="panel-tab active" data-tab="text">文本与基础</div>
+            <div class="panel-tab" data-tab="appearance">外观效果</div>
+            <div class="panel-tab" data-tab="animation">动画过渡</div>
+            <div class="panel-tab" data-tab="presets">预设效果</div>
+        </div>
+
+        <!-- 文本与基础设置 -->
+        <div class="panel-tab-content active" id="text-tab">
+            <div class="panel-content">
+                <div class="text-section">
+                    <div class="form-group">
+                        <label class="form-label">文本内容（支持多行）</label>
+                        <textarea id="textInput" placeholder="请输入文本，支持多行">增强版
+3D粒子系统</textarea>
+                    </div>
+
+                    <div class="animation-controls">
+                        <button class="control-btn" id="applyBtn">应用到当前帧</button>
+                        <button class="control-btn secondary" id="copyFrameBtn">复制当前帧</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">字体大小</label>
+                        <input type="number" id="fontSize" value="40" min="10" max="120">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">粒子密度</label>
+                        <input type="number" id="density" value="3" min="1" max="15">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">帧持续时间(秒)</label>
+                        <input type="number" id="frameDuration" value="2" min="0.5" max="10" step="0.5">
+                    </div>
+                </div>
+
+                <div class="properties-section">
+                    <div class="form-group">
+                        <label class="form-label">3D空间分布</label>
+                        <select id="zMode">
+                            <option value="random">随机分布</option>
+                            <option value="x-dependent">随X轴变化</option>
+                            <option value="y-dependent">随Y轴变化</option>
+                            <option value="wave">波浪分布</option>
+                            <option value="sphere">球形分布</option>
+                            <option value="static">固定值</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Z轴深度/强度</label>
+                        <input type="number" id="zDepth" value="50" min="-200" max="200">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">粒子大小</label>
+                        <input type="number" id="particleSize" value="2" min="0.5" max="10" step="0.5">
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">大小变化模式</label>
+                        <select id="sizeVariation">
+                            <option value="uniform">统一大小</option>
+                            <option value="random">随机大小</option>
+                            <option value="depth-based">基于深度</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">大小变化范围</label>
+                        <input type="range" id="sizeVariationRange" min="0" max="1" step="0.1" value="0.3">
+                        <div class="range-info">
+                            <span>无变化</span>
+                            <span id="sizeVariationValue">0.3</span>
+                            <span>最大变化</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 外观效果设置 -->
+        <div class="panel-tab-content" id="appearance-tab">
+            <div class="panel-content">
+                <div class="properties-section">
+                    <div class="form-group">
+                        <label class="form-label">粒子颜色模式</label>
+                        <select id="colorMode">
+                            <option value="single">单色</option>
+                            <option value="random">随机颜色</option>
+                            <option value="gradient">渐变色</option>
+                            <option value="depth-based">基于深度</option>
+                            <option value="velocity-based">基于速度</option>
+                        </select>
+                    </div>
+
+                    <div class="color-options" id="colorOptions">
+                        <div class="form-group">
+                            <label class="form-label">主色</label>
+                            <input type="color" class="form-input color-input" id="primaryColor" value="#00ff00">
+                        </div>
+                        <div class="form-group" id="secondaryColorGroup">
+                            <label class="form-label">辅助色</label>
+                            <input type="color" class="form-input color-input" id="secondaryColor" value="#ff00ff">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">不透明度</label>
+                        <input type="range" id="opacity" min="0.1" max="1" step="0.1" value="1">
+                        <div class="range-info">
+                            <span>0.1</span>
+                            <span id="opacityValue">1.0</span>
+                            <span>1.0</span>
+                        </div>
+                    </div>
+
+                    <div class="effect-section">
+                        <div class="form-group">
+                            <label class="form-label">发光效果强度</label>
+                            <input type="range" id="glowIntensity" min="0" max="2" step="0.1" value="0">
+                            <div class="range-info">
+                                <span>无</span>
+                                <span id="glowValue">0.0</span>
+                                <span>强</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">环境光强度</label>
+                            <input type="range" id="ambientLight" min="0" max="2" step="0.1" value="0.8">
+                            <div class="range-info">
+                                <span>暗</span>
+                                <span id="ambientLightValue">0.8</span>
+                                <span>亮</span>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">背景样式</label>
+                            <select id="backgroundStyle">
+                                <option value="solid">纯色</option>
+                                <option value="gradient">渐变</option>
+                                <option value="stars">星空</option>
+                            </select>
+                        </div>
+
+                        <div class="color-options" id="backgroundColorOptions">
+                            <div class="form-group">
+                                <label class="form-label">背景色1</label>
+                                <input type="color" class="form-input color-input" id="bgColor1" value="#050510">
+                            </div>
+                            <div class="form-group" id="bgColor2Group">
+                                <label class="form-label">背景色2</label>
+                                <input type="color" class="form-input color-input" id="bgColor2" value="#101030">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 动画过渡设置 -->
+        <div class="panel-tab-content" id="animation-tab">
+            <div class="panel-content">
+                <div class="properties-section">
+                    <div class="form-group">
+                        <label class="form-label">粒子运动效果</label>
+                        <select id="motionEffect">
+                            <option value="none">无运动</option>
+                            <option value="rotation">旋转</option>
+                            <option value="float">漂浮</option>
+                            <option value="pulse">脉动</option>
+                            <option value="wave">波浪</option>
+                            <option value="vortex">漩涡</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">运动速度</label>
+                        <input type="range" id="motionSpeed" min="0" max="0.05" step="0.001" value="0.005">
+                        <div class="range-info">
+                            <span>慢</span>
+                            <span id="motionSpeedValue">0.005</span>
+                            <span>快</span>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">运动幅度</label>
+                        <input type="range" id="motionAmplitude" min="0" max="50" step="1" value="10">
+                        <div class="range-info">
+                            <span>小</span>
+                            <span id="motionAmplitudeValue">10</span>
+                            <span>大</span>
+                        </div>
+                    </div>
+
+                    <div class="frame-transition">
+                        <div class="form-group">
+                            <label class="form-label">帧过渡动画</label>
+                            <select id="transitionType">
+                                <option value="fade">淡入淡出</option>
+                                <option value="move">移动过渡</option>
+                                <option value="scale">缩放过渡</option>
+                                <option value="dissolve">粒子消散</option>
+                                <option value="explode">爆炸效果</option>
+                                <option value="implode">聚爆效果</option>
+                                <option value="none">无过渡</option>
+                            </select>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">过渡时长(秒)</label>
+                            <input type="number" id="transitionDuration" value="1" min="0.1" max="3" step="0.1">
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">过渡紊乱度</label>
+                            <input type="range" id="transitionChaos" min="0" max="1" step="0.1" value="0.3">
+                            <div class="range-info">
+                                <span>有序</span>
+                                <span id="transitionChaosValue">0.3</span>
+                                <span>混乱</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 预设效果 -->
+        <div class="panel-tab-content" id="presets-tab">
+            <div class="preset-section">
+                <div class="preset-title">粒子风格预设</div>
+                <div class="preset-effects">
+                    <button class="preset-btn" data-preset="neon">霓虹粒子</button>
+                    <button class="preset-btn" data-preset="fire">火焰效果</button>
+                    <button class="preset-btn" data-preset="water">水流效果</button>
+                    <button class="preset-btn" data-preset="stars">星空效果</button>
+                    <button class="preset-btn" data-preset="digital">数字矩阵</button>
+                    <button class="preset-btn" data-preset="glow">发光粒子</button>
+                </div>
+            </div>
+
+            <div class="preset-section">
+                <div class="preset-title">动画效果预设</div>
+                <div class="preset-effects">
+                    <button class="preset-btn" data-animation="gentle">柔和漂浮</button>
+                    <button class="preset-btn" data-animation="dynamic">动态旋转</button>
+                    <button class="preset-btn" data-animation="wave">波浪运动</button>
+                    <button class="preset-btn" data-animation="intense">强烈动感</button>
+                    <button class="preset-btn" data-animation="pulse">呼吸脉动</button>
+                </div>
+            </div>
+
+            <div class="preset-section">
+                <div class="preset-title">过渡效果预设</div>
+                <div class="preset-effects">
+                    <button class="preset-btn" data-transition="smooth">平滑过渡</button>
+                    <button class="preset-btn" data-transition="dramatic">戏剧化</button>
+                    <button class="preset-btn" data-transition="fast">快速切换</button>
+                    <button class="preset-btn" data-transition="mystical">神秘消散</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status" id="status">准备就绪</div>
+
+    <script>
+        // 核心变量
+        let scene, camera, renderer, ambientLight, directionalLight;
+        let particleSystems = [];
+        let currentSystem = null;
+        let activeFrameIndex = 0;
+        let frames = [];
+        let isPlaying = false;
+        let animationId = null;
+        let frameTimer = null;
+        let transitionProgress = 0;
+        let isInTransition = false;
+        let fromFrameIndex = 0;
+        let panelExpanded = false;
+        let animationTime = 0; // 用于连续动画计算
+        let stars = []; // 用于星空背景
+        let cameraControls = {
+            rotationX: 0,
+            rotationY: 0,
+            zoom: 1,
+            isDragging: false,
+            lastX: 0,
+            lastY: 0
+        };
+
+        // 初始化Three.js场景
+        function initScene() {
+            try {
+                // 创建场景
+                scene = new THREE.Scene();
+                scene.background = new THREE.Color(0x050510);
+
+                // 添加环境光
+                ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+                scene.add(ambientLight);
+
+                // 添加方向光增强效果
+                directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                directionalLight.position.set(0, 0, 1);
+                scene.add(directionalLight);
+
+                // 创建相机
+                camera = new THREE.PerspectiveCamera(
+                    60,
+                    window.innerWidth / window.innerHeight,
+                    1,
+                    3000
+                );
+                camera.position.z = 500;
+
+                // 创建渲染器，支持抗锯齿和alpha通道
+                renderer = new THREE.WebGLRenderer({
+                    antialias: true,
+                    alpha: true
+                });
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+                renderer.shadowMap.enabled = true; // 启用阴影
+                document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+                // 初始化星空背景
+                initStars();
+
+                // 初始化帧数据
+                initFrames();
+
+                // 窗口大小变化处理
+                window.addEventListener('resize', onWindowResize);
+
+                // 鼠标交互控制
+                initCameraControls();
+
+                // 初始渲染
+                renderer.render(scene, camera);
+
+                // 启用渲染按钮
+                document.getElementById('renderCurrentBtn').disabled = false;
+                showStatus("初始化完成，点击左侧参数面板调整设置");
+            } catch (error) {
+                console.error("场景初始化失败:", error);
+                showStatus("初始化失败，请刷新页面重试");
+            }
+        }
+
+        // 初始化星空背景
+        function initStars() {
+            const starGeometry = new THREE.BufferGeometry();
+            const starCount = 2000;
+            const positions = new Float32Array(starCount * 3);
+            const colors = new Float32Array(starCount * 3);
+            const sizes = new Float32Array(starCount);
+
+            for (let i = 0; i < starCount; i++) {
+                const i3 = i * 3;
+
+                // 随机位置（范围更大，营造深度感）
+                positions[i3] = (Math.random() - 0.5) * 4000;
+                positions[i3 + 1] = (Math.random() - 0.5) * 4000;
+                positions[i3 + 2] = -Math.random() * 3000;
+
+                // 随机颜色（模拟不同恒星颜色）
+                const color = new THREE.Color();
+                if (Math.random() > 0.7) {
+                    color.setHSL(Math.random() * 0.1, 0.5, 0.9); // 蓝白色
+                } else if (Math.random() > 0.5) {
+                    color.setHSL(0.05, 0.6, 0.8); // 黄白色
+                } else {
+                    color.setHSL(0, 0, Math.random() * 0.5 + 0.5); // 白色系
+                }
+                colors[i3] = color.r;
+                colors[i3 + 1] = color.g;
+                colors[i3 + 2] = color.b;
+
+                // 随机大小
+                sizes[i] = Math.random() * 1.5 + 0.3;
+            }
+
+            starGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            starGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            starGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+            // 创建星星材质
+            const starMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    pointTexture: { value: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') }
+                },
+                vertexShader: `
+                        attribute float size;
+                        attribute vec3 color;
+                        varying vec3 vColor;
+                        void main() {
+                            vColor = color;
+                            vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                            gl_PointSize = size * (300.0 / -mvPosition.z);
+                            gl_Position = projectionMatrix * mvPosition;
+                        }
+                    `,
+                fragmentShader: `
+                        uniform sampler2D pointTexture;
+                        varying vec3 vColor;
+                        void main() {
+                            gl_FragColor = vec4(vColor, 1.0) * texture2D(pointTexture, gl_PointCoord);
+                        }
+                    `,
+                transparent: true
+            });
+
+            // 创建星星系统
+            const starSystem = new THREE.Points(starGeometry, starMaterial);
+            scene.add(starSystem);
+            stars.push(starSystem);
+        }
+
+        // 初始化帧数据
+        function initFrames() {
+            // 创建默认帧
+            frames = [{
+                text: document.getElementById('textInput').value,
+                fontSize: parseInt(document.getElementById('fontSize').value),
+                particleSize: parseFloat(document.getElementById('particleSize').value),
+                density: parseInt(document.getElementById('density').value),
+                zMode: document.getElementById('zMode').value,
+                zDepth: parseInt(document.getElementById('zDepth').value),
+                colorMode: document.getElementById('colorMode').value,
+                primaryColor: document.getElementById('primaryColor').value,
+                secondaryColor: document.getElementById('secondaryColor').value,
+                opacity: parseFloat(document.getElementById('opacity').value),
+                glowIntensity: parseFloat(document.getElementById('glowIntensity').value),
+                motionEffect: document.getElementById('motionEffect').value,
+                motionSpeed: parseFloat(document.getElementById('motionSpeed').value),
+                motionAmplitude: parseInt(document.getElementById('motionAmplitude').value),
+                sizeVariation: document.getElementById('sizeVariation').value,
+                sizeVariationRange: parseFloat(document.getElementById('sizeVariationRange').value),
+                duration: parseFloat(document.getElementById('frameDuration').value),
+                transitionType: document.getElementById('transitionType').value,
+                transitionDuration: parseFloat(document.getElementById('transitionDuration').value),
+                transitionChaos: parseFloat(document.getElementById('transitionChaos').value),
+                ambientLight: parseFloat(document.getElementById('ambientLight').value),
+                backgroundStyle: document.getElementById('backgroundStyle').value,
+                bgColor1: document.getElementById('bgColor1').value,
+                bgColor2: document.getElementById('bgColor2').value
+            }];
+
+            // 更新帧指示器
+            updateFrameIndicator();
+        }
+
+        // 从文本生成粒子系统 - 增加更多逼真效果
+        function generateParticles(frameIndex) {
+            try {
+                const frame = frames[frameIndex];
+                if (!frame) return null;
+
+                // 创建Canvas用于文本绘制
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                if (!ctx) throw new Error("无法获取Canvas上下文");
+
+                // 计算文本所需的Canvas大小
+                ctx.font = `${frame.fontSize}px Arial, sans-serif`;
+                const lines = frame.text.split('\n').filter(line => line.trim() !== '');
+                if (lines.length === 0) lines.push(' ');
+
+                // 计算每行高度和宽度
+                const lineHeights = [];
+                const lineWidths = [];
+                lines.forEach(line => {
+                    const metrics = ctx.measureText(line);
+                    lineHeights.push(metrics.actualBoundingBoxAscent + metrics.actualBoundingBoxDescent);
+                    lineWidths.push(metrics.width);
+                });
+
+                const maxLineWidth = Math.max(...lineWidths);
+                const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0) + (lines.length - 1) * frame.fontSize * 0.3;
+
+                // 设置Canvas尺寸
+                canvas.width = Math.max(maxLineWidth + frame.fontSize, 100);
+                canvas.height = Math.max(totalHeight + frame.fontSize, 100);
+
+                // 绘制文本
+                ctx.font = `${frame.fontSize}px Arial, sans-serif`;
+                ctx.fillStyle = '#ffffff';
+                ctx.textBaseline = 'top';
+
+                let y = (canvas.height - totalHeight) / 2;
+                lines.forEach((line, index) => {
+                    const x = (canvas.width - lineWidths[index]) / 2;
+                    ctx.fillText(line, x, y);
+                    y += lineHeights[index] + frame.fontSize * 0.3;
+                });
+
+                // 获取像素数据
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+                // 创建粒子几何
+                const geometry = new THREE.BufferGeometry();
+                const positions = [];
+                const colors = [];
+                const sizes = [];
+                const velocities = []; // 存储每个粒子的初始速度，用于动画效果
+                const originalPositions = []; // 存储原始位置，用于动画计算
+
+                // 计算中心位置
+                const halfWidth = canvas.width / 2;
+                const halfHeight = canvas.height / 2;
+
+                // 生成粒子
+                const density = Math.max(1, frame.density);
+                for (let y = 0; y < canvas.height; y += density) {
+                    for (let x = 0; x < canvas.width; x += density) {
+                        const index = (y * canvas.width + x) * 4;
+                        const alpha = imageData[index + 3];
+
+                        if (alpha > 10) {
+                            // 计算基础3D位置
+                            let posX = (x - halfWidth) * 0.5;
+                            let posY = (halfHeight - y) * 0.5;
+
+                            // 根据不同模式计算Z轴位置，增加更多3D效果
+                            let posZ;
+                            const normalizedX = x / canvas.width;
+                            const normalizedY = y / canvas.height;
+
+                            switch (frame.zMode) {
+                                case 'x-dependent':
+                                    posZ = (normalizedX - 0.5) * frame.zDepth;
+                                    break;
+                                case 'y-dependent':
+                                    posZ = (normalizedY - 0.5) * frame.zDepth;
+                                    break;
+                                case 'wave':
+                                    // 波浪效果 - 增加更自然的波动
+                                    posZ = Math.sin(normalizedX * Math.PI * 4) * Math.cos(normalizedY * Math.PI * 2) * (frame.zDepth / 2);
+                                    break;
+                                case 'sphere':
+                                    // 球形分布 - 营造包裹感
+                                    const angleX = normalizedX * Math.PI * 2;
+                                    const angleY = normalizedY * Math.PI;
+                                    posZ = Math.cos(angleY) * (frame.zDepth / 2);
+                                    const radius = Math.sin(angleY) * (frame.zDepth / 2);
+                                    posX = Math.cos(angleX) * radius;
+                                    posY = Math.sin(angleX) * radius;
+                                    break;
+                                case 'static':
+                                    posZ = frame.zDepth;
+                                    break;
+                                case 'random':
+                                default:
+                                    posZ = (Math.random() - 0.5) * frame.zDepth;
+                                    break;
+                            }
+
+                            // 存储原始位置用于动画
+                            originalPositions.push(posX, posY, posZ);
+                            positions.push(posX, posY, posZ);
+
+                            // 粒子大小变化 - 增加真实感
+                            let particleSize = frame.particleSize;
+                            switch (frame.sizeVariation) {
+                                case 'random':
+                                    particleSize *= (1 - frame.sizeVariationRange / 2 + Math.random() * frame.sizeVariationRange);
+                                    break;
+                                case 'depth-based':
+                                    // 基于深度的大小变化，增强透视感
+                                    const depthFactor = Math.max(0.2, 1 - Math.abs(posZ) / (frame.zDepth || 100));
+                                    particleSize *= depthFactor * (1 - frame.sizeVariationRange / 2 + Math.random() * frame.sizeVariationRange);
+                                    break;
+                                default: // uniform
+                                    break;
+                            }
+                            sizes.push(particleSize);
+
+                            // 初始速度 - 用于更自然的动画
+                            velocities.push(
+                                (Math.random() - 0.5) * 0.02,
+                                (Math.random() - 0.5) * 0.02,
+                                (Math.random() - 0.5) * 0.02
+                            );
+
+                            // 处理颜色 - 增加更多效果选项
+                            let color;
+                            const primary = new THREE.Color(frame.primaryColor);
+                            const secondary = new THREE.Color(frame.secondaryColor);
+
+                            switch (frame.colorMode) {
+                                case 'random':
+                                    // 随机颜色但保持在主色调范围内
+                                    color = primary.clone().lerp(secondary, Math.random());
+                                    break;
+                                case 'gradient':
+                                    // 更平滑的渐变色
+                                    const ratio = normalizedX + normalizedY * 0.5;
+                                    color = primary.clone().lerp(secondary, ratio % 1);
+                                    break;
+                                case 'depth-based':
+                                    // 基于深度的颜色变化，增强3D感
+                                    const zRatio = (posZ / frame.zDepth + 0.5);
+                                    color = primary.clone().lerp(secondary, zRatio);
+                                    break;
+                                case 'velocity-based':
+                                    // 基于速度的颜色变化（初始状态）
+                                    const speed = Math.sqrt(
+                                        velocities[velocities.length - 3] ** 2 +
+                                        velocities[velocities.length - 2] ** 2 +
+                                        velocities[velocities.length - 1] ** 2
+                                    );
+                                    color = primary.clone().lerp(secondary, speed * 20);
+                                    break;
+                                case 'single':
+                                default:
+                                    color = primary.clone();
+                                    break;
+                            }
+
+                            colors.push(color.r, color.g, color.b);
+                        }
+                    }
+                }
+
+                // 确保至少有一个粒子
+                if (positions.length === 0) {
+                    const posX = 0, posY = 0, posZ = 0;
+                    positions.push(posX, posY, posZ);
+                    originalPositions.push(posX, posY, posZ);
+                    sizes.push(frame.particleSize);
+                    velocities.push(0, 0, 0);
+
+                    const color = new THREE.Color(frame.primaryColor);
+                    colors.push(color.r, color.g, color.b);
+                }
+
+                // 设置几何体属性
+                geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+                geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+                geometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+                geometry.setAttribute('velocity', new THREE.Float32BufferAttribute(velocities, 3));
+                geometry.setAttribute('originalPosition', new THREE.Float32BufferAttribute(originalPositions, 3));
+
+                // 创建带发光效果的粒子材质
+                let material;
+                if (frame.glowIntensity > 0) {
+                    // 使用自定义着色器实现发光效果
+                    material = new THREE.ShaderMaterial({
+                        uniforms: {
+                            pointTexture: { value: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') },
+                            glowIntensity: { value: frame.glowIntensity },
+                            opacity: { value: frame.opacity }
+                        },
+                        vertexShader: `
+                                attribute float size;
+                                attribute vec3 color;
+                                varying vec3 vColor;
+                                void main() {
+                                    vColor = color;
+                                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                                    gl_PointSize = size * (300.0 / -mvPosition.z);
+                                    gl_Position = projectionMatrix * mvPosition;
+                                }
+                            `,
+                        fragmentShader: `
+                                uniform sampler2D pointTexture;
+                                uniform float glowIntensity;
+                                uniform float opacity;
+                                varying vec3 vColor;
+                                void main() {
+                                    vec4 texture = texture2D(pointTexture, gl_PointCoord);
+                                    // 发光效果：增加边缘亮度
+                                    float glow = 1.0 - length(gl_PointCoord - vec2(0.5)) * 2.0;
+                                    glow = pow(glow, 2.0) * glowIntensity;
+                                    gl_FragColor = vec4(vColor + glow, opacity) * texture;
+                                }
+                            `,
+                        transparent: true,
+                        blending: THREE.AdditiveBlending // 叠加混合增强发光效果
+                    });
+                } else {
+                    // 普通粒子材质
+                    material = new THREE.PointsMaterial({
+                        size: frame.particleSize,
+                        vertexColors: THREE.VertexColors,
+                        transparent: true,
+                        opacity: frame.opacity,
+                        sizeAttenuation: true
+                    });
+                }
+
+                // 创建粒子系统
+                const particleSystem = new THREE.Points(geometry, material);
+                particleSystem.userData.rotationSpeed = frame.motionSpeed;
+                particleSystem.userData.frameIndex = frameIndex;
+                particleSystem.userData.motionEffect = frame.motionEffect;
+                particleSystem.userData.motionAmplitude = frame.motionAmplitude;
+                particleSystem.userData.lastUpdate = 0;
+                particleSystem.userData.colorMode = frame.colorMode;
+                particleSystem.userData.primaryColor = new THREE.Color(frame.primaryColor);
+                particleSystem.userData.secondaryColor = new THREE.Color(frame.secondaryColor);
+
+                // 更新环境光
+                ambientLight.intensity = frame.ambientLight;
+
+                // 更新背景
+                updateBackground(frame);
+
+                return particleSystem;
+            } catch (error) {
+                console.error("生成粒子失败:", error);
+                showStatus("生成粒子失败，请检查参数");
+                return null;
+            }
+        }
+
+        // 更新背景样式
+        function updateBackground(frame) {
+            if (!scene) return;
+
+            // 控制星空可见性
+            stars.forEach(starSystem => {
+                starSystem.visible = frame.backgroundStyle === 'stars';
+            });
+
+            // 设置背景样式
+            switch (frame.backgroundStyle) {
+                case 'gradient':
+                    // 创建渐变背景需要使用自定义渲染
+                    scene.background = null;
+                    renderer.setClearColor(0x000000, 0);
+                    break;
+                case 'solid':
+                    scene.background = new THREE.Color(frame.bgColor1);
+                    break;
+                case 'stars':
+                    scene.background = new THREE.Color(frame.bgColor1);
+                    break;
+            }
+        }
+
+        // 渲染渐变背景
+        function renderGradientBackground() {
+            if (!renderer || !frames[activeFrameIndex]) return;
+
+            const frame = frames[activeFrameIndex];
+            if (frame.backgroundStyle !== 'gradient') return;
+
+            // 使用Three.js的方式绘制渐变背景
+            const canvas = renderer.domElement;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            const width = canvas.width;
+            const height = canvas.height;
+
+            // 保存当前状态
+            ctx.save();
+
+            // 清除画布
+            ctx.clearRect(0, 0, width, height);
+
+            // 创建渐变
+            const gradient = ctx.createLinearGradient(0, 0, 0, height);
+            const color1 = new THREE.Color(frame.bgColor1);
+            const color2 = new THREE.Color(frame.bgColor2);
+
+            gradient.addColorStop(0, `rgb(${Math.floor(color1.r * 255)}, ${Math.floor(color1.g * 255)}, ${Math.floor(color1.b * 255)})`);
+            gradient.addColorStop(1, `rgb(${Math.floor(color2.r * 255)}, ${Math.floor(color2.g * 255)}, ${Math.floor(color2.b * 255)})`);
+
+            // 绘制渐变背景
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // 恢复状态
+            ctx.restore();
+        }
+
+        // 应用粒子动画效果
+        function applyParticleAnimations(system, deltaTime) {
+            if (!system || !system.geometry.attributes.originalPosition) return;
+
+            const frame = frames[system.userData.frameIndex];
+            if (!frame || frame.motionEffect === 'none') return;
+
+            const positions = system.geometry.attributes.position;
+            const originalPositions = system.geometry.attributes.originalPosition;
+            const velocities = system.geometry.attributes.velocity;
+            const colors = system.geometry.attributes.color;
+            const time = animationTime * frame.motionSpeed;
+
+            // 对每个粒子应用动画
+            for (let i = 0; i < positions.count; i++) {
+                const i3 = i * 3;
+
+                // 获取原始位置
+                const ox = originalPositions.array[i3];
+                const oy = originalPositions.array[i3 + 1];
+                const oz = originalPositions.array[i3 + 2];
+
+                // 根据不同动画效果计算新位置
+                let x = ox, y = oy, z = oz;
+
+                switch (frame.motionEffect) {
+                    case 'rotation':
+                        // 更自然的旋转效果
+                        const rotX = time;
+                        const rotY = time * 0.7;
+
+                        // 绕Y轴旋转
+                        x = ox * Math.cos(rotY) - oz * Math.sin(rotY);
+                        z = ox * Math.sin(rotY) + oz * Math.cos(rotY);
+
+                        // 绕X轴旋转
+                        const tempY = y;
+                        y = tempY * Math.cos(rotX) - z * Math.sin(rotX);
+                        z = tempY * Math.sin(rotX) + z * Math.cos(rotX);
+                        break;
+
+                    case 'float':
+                        // 漂浮效果 - 更自然的随机运动
+                        x = ox + Math.sin(time + i * 0.3) * frame.motionAmplitude * 0.3;
+                        y = oy + Math.cos(time + i * 0.5) * frame.motionAmplitude * 0.3;
+                        z = oz + Math.sin(time + i * 0.7) * frame.motionAmplitude * 0.2;
+                        break;
+
+                    case 'pulse':
+                        // 脉动效果 - 呼吸感
+                        const pulse = (Math.sin(time) + 1) * 0.5;
+                        x = ox * (1 + pulse * frame.motionAmplitude * 0.01);
+                        y = oy * (1 + pulse * frame.motionAmplitude * 0.01);
+                        z = oz * (1 + pulse * frame.motionAmplitude * 0.01);
+                        break;
+
+                    case 'wave':
+                        // 波浪效果 - 更流畅的波动
+                        x = ox + Math.sin(oy * 0.1 + time) * frame.motionAmplitude;
+                        z = oz + Math.cos(ox * 0.1 + time) * frame.motionAmplitude * 0.5;
+                        break;
+
+                    case 'vortex':
+                        // 漩涡效果 - 旋转吸入感
+                        const distance = Math.sqrt(ox * ox + oy * oy);
+                        const angle = time + distance * 0.1;
+                        const radius = distance * (1 - Math.sin(time) * 0.1);
+
+                        x = Math.cos(angle) * radius;
+                        y = Math.sin(angle) * radius;
+                        z = oz + Math.sin(time + distance) * frame.motionAmplitude * 0.5;
+                        break;
+                }
+
+                // 更新位置
+                positions.array[i3] = x;
+                positions.array[i3 + 1] = y;
+                positions.array[i3 + 2] = z;
+
+                // 实时更新基于速度的颜色
+                if (system.userData.colorMode === 'velocity-based') {
+                    // 计算当前速度
+                    const vx = x - ox;
+                    const vy = y - oy;
+                    const vz = z - oz;
+                    const speed = Math.sqrt(vx * vx + vy * vy + vz * vz);
+
+                    // 基于速度更新颜色
+                    const ratio = Math.min(1, speed * 0.5);
+                    const color = system.userData.primaryColor.clone().lerp(system.userData.secondaryColor, ratio);
+                    colors.array[i3] = color.r;
+                    colors.array[i3 + 1] = color.g;
+                    colors.array[i3 + 2] = color.b;
+                }
+            }
+
+            positions.needsUpdate = true;
+            if (system.userData.colorMode === 'velocity-based') {
+                colors.needsUpdate = true;
+            }
+        }
+
+        // 渲染当前帧
+        function renderCurrentFrame() {
+            try {
+                clearParticles();
+                document.getElementById('renderCurrentBtn').disabled = true;
+                showStatus("正在渲染粒子...");
+
+                setTimeout(() => {
+                    try {
+                        const system = generateParticles(activeFrameIndex);
+                        if (system) {
+                            scene.add(system);
+                            currentSystem = system;
+                            particleSystems[activeFrameIndex] = system;
+
+                            document.getElementById('playBtn').disabled = false;
+                            showStatus(`已渲染帧 ${activeFrameIndex + 1}，粒子数量: ${system.geometry.attributes.position.count}`);
+                        } else {
+                            showStatus(`渲染帧 ${activeFrameIndex + 1} 失败`);
+                        }
+                    } finally {
+                        document.getElementById('renderCurrentBtn').disabled = false;
+                    }
+                }, 50);
+            } catch (error) {
+                console.error("渲染帧失败:", error);
+                showStatus("渲染失败，请重试");
+                document.getElementById('renderCurrentBtn').disabled = false;
+            }
+        }
+
+        // 清除场景中的粒子
+        function clearParticles() {
+            if (currentSystem) {
+                scene.remove(currentSystem);
+                currentSystem = null;
+            }
+
+            if (isInTransition) {
+                const fromSystem = particleSystems[fromFrameIndex];
+                const toSystem = particleSystems[(activeFrameIndex + 1) % frames.length];
+                if (fromSystem) scene.remove(fromSystem);
+                if (toSystem) scene.remove(toSystem);
+                isInTransition = false;
+            }
+        }
+
+        // 更新帧指示器
+        function updateFrameIndicator() {
+            document.getElementById('frameIndicator').textContent =
+                `帧 ${activeFrameIndex + 1} / ${frames.length}`;
+
+            document.getElementById('prevFrameBtn').disabled = activeFrameIndex === 0;
+            document.getElementById('nextFrameBtn').disabled = activeFrameIndex === frames.length - 1;
+            document.getElementById('deleteFrameBtn').disabled = frames.length <= 1;
+        }
+
+        // 切换到指定帧
+        function switchToFrame(index, skipRender = false) {
+            if (index < 0 || index >= frames.length) return;
+
+            if (isPlaying) {
+                pauseAnimation();
+            }
+
+            activeFrameIndex = index;
+            updateFrameIndicator();
+
+            const frame = frames[index];
+            document.getElementById('textInput').value = frame.text;
+            document.getElementById('fontSize').value = frame.fontSize;
+            document.getElementById('particleSize').value = frame.particleSize;
+            document.getElementById('density').value = frame.density;
+            document.getElementById('zMode').value = frame.zMode;
+            document.getElementById('zDepth').value = frame.zDepth;
+            document.getElementById('colorMode').value = frame.colorMode;
+            document.getElementById('primaryColor').value = frame.primaryColor;
+            document.getElementById('secondaryColor').value = frame.secondaryColor || '#ff00ff';
+            document.getElementById('opacity').value = frame.opacity;
+            document.getElementById('glowIntensity').value = frame.glowIntensity;
+            document.getElementById('motionEffect').value = frame.motionEffect;
+            document.getElementById('motionSpeed').value = frame.motionSpeed;
+            document.getElementById('motionAmplitude').value = frame.motionAmplitude;
+            document.getElementById('sizeVariation').value = frame.sizeVariation;
+            document.getElementById('sizeVariationRange').value = frame.sizeVariationRange;
+            document.getElementById('frameDuration').value = frame.duration;
+            document.getElementById('transitionType').value = frame.transitionType;
+            document.getElementById('transitionDuration').value = frame.transitionDuration;
+            document.getElementById('transitionChaos').value = frame.transitionChaos;
+            document.getElementById('ambientLight').value = frame.ambientLight;
+            document.getElementById('backgroundStyle').value = frame.backgroundStyle;
+            document.getElementById('bgColor1').value = frame.bgColor1;
+            document.getElementById('bgColor2').value = frame.bgColor2;
+
+            // 更新显示值
+            document.getElementById('opacityValue').textContent = frame.opacity.toFixed(1);
+            document.getElementById('glowValue').textContent = frame.glowIntensity.toFixed(1);
+            document.getElementById('motionSpeedValue').textContent = frame.motionSpeed.toFixed(3);
+            document.getElementById('motionAmplitudeValue').textContent = frame.motionAmplitude;
+            document.getElementById('sizeVariationValue').textContent = frame.sizeVariationRange.toFixed(1);
+            document.getElementById('transitionChaosValue').textContent = frame.transitionChaos.toFixed(1);
+            document.getElementById('ambientLightValue').textContent = frame.ambientLight.toFixed(1);
+
+            // 更新颜色选项显示
+            updateColorOptionsVisibility();
+            updateBackgroundOptionsVisibility();
+
+            // 渲染帧（除非指定跳过）
+            if (!skipRender) {
+                if (particleSystems[activeFrameIndex]) {
+                    clearParticles();
+                    currentSystem = particleSystems[activeFrameIndex];
+                    scene.add(currentSystem);
+                    showStatus(`已加载帧 ${activeFrameIndex + 1}`);
+                } else {
+                    renderCurrentFrame();
+                }
+            }
+        }
+
+        // 添加新帧
+        function addNewFrame() {
+            const currentFrame = JSON.parse(JSON.stringify(frames[activeFrameIndex]));
+            frames.push(currentFrame);
+
+            if (particleSystems.length <= activeFrameIndex) {
+                particleSystems.push(null);
+            }
+
+            switchToFrame(frames.length - 1);
+            showStatus(`已添加新帧，共 ${frames.length} 帧`);
+        }
+
+        // 删除当前帧
+        function deleteFrame() {
+            if (frames.length <= 1) return;
+
+            if (isPlaying) {
+                pauseAnimation();
+            }
+
+            frames.splice(activeFrameIndex, 1);
+
+            if (particleSystems[activeFrameIndex]) {
+                scene.remove(particleSystems[activeFrameIndex]);
+                particleSystems[activeFrameIndex].geometry.dispose();
+                particleSystems[activeFrameIndex].material.dispose();
+            }
+            particleSystems.splice(activeFrameIndex, 1);
+
+            const newIndex = Math.min(activeFrameIndex, frames.length - 1);
+            switchToFrame(newIndex);
+            showStatus(`已删除帧，剩余 ${frames.length} 帧`);
+        }
+
+        // 复制当前帧
+        function copyCurrentFrame() {
+            const currentFrame = JSON.parse(JSON.stringify(frames[activeFrameIndex]));
+            frames.splice(activeFrameIndex + 1, 0, currentFrame);
+            particleSystems.splice(activeFrameIndex + 1, 0, null);
+
+            switchToFrame(activeFrameIndex + 1);
+            showStatus(`已复制当前帧`);
+        }
+
+        // 保存当前表单数据到帧
+        function saveFrameData() {
+            // 从表单获取所有参数值
+            const updatedFrame = {
+                text: document.getElementById('textInput').value,
+                fontSize: parseInt(document.getElementById('fontSize').value),
+                particleSize: parseFloat(document.getElementById('particleSize').value),
+                density: parseInt(document.getElementById('density').value),
+                zMode: document.getElementById('zMode').value,
+                zDepth: parseInt(document.getElementById('zDepth').value),
+                colorMode: document.getElementById('colorMode').value,
+                primaryColor: document.getElementById('primaryColor').value,
+                secondaryColor: document.getElementById('secondaryColor').value,
+                opacity: parseFloat(document.getElementById('opacity').value),
+                glowIntensity: parseFloat(document.getElementById('glowIntensity').value),
+                motionEffect: document.getElementById('motionEffect').value,
+                motionSpeed: parseFloat(document.getElementById('motionSpeed').value),
+                motionAmplitude: parseInt(document.getElementById('motionAmplitude').value),
+                sizeVariation: document.getElementById('sizeVariation').value,
+                sizeVariationRange: parseFloat(document.getElementById('sizeVariationRange').value),
+                duration: parseFloat(document.getElementById('frameDuration').value),
+                transitionType: document.getElementById('transitionType').value,
+                transitionDuration: parseFloat(document.getElementById('transitionDuration').value),
+                transitionChaos: parseFloat(document.getElementById('transitionChaos').value),
+                ambientLight: parseFloat(document.getElementById('ambientLight').value),
+                backgroundStyle: document.getElementById('backgroundStyle').value,
+                bgColor1: document.getElementById('bgColor1').value,
+                bgColor2: document.getElementById('bgColor2').value
+            };
+
+            // 验证并修复可能的NaN值
+            Object.keys(updatedFrame).forEach(key => {
+                if (isNaN(updatedFrame[key])) {
+                    // 使用默认值替换无效值
+                    const defaults = {
+                        fontSize: 40,
+                        particleSize: 2,
+                        density: 3,
+                        zDepth: 50,
+                        opacity: 1,
+                        glowIntensity: 0,
+                        motionSpeed: 0.005,
+                        motionAmplitude: 10,
+                        sizeVariationRange: 0.3,
+                        duration: 2,
+                        transitionDuration: 1,
+                        transitionChaos: 0.3,
+                        ambientLight: 0.8
+                    };
+                    if (defaults.hasOwnProperty(key)) {
+                        updatedFrame[key] = defaults[key];
+                        // 更新UI显示
+                        const element = document.getElementById(key);
+                        if (element) element.value = defaults[key];
+                    }
+                }
+            });
+
+            frames[activeFrameIndex] = updatedFrame;
+
+            // 清除缓存的粒子系统，强制重新生成
+            if (particleSystems[activeFrameIndex]) {
+                scene.remove(particleSystems[activeFrameIndex]);
+                particleSystems[activeFrameIndex].geometry.dispose();
+                particleSystems[activeFrameIndex].material.dispose();
+                particleSystems[activeFrameIndex] = null;
+            }
+
+            renderCurrentFrame();
+        }
+
+        // 更新颜色选项可见性
+        function updateColorOptionsVisibility() {
+            const colorMode = document.getElementById('colorMode').value;
+            const secondaryGroup = document.getElementById('secondaryColorGroup');
+
+            // 更多模式需要辅助色
+            const needsSecondary = ['gradient', 'random', 'depth-based', 'velocity-based'];
+            secondaryGroup.style.display = needsSecondary.includes(colorMode) ? 'block' : 'none';
+        }
+
+        // 更新背景颜色选项可见性
+        function updateBackgroundOptionsVisibility() {
+            const bgStyle = document.getElementById('backgroundStyle').value;
+            const bgColor2Group = document.getElementById('bgColor2Group');
+
+            bgColor2Group.style.display = bgStyle === 'gradient' ? 'block' : 'none';
+        }
+
+        // 应用预设效果
+        function applyPreset(presetType, presetName) {
+            const presets = {
+                // 粒子风格预设
+                neon: {
+                    colorMode: 'gradient',
+                    primaryColor: '#00ffff',
+                    secondaryColor: '#ff00ff',
+                    glowIntensity: 1.5,
+                    particleSize: 1.5,
+                    sizeVariation: 'random',
+                    sizeVariationRange: 0.5,
+                    zMode: 'random',
+                    zDepth: 80,
+                    backgroundStyle: 'gradient',
+                    bgColor1: '#050510',
+                    bgColor2: '#100020'
+                },
+                fire: {
+                    colorMode: 'gradient',
+                    primaryColor: '#ff4400',
+                    secondaryColor: '#ffff00',
+                    glowIntensity: 1.2,
+                    particleSize: 2,
+                    sizeVariation: 'depth-based',
+                    sizeVariationRange: 0.7,
+                    zMode: 'y-dependent',
+                    zDepth: 60,
+                    motionEffect: 'float',
+                    motionAmplitude: 15,
+                    backgroundStyle: 'solid',
+                    bgColor1: '#100500'
+                },
+                water: {
+                    colorMode: 'depth-based',
+                    primaryColor: '#0044ff',
+                    secondaryColor: '#00ffff',
+                    glowIntensity: 0.8,
+                    particleSize: 2,
+                    sizeVariation: 'random',
+                    sizeVariationRange: 0.4,
+                    zMode: 'wave',
+                    zDepth: 60,
+                    motionEffect: 'wave',
+                    motionAmplitude: 8,
+                    backgroundStyle: 'gradient',
+                    bgColor1: '#000a1a',
+                    bgColor2: '#001a3a'
+                },
+                stars: {
+                    colorMode: 'random',
+                    primaryColor: '#ffffff',
+                    secondaryColor: '#c0c0ff',
+                    glowIntensity: 0.5,
+                    particleSize: 1.2,
+                    sizeVariation: 'random',
+                    sizeVariationRange: 0.8,
+                    zMode: 'sphere',
+                    zDepth: 150,
+                    motionEffect: 'float',
+                    motionAmplitude: 5,
+                    backgroundStyle: 'stars',
+                    bgColor1: '#000010'
+                },
+                digital: {
+                    colorMode: 'single',
+                    primaryColor: '#00ff00',
+                    glowIntensity: 0.3,
+                    particleSize: 1.8,
+                    sizeVariation: 'uniform',
+                    zMode: 'x-dependent',
+                    zDepth: 50,
+                    motionEffect: 'rotation',
+                    motionSpeed: 0.003,
+                    backgroundStyle: 'solid',
+                    bgColor1: '#000a00'
+                },
+                glow: {
+                    colorMode: 'gradient',
+                    primaryColor: '#ff66cc',
+                    secondaryColor: '#6666ff',
+                    glowIntensity: 2.0,
+                    particleSize: 2.5,
+                    sizeVariation: 'depth-based',
+                    sizeVariationRange: 0.6,
+                    zMode: 'random',
+                    zDepth: 100,
+                    motionEffect: 'pulse',
+                    backgroundStyle: 'gradient',
+                    bgColor1: '#0a0010',
+                    bgColor2: '#1a0030'
+                },
+
+                // 动画效果预设
+                gentle: {
+                    motionEffect: 'float',
+                    motionSpeed: 0.002,
+                    motionAmplitude: 5,
+                    zMode: 'random',
+                    zDepth: 40
+                },
+                dynamic: {
+                    motionEffect: 'rotation',
+                    motionSpeed: 0.008,
+                    motionAmplitude: 0,
+                    zMode: 'sphere',
+                    zDepth: 80
+                },
+                wave: {
+                    motionEffect: 'wave',
+                    motionSpeed: 0.006,
+                    motionAmplitude: 12,
+                    zMode: 'wave',
+                    zDepth: 60
+                },
+                intense: {
+                    motionEffect: 'vortex',
+                    motionSpeed: 0.015,
+                    motionAmplitude: 20,
+                    zMode: 'random',
+                    zDepth: 100
+                },
+                pulse: {
+                    motionEffect: 'pulse',
+                    motionSpeed: 0.004,
+                    motionAmplitude: 15,
+                    zMode: 'static',
+                    zDepth: 30
+                },
+
+                // 过渡效果预设
+                smooth: {
+                    transitionType: 'fade',
+                    transitionDuration: 1.2,
+                    transitionChaos: 0.2
+                },
+                dramatic: {
+                    transitionType: 'explode',
+                    transitionDuration: 1.5,
+                    transitionChaos: 0.8
+                },
+                fast: {
+                    transitionType: 'dissolve',
+                    transitionDuration: 0.5,
+                    transitionChaos: 0.5
+                },
+                mystical: {
+                    transitionType: 'implode',
+                    transitionDuration: 1.0,
+                    transitionChaos: 0.6
+                }
+            };
+
+            const preset = presets[presetName];
+            if (!preset) return;
+
+            // 应用预设值到表单
+            Object.keys(preset).forEach(key => {
+                const element = document.getElementById(key);
+                if (element) {
+                    element.value = preset[key];
+
+                    // 更新显示值
+                    if (key === 'opacity') {
+                        document.getElementById('opacityValue').textContent = parseFloat(preset[key]).toFixed(1);
+                    } else if (key === 'glowIntensity') {
+                        document.getElementById('glowValue').textContent = parseFloat(preset[key]).toFixed(1);
+                    } else if (key === 'motionSpeed') {
+                        document.getElementById('motionSpeedValue').textContent = parseFloat(preset[key]).toFixed(3);
+                    } else if (key === 'motionAmplitude') {
+                        document.getElementById('motionAmplitudeValue').textContent = preset[key];
+                    } else if (key === 'sizeVariationRange') {
+                        document.getElementById('sizeVariationValue').textContent = parseFloat(preset[key]).toFixed(1);
+                    } else if (key === 'transitionChaos') {
+                        document.getElementById('transitionChaosValue').textContent = parseFloat(preset[key]).toFixed(1);
+                    } else if (key === 'ambientLight') {
+                        document.getElementById('ambientLightValue').textContent = parseFloat(preset[key]).toFixed(1);
+                    }
+                }
+            });
+
+            // 更新相关显示
+            updateColorOptionsVisibility();
+            updateBackgroundOptionsVisibility();
+
+            // 应用到当前帧
+            saveFrameData();
+            showStatus(`已应用 "${presetName}" 预设效果`);
+        }
+
+        // 播放动画
+        function playAnimation() {
+            if (isPlaying || frames.length < 1) return;
+
+            if (!particleSystems[0]) {
+                renderCurrentFrame();
+                return;
+            }
+
+            isPlaying = true;
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+            document.getElementById('renderCurrentBtn').disabled = true;
+
+            // 收起参数面板，避免遮挡
+            if (panelExpanded) {
+                togglePanel();
+            }
+
+            preloadAllFrames();
+            playNextFrame();
+        }
+
+        // 预加载所有帧
+        function preloadAllFrames() {
+            frames.forEach((frame, index) => {
+                if (!particleSystems[index]) {
+                    setTimeout(() => {
+                        if (!isPlaying) return;
+                        particleSystems[index] = generateParticles(index);
+                    }, index * 100);
+                }
+            });
+        }
+
+        // 播放下一帧
+        function playNextFrame() {
+            if (!isPlaying) return;
+
+            if (frameTimer) {
+                clearTimeout(frameTimer);
+                frameTimer = null;
+            }
+
+            if (isInTransition) {
+                animateTransition();
+                return;
+            }
+
+            const nextFrameIndex = (activeFrameIndex + 1) % frames.length;
+            startTransition(activeFrameIndex, nextFrameIndex);
+        }
+
+        // 开始帧过渡 - 增加更多过渡效果
+        function startTransition(fromIndex, toIndex) {
+            // 确保两个帧的粒子系统都存在
+            if (!particleSystems[fromIndex]) {
+                particleSystems[fromIndex] = generateParticles(fromIndex);
+                if (!particleSystems[fromIndex]) {
+                    activeFrameIndex = toIndex;
+                    switchToFrame(activeFrameIndex, true);
+                    frameTimer = setTimeout(playNextFrame, frames[activeFrameIndex].duration * 1000);
+                    return;
+                }
+            }
+
+            if (!particleSystems[toIndex]) {
+                particleSystems[toIndex] = generateParticles(toIndex);
+                if (!particleSystems[toIndex]) {
+                    activeFrameIndex = toIndex;
+                    switchToFrame(activeFrameIndex, true);
+                    frameTimer = setTimeout(playNextFrame, frames[activeFrameIndex].duration * 1000);
+                    return;
+                }
+            }
+
+            // 清除当前场景
+            clearParticles();
+
+            // 添加两个帧的粒子系统
+            const fromSystem = particleSystems[fromIndex];
+            const toSystem = particleSystems[toIndex];
+
+            // 重置过渡前状态
+            fromSystem.visible = true;
+            toSystem.visible = true;
+
+            // 保存原始材质属性
+            fromSystem.userData.originalOpacity = fromSystem.material.opacity;
+            toSystem.userData.originalOpacity = toSystem.material.opacity;
+
+            // 对于着色器材质，使用uniform控制透明度
+            if (fromSystem.material.uniforms) {
+                fromSystem.material.uniforms.opacity.value = frames[fromIndex].opacity;
+            } else {
+                fromSystem.material.opacity = frames[fromIndex].opacity;
+            }
+
+            if (toSystem.material.uniforms) {
+                toSystem.material.uniforms.opacity.value = 0;
+            } else {
+                toSystem.material.opacity = 0;
+            }
+
+            fromSystem.scale.set(1, 1, 1);
+            toSystem.scale.set(1, 1, 1);
+            fromSystem.position.set(0, 0, 0);
+            toSystem.position.set(0, 0, 0);
+
+            scene.add(fromSystem);
+            scene.add(toSystem);
+
+            // 设置过渡状态
+            isInTransition = true;
+            fromFrameIndex = fromIndex;
+            transitionProgress = 0;
+
+            // 开始过渡动画
+            animateTransition();
+        }
+
+        // 帧过渡动画 - 实现更多过渡效果
+        function animateTransition() {
+            if (!isPlaying || !isInTransition) return;
+
+            const fromSystem = particleSystems[fromFrameIndex];
+            const toIndex = (activeFrameIndex + 1) % frames.length;
+            const toSystem = particleSystems[toIndex];
+            const currentFrame = frames[activeFrameIndex];
+            const transitionDuration = currentFrame.transitionDuration * 1000;
+
+            // 检查系统是否存在
+            if (!fromSystem || !toSystem) {
+                endTransition(toIndex);
+                return;
+            }
+
+            // 更新过渡进度
+            const progressIncrement = 16.67 / transitionDuration; // 基于60fps
+            transitionProgress += progressIncrement;
+
+            if (transitionProgress >= 1) {
+                endTransition(toIndex);
+                return;
+            }
+
+            // 应用过渡效果
+            applyTransitionEffect(fromSystem, toSystem, transitionProgress, currentFrame.transitionType, currentFrame.transitionChaos);
+
+            // 继续动画
+            animationId = requestAnimationFrame(animateTransition);
+        }
+
+        // 结束过渡
+        function endTransition(toIndex) {
+            transitionProgress = 1;
+            isInTransition = false;
+
+            // 清除场景
+            const fromSystem = particleSystems[fromFrameIndex];
+            const toSystem = particleSystems[toIndex];
+            if (fromSystem) scene.remove(fromSystem);
+            if (toSystem) scene.remove(toSystem);
+
+            // 恢复材质属性
+            if (fromSystem && fromSystem.userData.originalOpacity !== undefined) {
+                if (fromSystem.material.uniforms) {
+                    fromSystem.material.uniforms.opacity.value = fromSystem.userData.originalOpacity;
+                } else {
+                    fromSystem.material.opacity = fromSystem.userData.originalOpacity;
+                }
+            }
+
+            if (toSystem && toSystem.userData.originalOpacity !== undefined) {
+                if (toSystem.material.uniforms) {
+                    toSystem.material.uniforms.opacity.value = toSystem.userData.originalOpacity;
+                } else {
+                    toSystem.material.opacity = toSystem.userData.originalOpacity;
+                }
+            }
+
+            // 切换到下一帧
+            activeFrameIndex = toIndex;
+            updateFrameIndicator();
+
+            // 显示新帧
+            currentSystem = particleSystems[activeFrameIndex];
+            if (currentSystem) {
+                scene.add(currentSystem);
+            }
+
+            // 设置下一帧的计时器
+            frameTimer = setTimeout(playNextFrame, frames[activeFrameIndex].duration * 1000);
+        }
+
+        // 应用过渡效果 - 增加更多逼真的过渡效果
+        function applyTransitionEffect(fromSystem, toSystem, progress, type, chaos) {
+            // 基本过渡效果应用于整个系统
+            switch (type) {
+                case 'fade':
+                    // 淡入淡出 - 支持着色器材质
+                    if (fromSystem.material.uniforms) {
+                        fromSystem.material.uniforms.opacity.value = frames[fromFrameIndex].opacity * (1 - progress);
+                    } else {
+                        fromSystem.material.opacity = frames[fromFrameIndex].opacity * (1 - progress);
+                    }
+
+                    if (toSystem.material.uniforms) {
+                        toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    } else {
+                        toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    }
+                    break;
+
+                case 'move':
+                    // 移动过渡
+                    fromSystem.position.x = (1 - progress) * 0 - progress * 200;
+                    toSystem.position.x = (1 - progress) * 200 + progress * 0;
+
+                    // 同步透明度变化
+                    if (fromSystem.material.uniforms) {
+                        fromSystem.material.uniforms.opacity.value = frames[fromFrameIndex].opacity * (1 - progress);
+                    } else {
+                        fromSystem.material.opacity = frames[fromFrameIndex].opacity * (1 - progress);
+                    }
+
+                    if (toSystem.material.uniforms) {
+                        toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    } else {
+                        toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    }
+                    break;
+
+                case 'scale':
+                    // 缩放过渡
+                    fromSystem.scale.set(1 - progress, 1 - progress, 1 - progress);
+                    toSystem.scale.set(progress, progress, progress);
+
+                    // 同步透明度变化
+                    if (fromSystem.material.uniforms) {
+                        fromSystem.material.uniforms.opacity.value = frames[fromFrameIndex].opacity * (1 - progress);
+                    } else {
+                        fromSystem.material.opacity = frames[fromFrameIndex].opacity * (1 - progress);
+                    }
+
+                    if (toSystem.material.uniforms) {
+                        toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    } else {
+                        toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    }
+                    break;
+
+                case 'dissolve':
+                    // 粒子消散效果 - 每个粒子有不同的消失时间
+                    if (fromSystem.geometry.attributes.position) {
+                        const fromOpacity = fromSystem.material.uniforms ? fromSystem.material.uniforms.opacity.value : fromSystem.material.opacity;
+
+                        // 确保有不透明度属性
+                        if (!fromSystem.geometry.attributes.opacity) {
+                            const opacityArray = new Float32Array(fromSystem.geometry.attributes.position.count);
+                            opacityArray.fill(1);
+                            fromSystem.geometry.setAttribute('opacity', new THREE.Float32BufferAttribute(opacityArray, 1));
+                        }
+
+                        const opacityAttr = fromSystem.geometry.attributes.opacity;
+
+                        for (let i = 0; i < fromSystem.geometry.attributes.position.count; i++) {
+                            // 随机消散时间，增加混乱度参数控制
+                            const particleProgress = progress * (1 + (Math.random() - 0.5) * chaos * 2);
+                            const particleOpacity = Math.max(0, 1 - particleProgress);
+                            opacityAttr.array[i] = particleOpacity;
+                        }
+
+                        opacityAttr.needsUpdate = true;
+
+                        // 更新材质以使用顶点不透明度
+                        if (!fromSystem.material.defines.USE_OPACITY_ATTRIBUTE) {
+                            fromSystem.material.defines.USE_OPACITY_ATTRIBUTE = 1;
+                            fromSystem.material.fragmentShader = `
+                                    #define USE_OPACITY_ATTRIBUTE
+                                    uniform sampler2D pointTexture;
+                                    uniform float glowIntensity;
+                                    uniform float opacity;
+                                    varying vec3 vColor;
+                                    attribute float opacity;
+                                    void main() {
+                                        vec4 texture = texture2D(pointTexture, gl_PointCoord);
+                                        float glow = 1.0 - length(gl_PointCoord - vec2(0.5)) * 2.0;
+                                        glow = pow(glow, 2.0) * glowIntensity;
+                                        gl_FragColor = vec4(vColor + glow, opacity * opacity) * texture;
+                                    }
+                                `;
+                            fromSystem.material.needsUpdate = true;
+                        }
+                    }
+
+                    // 目标粒子淡入
+                    if (toSystem.material.uniforms) {
+                        toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    } else {
+                        toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    }
+                    break;
+
+                case 'explode':
+                    // 爆炸效果
+                    if (fromSystem.geometry.attributes.originalPosition) {
+                        const positions = fromSystem.geometry.attributes.position;
+                        const originalPositions = fromSystem.geometry.attributes.originalPosition;
+
+                        for (let i = 0; i < positions.count; i++) {
+                            const i3 = i * 3;
+
+                            // 从中心向外爆炸
+                            const ox = originalPositions.array[i3];
+                            const oy = originalPositions.array[i3 + 1];
+                            const oz = originalPositions.array[i3 + 2];
+
+                            // 爆炸方向基于粒子位置
+                            const dirX = ox;
+                            const dirY = oy;
+                            const dirZ = oz;
+
+                            // 距离中心越远的粒子飞得越快
+                            const distance = Math.sqrt(ox * ox + oy * oy + oz * oz);
+                            const speed = 1 + distance * 0.01;
+
+                            // 添加随机性
+                            const randomFactor = 1 + (Math.random() - 0.5) * chaos * 2;
+
+                            positions.array[i3] = ox + dirX * progress * speed * randomFactor;
+                            positions.array[i3 + 1] = oy + dirY * progress * speed * randomFactor;
+                            positions.array[i3 + 2] = oz + dirZ * progress * speed * randomFactor;
+                        }
+                        positions.needsUpdate = true;
+
+                        // 更新透明度
+                        if (fromSystem.material.uniforms) {
+                            fromSystem.material.uniforms.opacity.value = frames[fromFrameIndex].opacity * (1 - progress);
+                        } else {
+                            fromSystem.material.opacity = frames[fromFrameIndex].opacity * (1 - progress);
+                        }
+                    }
+
+                    // 目标粒子淡入
+                    if (toSystem.material.uniforms) {
+                        toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    } else {
+                        toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * progress;
+                    }
+                    break;
+
+                case 'implode':
+                    // 聚爆效果 - 粒子从随机位置聚集到目标位置
+                    if (progress < 0.5) {
+                        // 第一阶段：原粒子消失
+                        if (fromSystem.material.uniforms) {
+                            fromSystem.material.uniforms.opacity.value = frames[fromFrameIndex].opacity * (1 - progress * 2);
+                        } else {
+                            fromSystem.material.opacity = frames[fromFrameIndex].opacity * (1 - progress * 2);
+                        }
+                    } else {
+                        // 第二阶段：新粒子从随机位置聚集
+                        if (fromSystem.material.uniforms) {
+                            fromSystem.material.uniforms.opacity.value = 0;
+                        } else {
+                            fromSystem.material.opacity = 0;
+                        }
+
+                        if (toSystem.geometry.attributes.originalPosition) {
+                            const positions = toSystem.geometry.attributes.position;
+                            const originalPositions = toSystem.geometry.attributes.originalPosition;
+
+                            for (let i = 0; i < positions.count; i++) {
+                                const i3 = i * 3;
+
+                                // 目标位置
+                                const tx = originalPositions.array[i3];
+                                const ty = originalPositions.array[i3 + 1];
+                                const tz = originalPositions.array[i3 + 2];
+
+                                // 随机起始位置
+                                const randomFactor = chaos * 100;
+                                const sx = tx + (Math.random() - 0.5) * randomFactor;
+                                const sy = ty + (Math.random() - 0.5) * randomFactor;
+                                const sz = tz + (Math.random() - 0.5) * randomFactor;
+
+                                // 插值到目标位置
+                                const p = (progress - 0.5) * 2;
+                                positions.array[i3] = sx + (tx - sx) * p;
+                                positions.array[i3 + 1] = sy + (ty - sy) * p;
+                                positions.array[i3 + 2] = sz + (tz - sz) * p;
+                            }
+                            positions.needsUpdate = true;
+
+                            // 更新透明度
+                            if (toSystem.material.uniforms) {
+                                toSystem.material.uniforms.opacity.value = frames[(activeFrameIndex + 1) % frames.length].opacity * (progress - 0.5) * 2;
+                            } else {
+                                toSystem.material.opacity = frames[(activeFrameIndex + 1) % frames.length].opacity * (progress - 0.5) * 2;
+                            }
+                        }
+                    }
+                    break;
+
+                case 'none':
+                default:
+                    // 无过渡效果 - 立即切换
+                    fromSystem.visible = progress < 0.5;
+                    toSystem.visible = progress >= 0.5;
+                    break;
+            }
+        }
+
+        // 暂停动画
+        function pauseAnimation() {
+            if (!isPlaying) return;
+
+            isPlaying = false;
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+            document.getElementById('renderCurrentBtn').disabled = false;
+
+            if (frameTimer) {
+                clearTimeout(frameTimer);
+                frameTimer = null;
+            }
+
+            // 结束任何正在进行的过渡
+            if (isInTransition) {
+                const toIndex = (activeFrameIndex + 1) % frames.length;
+                endTransition(toIndex);
+            }
+        }
+
+        // 重置视角
+        function resetView() {
+            cameraControls.rotationX = 0;
+            cameraControls.rotationY = 0;
+            cameraControls.zoom = 1;
+            camera.position.z = 500;
+
+            if (currentSystem) {
+                currentSystem.rotation.x = 0;
+                currentSystem.rotation.y = 0;
+            }
+
+            showStatus("视角已重置");
+        }
+
+        // 初始化相机控制
+        function initCameraControls() {
+            const container = document.getElementById('canvas-container');
+
+            container.addEventListener('mousedown', (e) => {
+                if (isPlaying) return;
+                cameraControls.isDragging = true;
+                cameraControls.lastX = e.clientX;
+                cameraControls.lastY = e.clientY;
+                container.classList.add('grabbing');
+            });
+
+            container.addEventListener('mousemove', (e) => {
+                if (!cameraControls.isDragging || !currentSystem || isPlaying) return;
+
+                const deltaX = e.clientX - cameraControls.lastX;
+                const deltaY = e.clientY - cameraControls.lastY;
+
+                cameraControls.rotationY += deltaX * 0.005;
+                cameraControls.rotationX += deltaY * 0.005;
+
+                // 限制上下旋转角度
+                cameraControls.rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, cameraControls.rotationX));
+
+                // 应用旋转
+                currentSystem.rotation.x = cameraControls.rotationX;
+                currentSystem.rotation.y = cameraControls.rotationY;
+
+                cameraControls.lastX = e.clientX;
+                cameraControls.lastY = e.clientY;
+            });
+
+            container.addEventListener('mouseup', () => {
+                cameraControls.isDragging = false;
+                container.classList.remove('grabbing');
+            });
+
+            container.addEventListener('mouseleave', () => {
+                cameraControls.isDragging = false;
+                container.classList.remove('grabbing');
+            });
+
+            container.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (isPlaying) return;
+
+                cameraControls.zoom *= e.deltaY < 0 ? 1.1 : 0.9;
+                cameraControls.zoom = Math.max(0.3, Math.min(3, cameraControls.zoom)); // 限制缩放范围
+                camera.position.z = 500 / cameraControls.zoom;
+            });
+        }
+
+        // 切换参数面板显示/隐藏
+        function togglePanel() {
+            const panel = document.getElementById('editorPanel');
+            panelExpanded = !panelExpanded;
+
+            if (panelExpanded) {
+                panel.classList.add('expanded');
+            } else {
+                panel.classList.remove('expanded');
+            }
+        }
+
+        // 切换标签页
+        function switchTab(tabName) {
+            // 移除所有标签页的活动状态
+            document.querySelectorAll('.panel-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.panel-tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // 激活选中的标签页
+            document.querySelector(`.panel-tab[data-tab="${tabName}"]`).classList.add('active');
+            document.getElementById(`${tabName}-tab`).classList.add('active');
+        }
+
+        // 窗口大小变化处理
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // 显示状态提示
+        function showStatus(text) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.classList.add('show');
+
+            clearTimeout(statusEl.timeout);
+            statusEl.timeout = setTimeout(() => {
+                statusEl.classList.remove('show');
+            }, 3000);
+        }
+
+        // 动画循环 - 增加更多粒子动画效果
+        function animate() {
+            const deltaTime = 0.016; // 约60fps
+            animationTime += deltaTime;
+
+            // 绘制渐变背景（如果需要）
+            if (frames[activeFrameIndex] && frames[activeFrameIndex].backgroundStyle === 'gradient') {
+                renderGradientBackground();
+            }
+
+            // 更新星星动画
+            stars.forEach(starSystem => {
+                if (starSystem.visible) {
+                    starSystem.rotation.y += 0.0001; // 缓慢旋转星空，增强沉浸感
+                }
+            });
+
+            // 应用粒子动画
+            if (!isInTransition) {
+                if (currentSystem && !isPlaying) {
+                    applyParticleAnimations(currentSystem, deltaTime);
+                } else if (isPlaying && currentSystem) {
+                    applyParticleAnimations(currentSystem, deltaTime);
+                }
+            } else {
+                // 过渡期间也应用动画
+                const fromSystem = particleSystems[fromFrameIndex];
+                const toIndex = (activeFrameIndex + 1) % frames.length;
+                const toSystem = particleSystems[toIndex];
+
+                if (fromSystem) applyParticleAnimations(fromSystem, deltaTime);
+                if (toSystem) applyParticleAnimations(toSystem, deltaTime);
+            }
+
+            renderer.render(scene, camera);
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // 初始化事件监听
+        function initEvents() {
+            // 面板切换
+            document.getElementById('panelToggle').addEventListener('click', togglePanel);
+
+            // 标签页切换
+            document.querySelectorAll('.panel-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    switchTab(tab.dataset.tab);
+                });
+            });
+
+            // 按钮事件
+            document.getElementById('renderCurrentBtn').addEventListener('click', renderCurrentFrame);
+            document.getElementById('playBtn').addEventListener('click', playAnimation);
+            document.getElementById('pauseBtn').addEventListener('click', pauseAnimation);
+            document.getElementById('resetViewBtn').addEventListener('click', resetView);
+            document.getElementById('clearBtn').addEventListener('click', () => {
+                clearParticles();
+                showStatus("已清除粒子");
+            });
+
+            // 帧控制事件
+            document.getElementById('prevFrameBtn').addEventListener('click', () => {
+                if (activeFrameIndex > 0) {
+                    switchToFrame(activeFrameIndex - 1);
+                }
+            });
+
+            document.getElementById('nextFrameBtn').addEventListener('click', () => {
+                if (activeFrameIndex < frames.length - 1) {
+                    switchToFrame(activeFrameIndex + 1);
+                }
+            });
+
+            document.getElementById('addFrameBtn').addEventListener('click', addNewFrame);
+            document.getElementById('deleteFrameBtn').addEventListener('click', deleteFrame);
+            document.getElementById('copyFrameBtn').addEventListener('click', copyCurrentFrame);
+            document.getElementById('applyBtn').addEventListener('click', saveFrameData);
+
+            // 预设效果应用
+            document.querySelectorAll('.preset-btn[data-preset]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    applyPreset('preset', btn.dataset.preset);
+                });
+            });
+
+            document.querySelectorAll('.preset-btn[data-animation]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    applyPreset('animation', btn.dataset.animation);
+                });
+            });
+
+            document.querySelectorAll('.preset-btn[data-transition]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    applyPreset('transition', btn.dataset.transition);
+                });
+            });
+
+            // 颜色模式变化事件
+            document.getElementById('colorMode').addEventListener('change', updateColorOptionsVisibility);
+            document.getElementById('backgroundStyle').addEventListener('change', updateBackgroundOptionsVisibility);
+
+            // 范围输入实时显示
+            document.getElementById('opacity').addEventListener('input', (e) => {
+                document.getElementById('opacityValue').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+
+            document.getElementById('glowIntensity').addEventListener('input', (e) => {
+                document.getElementById('glowValue').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+
+            document.getElementById('motionSpeed').addEventListener('input', (e) => {
+                document.getElementById('motionSpeedValue').textContent = parseFloat(e.target.value).toFixed(3);
+            });
+
+            document.getElementById('motionAmplitude').addEventListener('input', (e) => {
+                document.getElementById('motionAmplitudeValue').textContent = e.target.value;
+            });
+
+            document.getElementById('sizeVariationRange').addEventListener('input', (e) => {
+                document.getElementById('sizeVariationValue').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+
+            document.getElementById('transitionChaos').addEventListener('input', (e) => {
+                document.getElementById('transitionChaosValue').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+
+            document.getElementById('ambientLight').addEventListener('input', (e) => {
+                document.getElementById('ambientLightValue').textContent = parseFloat(e.target.value).toFixed(1);
+            });
+
+            // 窗口关闭时清理资源
+            window.addEventListener('beforeunload', () => {
+                if (renderer) renderer.dispose();
+                particleSystems.forEach(system => {
+                    if (system) {
+                        system.geometry.dispose();
+                        system.material.dispose();
+                    }
+                });
+                stars.forEach(starSystem => {
+                    if (starSystem) {
+                        starSystem.geometry.dispose();
+                        starSystem.material.dispose();
+                    }
+                });
+            });
+        }
+
+        // 初始化应用
+        function init() {
+            try {
+                initScene();
+                initEvents();
+                animate();
+                renderCurrentFrame();
+            } catch (error) {
+                console.error("初始化失败:", error);
+                showStatus("初始化失败，请刷新页面重试");
+            }
+        }
+
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

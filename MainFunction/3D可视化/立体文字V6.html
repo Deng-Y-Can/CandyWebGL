@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三维诗歌空间 - 极简风格 A2</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: #0a0a14;
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+        }
+
+        canvas {
+            display: block;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .ui-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .title {
+            position: absolute;
+            top: 40px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            font-size: 2.8rem;
+            font-weight: 300;
+            text-align: center;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            font-family: 'Arial Narrow', sans-serif;
+        }
+
+            .title::after {
+                content: '';
+                position: absolute;
+                bottom: -10px;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 100px;
+                height: 2px;
+                background: linear-gradient(90deg, transparent, #64ffda, transparent);
+            }
+
+        .poem-info {
+            position: absolute;
+            top: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #a0a8ff;
+            font-size: 1.4rem;
+            text-align: center;
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        .current-line {
+            position: absolute;
+            top: 170px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #ffffff;
+            font-size: 1.8rem;
+            text-align: center;
+            max-width: 80%;
+            font-weight: 400;
+            text-shadow: 0 0 20px rgba(100, 255, 218, 0.7);
+            padding: 10px 0;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            pointer-events: all;
+            background: rgba(10, 10, 20, 0.7);
+            backdrop-filter: blur(10px);
+            border-radius: 50px;
+            padding: 10px 25px;
+            border: 1px solid rgba(100, 255, 218, 0.2);
+        }
+
+            .controls button {
+                background: transparent;
+                border: 1px solid rgba(100, 255, 218, 0.3);
+                color: #64ffda;
+                padding: 12px 25px;
+                border-radius: 25px;
+                cursor: pointer;
+                font-size: 0.9rem;
+                font-weight: 500;
+                transition: all 0.3s ease;
+                min-width: 110px;
+                text-transform: uppercase;
+                letter-spacing: 1px;
+            }
+
+                .controls button:hover {
+                    background: rgba(100, 255, 218, 0.1);
+                    border-color: #64ffda;
+                    transform: translateY(-2px);
+                }
+
+                .controls button:active {
+                    transform: translateY(0);
+                }
+
+        .instructions {
+            position: absolute;
+            top: 50%;
+            left: 30px;
+            transform: translateY(-50%);
+            color: #8a8fff;
+            background: rgba(10, 10, 20, 0.5);
+            padding: 25px;
+            border-radius: 15px;
+            border: 1px solid rgba(100, 255, 218, 0.1);
+            backdrop-filter: blur(5px);
+            max-width: 250px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+            .instructions h3 {
+                margin-top: 0;
+                color: #ffffff;
+                font-weight: 400;
+                font-size: 1.1rem;
+                margin-bottom: 15px;
+                letter-spacing: 1px;
+            }
+
+            .instructions ul {
+                padding-left: 20px;
+                margin: 0;
+            }
+
+            .instructions li {
+                margin: 8px 0;
+                color: #b0b4ff;
+            }
+
+        .hint {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            color: #6a6fff;
+            font-size: 0.85rem;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .particle-counter {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            color: #64ffda;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
+        }
+
+        /* 新的诗句样式 - 无背景 */
+        .sentence-style {
+            color: #ffffff;
+            text-shadow: none;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .title {
+                font-size: 1.8rem;
+                top: 20px;
+            }
+
+            .poem-info {
+                font-size: 1.1rem;
+                top: 80px;
+            }
+
+            .current-line {
+                font-size: 1.3rem;
+                top: 120px;
+            }
+
+            .controls {
+                flex-direction: column;
+                gap: 8px;
+                padding: 15px;
+                border-radius: 20px;
+                bottom: 30px;
+            }
+
+                .controls button {
+                    min-width: 100%;
+                    padding: 10px;
+                }
+
+            .instructions {
+                display: none;
+            }
+
+            .hint {
+                display: none;
+            }
+
+            .particle-counter {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ui-container">
+        <div class="title">Poetry Space</div>
+        <div class="poem-info" id="poem-info">《登鹳雀楼》 - 王之涣</div>
+        <div class="current-line sentence-style" id="current-line">白日依山尽，黄河入海流</div>
+
+        <div class="controls">
+            <button id="prev-poem">← 上一首</button>
+            <button id="reset">重置视角</button>
+            <button id="toggle-rotate">暂停旋转</button>
+            <button id="next-poem">下一首 →</button>
+        </div>
+
+        <div class="instructions">
+            <h3>操作指南</h3>
+            <ul>
+                <li>鼠标拖拽：旋转视角</li>
+                <li>滚轮缩放：调整距离</li>
+                <li>点击诗句：高亮显示</li>
+                <li>悬停诗句：查看内容</li>
+                <li>双击诗句：详细查看</li>
+            </ul>
+        </div>
+
+        <div class="hint">沉浸式诗歌体验 - 自由探索三维文字空间</div>
+        <div class="particle-counter">诗句数量: <span id="sentence-count">4</span></div>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <script>
+        // ==================== 配置和诗歌数据 ====================
+        const CONFIG = {
+            MIN_TEXTURE_WIDTH: 512,
+            MIN_TEXTURE_HEIGHT: 256,
+            FONT_SIZE: 84, // 增大字体
+            SPHERE_RADIUS: 14, // 增大球体半径
+            ZOOM: 22, // 调整初始缩放
+            SENTENCE_SPACING: 3.0,
+            MAX_SENTENCE_LENGTH: 20
+        };
+
+        const POEMS = [
+            {
+                title: "登鹳雀楼",
+                author: "王之涣",
+                lines: [
+                    "白日依山尽",
+                    "黄河入海流",
+                    "欲穷千里目",
+                    "更上一层楼"
+                ]
+            },
+            {
+                title: "静夜思",
+                author: "李白",
+                lines: [
+                    "床前明月光",
+                    "疑是地上霜",
+                    "举头望明月",
+                    "低头思故乡"
+                ]
+            },
+            {
+                title: "春晓",
+                author: "孟浩然",
+                lines: [
+                    "春眠不觉晓",
+                    "处处闻啼鸟",
+                    "夜来风雨声",
+                    "花落知多少"
+                ]
+            },
+            {
+                title: "相思",
+                author: "王维",
+                lines: [
+                    "红豆生南国",
+                    "春来发几枝",
+                    "愿君多采撷",
+                    "此物最相思"
+                ]
+            },
+            {
+                title: "江雪",
+                author: "柳宗元",
+                lines: [
+                    "千山鸟飞绝",
+                    "万径人踪灭",
+                    "孤舟蓑笠翁",
+                    "独钓寒江雪"
+                ]
+            }
+        ];
+
+        // ==================== 核心矩阵函数 ====================
+        function createMat4() { return new Float32Array(16); }
+        function identityMat4(m) {
+            m[0] = 1; m[1] = 0; m[2] = 0; m[3] = 0;
+            m[4] = 0; m[5] = 1; m[6] = 0; m[7] = 0;
+            m[8] = 0; m[9] = 0; m[10] = 1; m[11] = 0;
+            m[12] = 0; m[13] = 0; m[14] = 0; m[15] = 1;
+            return m;
+        }
+
+        function perspectiveMat4(m, fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const nf = 1 / (near - far);
+            m[0] = f / aspect; m[1] = 0; m[2] = 0; m[3] = 0;
+            m[4] = 0; m[5] = f; m[6] = 0; m[7] = 0;
+            m[8] = 0; m[9] = 0; m[10] = (far + near) * nf; m[11] = -1;
+            m[12] = 0; m[13] = 0; m[14] = (2 * far * near) * nf; m[15] = 0;
+            return m;
+        }
+
+        function translateMat4(m, x, y, z) {
+            m[12] = m[0] * x + m[4] * y + m[8] * z + m[12];
+            m[13] = m[1] * x + m[5] * y + m[9] * z + m[13];
+            m[14] = m[2] * x + m[6] * y + m[10] * z + m[14];
+            m[15] = m[3] * x + m[7] * y + m[11] * z + m[15];
+            return m;
+        }
+
+        function rotateYMat4(m, angle) {
+            const s = Math.sin(angle), c = Math.cos(angle);
+            const a00 = m[0], a01 = m[1], a02 = m[2], a03 = m[3];
+            const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
+            m[0] = a00 * c - a20 * s; m[1] = a01 * c - a21 * s;
+            m[2] = a02 * c - a22 * s; m[3] = a03 * c - a23 * s;
+            m[8] = a00 * s + a20 * c; m[9] = a01 * s + a21 * c;
+            m[10] = a02 * s + a22 * c; m[11] = a03 * s + a23 * c;
+            return m;
+        }
+
+        function rotateXMat4(m, angle) {
+            const s = Math.sin(angle), c = Math.cos(angle);
+            const a10 = m[4], a11 = m[5], a12 = m[6], a13 = m[7];
+            const a20 = m[8], a21 = m[9], a22 = m[10], a23 = m[11];
+            m[4] = a10 * c + a20 * s; m[5] = a11 * c + a21 * s;
+            m[6] = a12 * c + a22 * s; m[7] = a13 * c + a23 * s;
+            m[8] = a20 * c - a10 * s; m[9] = a21 * c - a11 * s;
+            m[10] = a22 * c - a12 * s; m[11] = a23 * c - a13 * s;
+            return m;
+        }
+
+        function scaleMat4(m, sx, sy, sz) {
+            m[0] *= sx; m[1] *= sx; m[2] *= sx; m[3] *= sx;
+            m[4] *= sy; m[5] *= sy; m[6] *= sy; m[7] *= sy;
+            m[8] *= sz; m[9] *= sz; m[10] *= sz; m[11] *= sz;
+            return m;
+        }
+
+        // ==================== WebGL 2 诗句贴图系统 ====================
+        class Poetry3DSentences {
+            constructor() {
+                this.canvas = document.getElementById('canvas');
+                this.gl = this.canvas.getContext('webgl2');
+                if (!this.gl) {
+                    alert('您的浏览器不支持WebGL 2.0');
+                    return;
+                }
+
+                this.setupCanvas();
+                this.compileShaders();
+                this.createTextures();
+                this.createGeometry();
+                this.initState();
+                this.setupControls();
+                this.animate();
+            }
+
+            setupCanvas() {
+                const canvas = this.canvas;
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+                this.gl.viewport(0, 0, canvas.width, canvas.height);
+
+                window.addEventListener('resize', () => {
+                    canvas.width = window.innerWidth;
+                    canvas.height = window.innerHeight;
+                    this.gl.viewport(0, 0, canvas.width, canvas.height);
+                });
+            }
+
+            compileShaders() {
+                const gl = this.gl;
+
+                // 顶点着色器 - 简化版
+                const vertexShaderSource = `#version 300 es
+                        precision highp float;
+
+                        in vec3 aPosition;
+                        in vec2 aTexCoord;
+
+                        uniform mat4 uModel;
+                        uniform mat4 uView;
+                        uniform mat4 uProjection;
+                        uniform float uTime;
+                        uniform vec3 uOffset;
+                        uniform float uHighlight;
+
+                        out vec2 vTexCoord;
+                        out vec3 vPosition;
+                        out float vHighlight;
+
+                        void main() {
+                            // 轻微浮动动画
+                            float wave = sin(uTime * 0.001 + aPosition.x * 2.5 + uOffset.x) *
+                                       cos(uTime * 0.0007 + aPosition.y * 2.0 + uOffset.y) * 0.15;
+
+                            vec3 pos = aPosition + vec3(0.0, wave * uHighlight, 0.0);
+
+                            gl_Position = uProjection * uView * uModel * vec4(pos, 1.0);
+                            vTexCoord = aTexCoord;
+                            vPosition = pos;
+                            vHighlight = uHighlight;
+                        }
+                    `;
+
+                // 片元着色器 - 移除背景，增强文字效果
+                const fragmentShaderSource = `#version 300 es
+                        precision highp float;
+
+                        in vec2 vTexCoord;
+                        in vec3 vPosition;
+                        in float vHighlight;
+
+                        uniform sampler2D uTexture;
+                        uniform float uTime;
+                        uniform vec3 uColor;
+                        uniform vec3 uGlowColor;
+                        uniform float uSelected;
+
+                        out vec4 fragColor;
+
+                        void main() {
+                            vec4 texColor = texture(uTexture, vTexCoord);
+
+                            // 透明度阈值调低，让文字更清晰
+                            if (texColor.a < 0.2) discard;
+
+                            // 基础颜色 - 使用纯白色文字
+                            vec3 baseColor = vec3(1.0, 1.0, 1.0);
+
+                            // 颜色叠加（根据诗句的设定颜色）
+                            baseColor = mix(baseColor, uColor, 0.7);
+
+                            // 高亮效果增强
+                            float highlight = vHighlight * 0.8 + 0.8;
+
+                            // 选中效果
+                            float selected = uSelected * 0.5;
+
+                            // 边缘发光效果
+                            float edge = smoothstep(0.2, 0.8, texColor.r);
+
+                            // 脉动效果
+                            float pulse = sin(uTime * 0.001) * 0.1 + 0.9;
+
+                            // 最终颜色 - 无背景，纯文字
+                            vec3 finalColor = baseColor * highlight * pulse;
+
+                            // 选中时添加发光
+                            finalColor += uGlowColor * (edge * 0.5 + selected * 0.8);
+
+                            // 透明度保持文字原样
+                            float alpha = texColor.a * (0.9 + selected * 0.1);
+
+                            fragColor = vec4(finalColor, alpha);
+                        }
+                    `;
+
+                // 编译着色器
+                const vertexShader = gl.createShader(gl.VERTEX_SHADER);
+                gl.shaderSource(vertexShader, vertexShaderSource);
+                gl.compileShader(vertexShader);
+
+                const fragmentShader = gl.createShader(gl.FRAGMENT_SHADER);
+                gl.shaderSource(fragmentShader, fragmentShaderSource);
+                gl.compileShader(fragmentShader);
+
+                // 检查编译状态
+                if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
+                    console.error('顶点着色器编译错误:', gl.getShaderInfoLog(vertexShader));
+                    return;
+                }
+                if (!gl.getShaderParameter(fragmentShader, gl.COMPILE_STATUS)) {
+                    console.error('片元着色器编译错误:', gl.getShaderInfoLog(fragmentShader));
+                    return;
+                }
+
+                // 创建程序
+                this.program = gl.createProgram();
+                gl.attachShader(this.program, vertexShader);
+                gl.attachShader(this.program, fragmentShader);
+                gl.linkProgram(this.program);
+
+                if (!gl.getProgramParameter(this.program, gl.LINK_STATUS)) {
+                    console.error('程序链接失败:', gl.getProgramInfoLog(this.program));
+                    return;
+                }
+
+                gl.useProgram(this.program);
+
+                // 获取属性位置
+                this.aPosition = gl.getAttribLocation(this.program, 'aPosition');
+                this.aTexCoord = gl.getAttribLocation(this.program, 'aTexCoord');
+
+                // 获取uniform位置
+                this.uModel = gl.getUniformLocation(this.program, 'uModel');
+                this.uView = gl.getUniformLocation(this.program, 'uView');
+                this.uProjection = gl.getUniformLocation(this.program, 'uProjection');
+                this.uTime = gl.getUniformLocation(this.program, 'uTime');
+                this.uTexture = gl.getUniformLocation(this.program, 'uTexture');
+                this.uColor = gl.getUniformLocation(this.program, 'uColor');
+                this.uGlowColor = gl.getUniformLocation(this.program, 'uGlowColor');
+                this.uOffset = gl.getUniformLocation(this.program, 'uOffset');
+                this.uHighlight = gl.getUniformLocation(this.program, 'uHighlight');
+                this.uSelected = gl.getUniformLocation(this.program, 'uSelected');
+            }
+
+            createTextures() {
+                const gl = this.gl;
+                this.textures = {};
+
+                // 为每首诗的每句话创建纹理
+                POEMS.forEach((poem, poemIndex) => {
+                    poem.lines.forEach((line, lineIndex) => {
+                        const textureId = `${poemIndex}_${lineIndex}`;
+
+                        // 计算纹理尺寸
+                        const length = Math.min(line.length, CONFIG.MAX_SENTENCE_LENGTH);
+                        const textureWidth = Math.max(CONFIG.MIN_TEXTURE_WIDTH, length * CONFIG.FONT_SIZE * 0.9);
+                        const textureHeight = CONFIG.MIN_TEXTURE_HEIGHT;
+
+                        // 创建离屏canvas - 透明背景
+                        const canvas = document.createElement('canvas');
+                        canvas.width = textureWidth;
+                        canvas.height = textureHeight;
+                        const ctx = canvas.getContext('2d');
+
+                        // 清空为透明
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        // 绘制文字（无背景）
+                        ctx.font = `bold ${CONFIG.FONT_SIZE}px "Microsoft YaHei", "SimHei", Arial, sans-serif`;
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+
+                        // 文字描边（更细，更现代）
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+                        ctx.lineWidth = 4;
+                        ctx.strokeText(line, canvas.width / 2, canvas.height / 2);
+
+                        // 文字填充 - 使用白色
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fillText(line, canvas.width / 2, canvas.height / 2);
+
+                        // 创建WebGL纹理
+                        const texture = gl.createTexture();
+                        gl.bindTexture(gl.TEXTURE_2D, texture);
+                        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, canvas);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+                        gl.generateMipmap(gl.TEXTURE_2D);
+
+                        this.textures[textureId] = {
+                            texture: texture,
+                            width: textureWidth,
+                            height: textureHeight,
+                            aspect: textureWidth / textureHeight
+                        };
+                    });
+                });
+
+                // 创建默认纹理
+                const defaultTexture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, defaultTexture);
+                const transparentPixel = new Uint8Array([255, 255, 255, 0]);
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, transparentPixel);
+                this.textures['default'] = {
+                    texture: defaultTexture,
+                    width: 1,
+                    height: 1,
+                    aspect: 1
+                };
+            }
+
+            createGeometry() {
+                const gl = this.gl;
+
+                // 创建平面几何
+                const vertices = new Float32Array([
+                    // 位置 (x, y, z), 纹理坐标 (u, v)
+                    -0.5, -0.5, 0.0, 0.0, 0.0,
+                    0.5, -0.5, 0.0, 1.0, 0.0,
+                    0.5, 0.5, 0.0, 1.0, 1.0,
+                    -0.5, 0.5, 0.0, 0.0, 1.0
+                ]);
+
+                const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+                // 创建顶点缓冲区
+                this.vertexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+                // 创建索引缓冲区
+                this.indexBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+                this.indexCount = indices.length;
+            }
+
+            initState() {
+                this.rotationX = 0.3;
+                this.rotationY = 0.5;
+                this.zoom = CONFIG.ZOOM;
+                this.autoRotate = true;
+                this.currentPoem = 0;
+                this.time = 0;
+                this.selectedSentence = -1;
+                this.hoveredSentence = -1;
+
+                // 创建诗句对象
+                this.createSentences();
+
+                // 鼠标交互状态
+                this.isDragging = false;
+                this.lastX = 0;
+                this.lastY = 0;
+            }
+
+            createSentences() {
+                const poem = POEMS[this.currentPoem];
+                const infoEl = document.getElementById('poem-info');
+                infoEl.textContent = `《${poem.title}》 - ${poem.author}`;
+
+                // 更新诗句数量显示
+                document.getElementById('sentence-count').textContent = poem.lines.length;
+
+                // 清空当前行显示
+                document.getElementById('current-line').textContent = '';
+
+                this.sentences = [];
+
+                // 计算球面坐标（诗句在球面上均匀分布）
+                const numSentences = poem.lines.length;
+
+                // 现代配色方案
+                const colorPalettes = [
+                    ['#64ffda', '#00e5ff', '#2979ff'], // 青蓝
+                    ['#ff6ec7', '#ff9a9e', '#fad0c4'], // 粉紫
+                    ['#a8edea', '#fed6e3', '#a1c4fd'], // 柔光
+                    ['#ffd166', '#06d6a0', '#118ab2'], // 活力
+                    ['#e0c3fc', '#8ec5fc', '#a8edea']  // 梦幻
+                ];
+
+                const palette = colorPalettes[this.currentPoem % colorPalettes.length];
+
+                for (let i = 0; i < numSentences; i++) {
+                    // 球面坐标 - 更均匀分布
+                    const phi = Math.acos(-1 + (2 * i) / numSentences);
+                    const theta = Math.sqrt(numSentences * Math.PI) * phi;
+
+                    const x = CONFIG.SPHERE_RADIUS * Math.sin(phi) * Math.cos(theta);
+                    const y = CONFIG.SPHERE_RADIUS * Math.sin(phi) * Math.sin(theta);
+                    const z = CONFIG.SPHERE_RADIUS * Math.cos(phi);
+
+                    // 朝向中心点
+                    const lookAtCenter = [
+                        -x * 0.08,
+                        -y * 0.08,
+                        -z * 0.08
+                    ];
+
+                    // 颜色分配 - 使用现代配色
+                    const colorIndex = i % palette.length;
+                    const mainColor = this.hexToRgb(palette[colorIndex]);
+                    const glowColor = this.hexToRgb(palette[(colorIndex + 1) % palette.length]);
+
+                    // 根据诗句长度调整缩放
+                    const line = poem.lines[i];
+                    const lengthFactor = Math.min(line.length / 5, 2.2);
+                    const baseScale = 1.6 * lengthFactor;
+
+                    this.sentences.push({
+                        id: i,
+                        text: line,
+                        textureId: `${this.currentPoem}_${i}`,
+                        position: [x, y, z],
+                        lookAt: lookAtCenter,
+                        rotation: [Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, 0],
+                        scale: baseScale + Math.random() * 0.4,
+                        color: mainColor,
+                        glowColor: glowColor,
+                        speed: 0.0004 + Math.random() * 0.0008,
+                        offset: [Math.random() * 100, Math.random() * 100],
+                        highlight: 1.0,
+                        selected: 0.0,
+                        distance: 0
+                    });
+                }
+            }
+
+            hexToRgb(hex) {
+                hex = hex.replace('#', '');
+                const r = parseInt(hex.substring(0, 2), 16) / 255;
+                const g = parseInt(hex.substring(2, 4), 16) / 255;
+                const b = parseInt(hex.substring(4, 6), 16) / 255;
+                return [r, g, b];
+            }
+
+            hslToRgb(h, s, l) {
+                h /= 360;
+                let r, g, b;
+
+                if (s === 0) {
+                    r = g = b = l;
+                } else {
+                    const hue2rgb = (p, q, t) => {
+                        if (t < 0) t += 1;
+                        if (t > 1) t -= 1;
+                        if (t < 1 / 6) return p + (q - p) * 6 * t;
+                        if (t < 1 / 2) return q;
+                        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+                        return p;
+                    };
+
+                    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+                    const p = 2 * l - q;
+
+                    r = hue2rgb(p, q, h + 1 / 3);
+                    g = hue2rgb(p, q, h);
+                    b = hue2rgb(p, q, h - 1 / 3);
+                }
+
+                return [r, g, b];
+            }
+
+            setupControls() {
+                const canvas = this.canvas;
+
+                // 鼠标拖拽
+                canvas.addEventListener('mousedown', (e) => {
+                    this.isDragging = true;
+                    this.lastX = e.clientX;
+                    this.lastY = e.clientY;
+                    e.preventDefault();
+                });
+
+                document.addEventListener('mousemove', (e) => {
+                    if (!this.isDragging) return;
+
+                    const dx = e.clientX - this.lastX;
+                    const dy = e.clientY - this.lastY;
+
+                    this.rotationY += dx * 0.004;
+                    this.rotationX += dy * 0.004;
+
+                    this.lastX = e.clientX;
+                    this.lastY = e.clientY;
+                });
+
+                document.addEventListener('mouseup', () => {
+                    this.isDragging = false;
+                });
+
+                // 滚轮缩放
+                canvas.addEventListener('wheel', (e) => {
+                    e.preventDefault();
+                    this.zoom += e.deltaY * 0.03;
+                    this.zoom = Math.max(6, Math.min(35, this.zoom));
+                });
+
+                // 鼠标悬停检测
+                canvas.addEventListener('mousemove', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+
+                    this.checkHover(x, y);
+                });
+
+                // 点击选择诗句
+                canvas.addEventListener('click', (e) => {
+                    const rect = canvas.getBoundingClientRect();
+                    const x = e.clientX - rect.left;
+                    const y = e.clientY - rect.top;
+
+                    this.checkClick(x, y);
+                });
+
+                // 双击查看详情
+                canvas.addEventListener('dblclick', (e) => {
+                    if (this.hoveredSentence >= 0) {
+                        const text = this.sentences[this.hoveredSentence].text;
+                        alert(`诗句详情：${text}\n\n来自：《${POEMS[this.currentPoem].title}》`);
+                    }
+                });
+
+                // 控制按钮
+                document.getElementById('prev-poem').addEventListener('click', () => {
+                    this.currentPoem = (this.currentPoem - 1 + POEMS.length) % POEMS.length;
+                    this.selectedSentence = -1;
+                    this.createSentences();
+                });
+
+                document.getElementById('next-poem').addEventListener('click', () => {
+                    this.currentPoem = (this.currentPoem + 1) % POEMS.length;
+                    this.selectedSentence = -1;
+                    this.createSentences();
+                });
+
+                document.getElementById('reset').addEventListener('click', () => {
+                    this.rotationX = 0.3;
+                    this.rotationY = 0.5;
+                    this.zoom = CONFIG.ZOOM;
+                    this.selectedSentence = -1;
+                    document.getElementById('current-line').textContent = '';
+                });
+
+                document.getElementById('toggle-rotate').addEventListener('click', (e) => {
+                    this.autoRotate = !this.autoRotate;
+                    e.target.textContent = this.autoRotate ? '暂停旋转' : '继续旋转';
+                });
+            }
+
+            checkHover(x, y) {
+                // 转换为NDC坐标
+                const ndcX = (x / this.canvas.width) * 2 - 1;
+                const ndcY = 1 - (y / this.canvas.height) * 2;
+
+                let closest = -1;
+                let minDist = Infinity;
+
+                // 计算每个句子的屏幕位置
+                const view = identityMat4(createMat4());
+                translateMat4(view, 0, 0, -this.zoom);
+                rotateXMat4(view, this.rotationX);
+                rotateYMat4(view, this.rotationY);
+
+                const projection = identityMat4(createMat4());
+                const aspect = this.canvas.width / this.canvas.height;
+                perspectiveMat4(projection, Math.PI / 3.5, aspect, 0.1, 100);
+
+                // 找到最近的句子
+                for (let i = 0; i < this.sentences.length; i++) {
+                    const sentence = this.sentences[i];
+
+                    // 计算模型矩阵
+                    const model = createMat4();
+                    identityMat4(model);
+                    translateMat4(model, ...sentence.position);
+                    rotateXMat4(model, sentence.rotation[0]);
+                    rotateYMat4(model, sentence.rotation[1]);
+
+                    // 计算屏幕位置
+                    const mat = this.multiplyMat4(projection, this.multiplyMat4(view, model));
+                    const pos = this.transformVec4([0, 0, 0, 1], mat);
+
+                    if (pos[3] !== 0) {
+                        const screenX = pos[0] / pos[3];
+                        const screenY = pos[1] / pos[3];
+
+                        const dist = Math.sqrt(
+                            Math.pow(screenX - ndcX, 2) +
+                            Math.pow(screenY - ndcY, 2)
+                        );
+
+                        if (dist < minDist && dist < 0.15) {
+                            minDist = dist;
+                            closest = i;
+                        }
+                    }
+                }
+
+                // 更新悬停状态
+                if (this.hoveredSentence !== closest) {
+                    if (this.hoveredSentence >= 0) {
+                        this.sentences[this.hoveredSentence].highlight = 1.0;
+                    }
+                    if (closest >= 0) {
+                        this.sentences[closest].highlight = 1.8;
+                        document.getElementById('current-line').textContent = this.sentences[closest].text;
+                    } else {
+                        document.getElementById('current-line').textContent = '';
+                    }
+                    this.hoveredSentence = closest;
+                }
+            }
+
+            checkClick(x, y) {
+                if (this.hoveredSentence >= 0) {
+                    // 切换选中状态
+                    if (this.selectedSentence === this.hoveredSentence) {
+                        this.selectedSentence = -1;
+                        document.getElementById('current-line').textContent = '';
+                    } else {
+                        if (this.selectedSentence >= 0) {
+                            this.sentences[this.selectedSentence].selected = 0.0;
+                        }
+                        this.selectedSentence = this.hoveredSentence;
+                        this.sentences[this.selectedSentence].selected = 1.0;
+                        document.getElementById('current-line').textContent = this.sentences[this.selectedSentence].text;
+                    }
+                }
+            }
+
+            multiplyMat4(a, b) {
+                const out = new Float32Array(16);
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        out[i * 4 + j] = 0;
+                        for (let k = 0; k < 4; k++) {
+                            out[i * 4 + j] += a[i * 4 + k] * b[k * 4 + j];
+                        }
+                    }
+                }
+                return out;
+            }
+
+            transformVec4(v, m) {
+                const out = [0, 0, 0, 0];
+                for (let i = 0; i < 4; i++) {
+                    out[i] =
+                        v[0] * m[i * 4 + 0] +
+                        v[1] * m[i * 4 + 1] +
+                        v[2] * m[i * 4 + 2] +
+                        v[3] * m[i * 4 + 3];
+                }
+                return out;
+            }
+
+            animate(timestamp = 0) {
+                const gl = this.gl;
+
+                if (!this.program) return;
+
+                this.time = timestamp;
+
+                // 清除画布 - 使用深色背景
+                gl.clearColor(0.05, 0.05, 0.1, 1.0);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                gl.enable(gl.DEPTH_TEST);
+                gl.enable(gl.BLEND);
+                gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+                // 自动旋转
+                if (this.autoRotate) {
+                    this.rotationY += 0.0002;
+                }
+
+                // 设置矩阵
+                const model = createMat4();
+                const view = identityMat4(createMat4());
+                const projection = identityMat4(createMat4());
+
+                // 视图矩阵
+                translateMat4(view, 0, 0, -this.zoom);
+                rotateXMat4(view, this.rotationX);
+                rotateYMat4(view, this.rotationY);
+
+                // 投影矩阵
+                const aspect = this.canvas.width / this.canvas.height;
+                perspectiveMat4(projection, Math.PI / 3.5, aspect, 0.1, 100);
+
+                // 绑定几何数据
+                gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexBuffer);
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, this.indexBuffer);
+
+                // 设置顶点属性
+                gl.vertexAttribPointer(this.aPosition, 3, gl.FLOAT, false, 20, 0);
+                gl.vertexAttribPointer(this.aTexCoord, 2, gl.FLOAT, false, 20, 12);
+                gl.enableVertexAttribArray(this.aPosition);
+                gl.enableVertexAttribArray(this.aTexCoord);
+
+                // 设置uniform
+                gl.uniformMatrix4fv(this.uView, false, view);
+                gl.uniformMatrix4fv(this.uProjection, false, projection);
+                gl.uniform1f(this.uTime, this.time);
+
+                // 激活纹理单元0
+                gl.activeTexture(gl.TEXTURE0);
+                gl.uniform1i(this.uTexture, 0);
+
+                // 渲染每个诗句
+                for (let i = 0; i < this.sentences.length; i++) {
+                    const sentence = this.sentences[i];
+
+                    // 更新旋转
+                    sentence.rotation[0] += sentence.speed;
+                    sentence.rotation[1] += sentence.speed * 0.7;
+
+                    // 创建模型矩阵
+                    identityMat4(model);
+                    translateMat4(model, ...sentence.position);
+
+                    // 朝向中心点
+                    const lookX = Math.atan2(sentence.lookAt[1], sentence.lookAt[0]);
+                    const lookY = Math.atan2(
+                        sentence.lookAt[2],
+                        Math.sqrt(sentence.lookAt[0] * sentence.lookAt[0] + sentence.lookAt[1] * sentence.lookAt[1])
+                    );
+
+                    rotateYMat4(model, lookX);
+                    rotateXMat4(model, lookY);
+
+                    // 自转
+                    rotateYMat4(model, sentence.rotation[1]);
+                    rotateXMat4(model, sentence.rotation[0]);
+
+                    // 根据纹理宽高比调整缩放
+                    const textureInfo = this.textures[sentence.textureId] || this.textures['default'];
+                    const aspectScale = Math.min(1.0, textureInfo.aspect / 2);
+                    const scale = sentence.scale * aspectScale;
+                    scaleMat4(model, scale * textureInfo.aspect, scale, 1.0);
+
+                    // 设置uniform
+                    gl.uniformMatrix4fv(this.uModel, false, model);
+                    gl.uniform3f(this.uColor, ...sentence.color);
+                    gl.uniform3f(this.uGlowColor, ...sentence.glowColor);
+                    gl.uniform2f(this.uOffset, ...sentence.offset);
+                    gl.uniform1f(this.uHighlight, sentence.highlight);
+                    gl.uniform1f(this.uSelected, sentence.selected);
+
+                    // 绑定纹理
+                    gl.bindTexture(gl.TEXTURE_2D, textureInfo.texture);
+
+                    // 绘制
+                    gl.drawElements(gl.TRIANGLES, this.indexCount, gl.UNSIGNED_SHORT, 0);
+                }
+
+                // 下一帧
+                requestAnimationFrame((t) => this.animate(t));
+            }
+        }
+
+        // 启动程序
+        window.addEventListener('load', () => {
+            new Poetry3DSentences();
+        });
+    </script>
+</body>
+</html>

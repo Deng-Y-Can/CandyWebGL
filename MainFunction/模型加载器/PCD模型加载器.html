@@ -1,0 +1,1207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enhanced PCD Viewer</title>
+    <style>
+        body { margin: 0; display: flex; flex-direction: column; height: 100vh; font-family: Arial, sans-serif; }
+        #header { padding: 10px; background: #f0f0f0; display: flex; align-items: center; gap: 15px; flex-wrap: wrap; }
+        #main { display: flex; flex: 1; overflow: hidden; }
+        #canvas-container { flex: 1; background: #000; position: relative; }
+        #controls { width: 300px; padding: 10px; background: #f5f5f5; display: flex; flex-direction: column; overflow-y: auto; }
+        #logs { margin-top: 15px; padding: 10px; background: #fff; border: 1px solid #ddd; border-radius: 4px; flex: 1; overflow-y: auto; font-family: monospace; font-size: 12px; }
+        .log-entry { margin: 2px 0; padding: 2px; }
+        .error { color: #dc3545; background-color: #f8d7da; }
+        .warning { color: #856404; background-color: #fff3cd; }
+        .info { color: #0c5460; background-color: #d1ecf1; }
+        .control-group { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; font-size: 14px; }
+        #data-stats { position: absolute; bottom: 10px; left: 10px; background: rgba(255,255,255,0.8); padding: 5px 10px; border-radius: 4px; font-size: 12px; max-width: 300px; }
+        button { padding: 5px 10px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        button:active { background: #004085; }
+        
+        /* 操作提示样式 */
+        #controls-overlay { 
+            position: absolute; 
+            top: 10px; 
+            right: 10px; 
+            background: rgba(255,255,255,0.95); 
+            padding: 15px; 
+            border-radius: 6px; 
+            font-size: 13px; 
+            max-width: 280px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            border: 1px solid #eee;
+            transition: opacity 0.3s ease;
+        }
+        #controls-overlay h3 {
+            margin: 0 0 10px 0;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #eee;
+            font-size: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .toggle-hint {
+            font-size: 12px;
+            color: #666;
+            cursor: pointer;
+            background: none;
+            padding: 2px 5px;
+        }
+        .toggle-hint:hover {
+            background: #f0f0f0;
+            color: #000;
+        }
+        .control-item {
+            margin: 8px 0;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+        .control-icon {
+            color: #007bff;
+            font-weight: bold;
+            min-width: 20px;
+        }
+        .key-hint {
+            display: inline-block;
+            background: #f0f0f0;
+            padding: 0 5px;
+            border-radius: 3px;
+            border: 1px solid #ddd;
+            font-size: 11px;
+            margin: 0 2px;
+        }
+        
+        /* 加载指示器 */
+        #loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 6px;
+            display: none;
+        }
+        
+        /* 初始提示 */
+        #initial-hint {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255,255,255,0.9);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 400px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+    <div id="header">
+        <h1>PCD Viewer</h1>
+        <input type="file" id="file-upload" accept=".pcd">
+        <button id="reset-camera">Reset View</button>
+        <button id="fit-view">Fit All Points</button>
+        <button id="debug-vertices">Debug Vertices</button>
+        <button id="toggle-controls">Show/Hide Controls</button>
+    </div>
+    <div id="main">
+        <div id="canvas-container">
+            <canvas id="glCanvas"></canvas>
+            <div id="data-stats">No data loaded</div>
+            
+            <!-- 可隐藏的操作提示 -->
+            <div id="controls-overlay">
+                <h3>
+                    Controls
+                    <button class="toggle-hint" id="close-hint">×</button>
+                </h3>
+                <div class="control-item">
+                    <span class="control-icon">⟳</span>
+                    <div><strong>Rotate:</strong> Left Click + Drag</div>
+                </div>
+                <div class="control-item">
+                    <span class="control-icon">↔</span>
+                    <div>
+                        <strong>Pan:</strong> 
+                        <span class="key-hint">Alt</span> + Left Click + Drag
+                    </div>
+                </div>
+                <div class="control-item">
+                    <span class="control-icon">🔍</span>
+                    <div><strong>Zoom:</strong> Mouse Wheel</div>
+                </div>
+                <div class="control-item">
+                    <span class="control-icon">⟲</span>
+                    <div><strong>Reset View:</strong> Click "Reset View" button</div>
+                </div>
+                <div class="control-item">
+                    <span class="control-icon">⌖</span>
+                    <div><strong>Show All:</strong> Click "Fit All Points" button</div>
+                </div>
+            </div>
+            
+            <!-- 加载指示器 -->
+            <div id="loading-indicator">Loading PCD data...</div>
+            
+            <!-- 初始提示 -->
+            <div id="initial-hint">
+                <h3>Welcome to PCD Viewer</h3>
+                <p>Please upload a .pcd file using the button above</p>
+            </div>
+        </div>
+        <div id="controls">
+            <div class="control-group">
+                <label>Point Size</label>
+                <input type="range" id="point-size" min="1" max="20" value="3">
+                <div id="point-size-value">3</div>
+            </div>
+            <div class="control-group">
+                <label>Point Color</label>
+                <input type="color" id="point-color" value="#ff0000">
+            </div>
+            <div class="control-group">
+                <label>Interaction Sensitivity (扩大范围)</label>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-weight: normal; display: inline;">Rotation</label>
+                    <input type="range" id="rotation-speed" min="0.1" max="5" step="0.1" value="1">
+                </div>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-weight: normal; display: inline;">Pan</label>
+                    <input type="range" id="pan-speed" min="0.1" max="5" step="0.1" value="1">
+                </div>
+                <div>
+                    <label style="font-weight: normal; display: inline;">Zoom</label>
+                    <input type="range" id="zoom-speed" min="0.01" max="0.5" step="0.01" value="0.05">
+                </div>
+            </div>
+            <div class="control-group">
+                <label>PCD Data Info</label>
+                <div id="pcd-info">
+                    <div>Points Loaded: 0</div>
+                    <div>Format: N/A</div>
+                    <div>X Range: N/A</div>
+                    <div>Y Range: N/A</div>
+                    <div>Z Range: N/A</div>
+                </div>
+            </div>
+            <div>
+                <label>Logs</label>
+                <div id="logs"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vertex Debug Modal -->
+    <div id="vertex-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 1000;">
+        <div style="background: white; padding: 20px; border-radius: 8px; max-width: 800px; max-height: 80vh; overflow-y: auto; width: 90%;">
+            <h2>Vertex Data Debug</h2>
+            <p>First 10 vertices (x, y, z):</p>
+            <pre id="vertex-data" style="background: #f5f5f5; padding: 10px; border-radius: 4px; overflow-x: auto;"></pre>
+            <button id="close-vertex-modal" style="margin-top: 15px;">Close</button>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let canvas, gl;
+        let program = null;
+        let positionBuffer;
+        let vertices = null;
+        let pointCount = 0;
+        let dataRanges = {
+            x: { min: 0, max: 0, range: 0 },
+            y: { min: 0, max: 0, range: 0 },
+            z: { min: 0, max: 0, range: 0 },
+            center: { x: 0, y: 0, z: 0 },
+            maxExtent: 0 // 最大范围，用于计算初始缩放
+        };
+        let pcdFormat = "N/A";
+        let isDragging = false;
+        let lastX, lastY;
+        let isAltPressed = false; // 跟踪Alt键是否按下
+        let controlsVisible = true; // 控制提示框是否可见
+        
+        // 交互灵敏度设置 - 扩大范围
+        const interactionSettings = {
+            rotationSpeed: 1,
+            panSpeed: 1,
+            zoomSpeed: 0.05
+        };
+        
+        // 矩阵工具
+        const mat4 = {
+            create: () => new Float32Array(16),
+            identity: (m) => {
+                m.set([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                return m;
+            },
+            perspective: (m, fovy, aspect, near, far) => {
+                const f = 1.0 / Math.tan(fovy * 0.5);
+                const nf = 1.0 / (near - far);
+                m.set([
+                    f / aspect, 0, 0, 0,
+                    0, f, 0, 0,
+                    0, 0, (far + near) * nf, -1,
+                    0, 0, 2 * far * near * nf, 0
+                ]);
+                return m;
+            },
+            translate: (out, a, v) => {
+                const x = v[0], y = v[1], z = v[2];
+                out[0] = a[0];
+                out[1] = a[1];
+                out[2] = a[2];
+                out[3] = a[3];
+                out[4] = a[4];
+                out[5] = a[5];
+                out[6] = a[6];
+                out[7] = a[7];
+                out[8] = a[8];
+                out[9] = a[9];
+                out[10] = a[10];
+                out[11] = a[11];
+                out[12] = a[0] * x + a[4] * y + a[8] * z + a[12];
+                out[13] = a[1] * x + a[5] * y + a[9] * z + a[13];
+                out[14] = a[2] * x + a[6] * y + a[10] * z + a[14];
+                out[15] = a[3] * x + a[7] * y + a[11] * z + a[15];
+                return out;
+            },
+            rotateX: (out, a, rad) => {
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+                const a10 = a[4];
+                const a11 = a[5];
+                const a12 = a[6];
+                const a13 = a[7];
+                const a20 = a[8];
+                const a21 = a[9];
+                const a22 = a[10];
+                const a23 = a[11];
+
+                out[4] = a10 * cos + a20 * sin;
+                out[5] = a11 * cos + a21 * sin;
+                out[6] = a12 * cos + a22 * sin;
+                out[7] = a13 * cos + a23 * sin;
+                out[8] = a10 * -sin + a20 * cos;
+                out[9] = a11 * -sin + a21 * cos;
+                out[10] = a12 * -sin + a22 * cos;
+                out[11] = a13 * -sin + a23 * cos;
+
+                if (a !== out) {
+                    out[0] = a[0];
+                    out[1] = a[1];
+                    out[2] = a[2];
+                    out[3] = a[3];
+                    out[12] = a[12];
+                    out[13] = a[13];
+                    out[14] = a[14];
+                    out[15] = a[15];
+                }
+                return out;
+            },
+            rotateY: (out, a, rad) => {
+                const cos = Math.cos(rad);
+                const sin = Math.sin(rad);
+                const a00 = a[0];
+                const a01 = a[1];
+                const a02 = a[2];
+                const a03 = a[3];
+                const a20 = a[8];
+                const a21 = a[9];
+                const a22 = a[10];
+                const a23 = a[11];
+
+                out[0] = a00 * cos + a20 * -sin;
+                out[1] = a01 * cos + a21 * -sin;
+                out[2] = a02 * cos + a22 * -sin;
+                out[3] = a03 * cos + a23 * -sin;
+                out[8] = a00 * sin + a20 * cos;
+                out[9] = a01 * sin + a21 * cos;
+                out[10] = a02 * sin + a22 * cos;
+                out[11] = a03 * sin + a23 * cos;
+
+                if (a !== out) {
+                    out[4] = a[4];
+                    out[5] = a[5];
+                    out[6] = a[6];
+                    out[7] = a[7];
+                    out[12] = a[12];
+                    out[13] = a[13];
+                    out[14] = a[14];
+                    out[15] = a[15];
+                }
+                return out;
+            },
+            scale: (out, a, s) => {
+                // s 是缩放因子
+                out[0] = a[0] * s;
+                out[1] = a[1] * s;
+                out[2] = a[2] * s;
+                out[3] = a[3] * s;
+                out[4] = a[4] * s;
+                out[5] = a[5] * s;
+                out[6] = a[6] * s;
+                out[7] = a[7] * s;
+                out[8] = a[8] * s;
+                out[9] = a[9] * s;
+                out[10] = a[10] * s;
+                out[11] = a[11] * s;
+                out[12] = a[12] * s;
+                out[13] = a[13] * s;
+                out[14] = a[14] * s;
+                out[15] = a[15] * s;
+                return out;
+            }
+        };
+        
+        // 相机状态
+        const camera = {
+            projection: mat4.create(),
+            view: mat4.create(),
+            rotation: { x: 30, y: 45 }, // 初始旋转角度，提供更好的初始视角
+            zoom: 1,
+            pan: { x: 0, y: 0 },
+            distance: 10, // 相机到目标点的距离
+            fov: Math.PI / 4 // 视野角度 (45度)
+        };
+        
+        // DOM元素
+        const fileInput = document.getElementById('file-upload');
+        const pointSizeInput = document.getElementById('point-size');
+        const pointSizeValue = document.getElementById('point-size-value');
+        const pointColorInput = document.getElementById('point-color');
+        const rotationSpeedInput = document.getElementById('rotation-speed');
+        const panSpeedInput = document.getElementById('pan-speed');
+        const zoomSpeedInput = document.getElementById('zoom-speed');
+        const logsElement = document.getElementById('logs');
+        const dataStatsElement = document.getElementById('data-stats');
+        const pcdInfoElement = document.getElementById('pcd-info');
+        const resetCameraBtn = document.getElementById('reset-camera');
+        const fitViewBtn = document.getElementById('fit-view');
+        const debugVerticesBtn = document.getElementById('debug-vertices');
+        const vertexModal = document.getElementById('vertex-modal');
+        const vertexDataElement = document.getElementById('vertex-data');
+        const closeVertexModalBtn = document.getElementById('close-vertex-modal');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const initialHint = document.getElementById('initial-hint');
+        const controlsOverlay = document.getElementById('controls-overlay');
+        const closeHintBtn = document.getElementById('close-hint');
+        const toggleControlsBtn = document.getElementById('toggle-controls');
+        
+        // 日志功能
+        function log(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logsElement.appendChild(logEntry);
+            logsElement.scrollTop = logsElement.scrollHeight;
+            
+            switch(type) {
+                case 'error': console.error(message); break;
+                case 'warning': console.warn(message); break;
+                default: console.log(message);
+            }
+        }
+        
+        // 更新数据信息显示
+        function updateDataInfo() {
+            pcdInfoElement.innerHTML = `
+                <div>Points Loaded: ${pointCount.toLocaleString()}</div>
+                <div>Format: ${pcdFormat}</div>
+                <div>X Range: ${dataRanges.x.min.toFixed(4)} to ${dataRanges.x.max.toFixed(4)}</div>
+                <div>Y Range: ${dataRanges.y.min.toFixed(4)} to ${dataRanges.y.max.toFixed(4)}</div>
+                <div>Z Range: ${dataRanges.z.min.toFixed(4)} to ${dataRanges.z.max.toFixed(4)}</div>
+            `;
+            
+            dataStatsElement.textContent = 
+                `${pointCount.toLocaleString()} points (${pcdFormat}) | ` +
+                `Zoom: ${camera.zoom.toFixed(2)}x`;
+        }
+        
+        // 显示顶点调试信息
+        function showVertexDebug() {
+            if (!vertices || vertices.length === 0) {
+                vertexDataElement.textContent = 'No vertex data available';
+            } else {
+                let debugText = '';
+                const count = Math.min(10, pointCount);
+                for (let i = 0; i < count; i++) {
+                    const idx = i * 3;
+                    debugText += `Vertex ${i}: (${vertices[idx].toFixed(6)}, ${vertices[idx+1].toFixed(6)}, ${vertices[idx+2].toFixed(6)})\n`;
+                }
+                vertexDataElement.textContent = debugText;
+            }
+            vertexModal.style.display = 'flex';
+        }
+        
+        // 切换操作提示框显示/隐藏
+        function toggleControlsHint() {
+            controlsVisible = !controlsVisible;
+            controlsOverlay.style.display = controlsVisible ? 'block' : 'none';
+            log(`${controlsVisible ? 'Shown' : 'Hidden'} controls hint`, 'info');
+        }
+        
+        // 编译着色器
+        function compileShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+            
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                const error = gl.getShaderInfoLog(shader);
+                log(`Shader compile error: ${error}`, 'error');
+                gl.deleteShader(shader);
+                return null;
+            }
+            return shader;
+        }
+        
+        // 创建着色器程序
+        function createProgram(vertexShader, fragmentShader) {
+            const program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+            
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                const error = gl.getProgramInfoLog(program);
+                log(`Program link error: ${error}`, 'error');
+                return null;
+            }
+            
+            program.uMVPMatrix = gl.getUniformLocation(program, 'uMVPMatrix');
+            program.uPointSize = gl.getUniformLocation(program, 'uPointSize');
+            program.uColor = gl.getUniformLocation(program, 'uColor');
+            program.aPosition = gl.getAttribLocation(program, 'aPosition');
+            
+            if (program.uMVPMatrix === null) log('Warning: uMVPMatrix uniform not found', 'warning');
+            if (program.uPointSize === null) log('Warning: uPointSize uniform not found', 'warning');
+            if (program.aPosition === -1) log('Warning: aPosition attribute not found', 'warning');
+            
+            return program;
+        }
+        
+        // 初始化WebGL
+        function initWebGL() {
+            try {
+                canvas = document.getElementById('glCanvas');
+                resizeCanvas();
+                
+                gl = canvas.getContext('webgl') || 
+                     canvas.getContext('experimental-webgl');
+                
+                if (!gl) {
+                    log('WebGL is not supported by your browser', 'error');
+                    return false;
+                }
+                
+                log('WebGL context initialized successfully', 'info');
+                
+                const vsSource = `
+                    attribute vec3 aPosition;
+                    uniform mat4 uMVPMatrix;
+                    uniform float uPointSize;
+                    
+                    void main(void) {
+                        gl_Position = uMVPMatrix * vec4(aPosition, 1.0);
+                        gl_PointSize = uPointSize;
+                    }
+                `;
+                
+                const fsSource = `
+                    precision mediump float;
+                    uniform vec3 uColor;
+                    
+                    void main(void) {
+                        gl_FragColor = vec4(uColor, 1.0);
+                    }
+                `;
+                
+                const vertexShader = compileShader(gl.VERTEX_SHADER, vsSource);
+                const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fsSource);
+                
+                if (!vertexShader || !fragmentShader) {
+                    return false;
+                }
+                
+                program = createProgram(vertexShader, fragmentShader);
+                if (!program) {
+                    return false;
+                }
+                
+                gl.useProgram(program);
+                
+                positionBuffer = gl.createBuffer();
+                gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+                
+                if (program.aPosition !== -1) {
+                    gl.enableVertexAttribArray(program.aPosition);
+                    gl.vertexAttribPointer(program.aPosition, 3, gl.FLOAT, false, 0, 0);
+                }
+                
+                mat4.identity(camera.view);
+                mat4.perspective(camera.projection, camera.fov, 
+                                canvas.width / canvas.height, 0.1, 10000.0);
+                
+                if (program.uPointSize) gl.uniform1f(program.uPointSize, 3);
+                if (program.uColor) gl.uniform3f(program.uColor, 1.0, 0.0, 0.0);
+                
+                gl.clearColor(0.1, 0.1, 0.1, 1.0);
+                gl.enable(gl.DEPTH_TEST);
+                
+                setupEventListeners();
+                requestAnimationFrame(render);
+                return true;
+                
+            } catch (error) {
+                log(`Initialization error: ${error.message}`, 'error');
+                return false;
+            }
+        }
+        
+        // 调整画布尺寸
+        function resizeCanvas() {
+            if (!canvas) return;
+            const container = canvas.parentElement;
+            canvas.width = container.clientWidth;
+            canvas.height = container.clientHeight;
+            if (gl) {
+                gl.viewport(0, 0, canvas.width, canvas.height);
+                mat4.perspective(camera.projection, camera.fov, 
+                                canvas.width / canvas.height, 0.1, 10000.0);
+                // 如果已有数据，重新调整视图以确保所有点可见
+                if (pointCount > 0) {
+                    adjustZoomToFit();
+                }
+                log(`Canvas resized to ${canvas.width}x${canvas.height}`, 'info');
+            }
+        }
+        
+        // 设置事件监听
+        function setupEventListeners() {
+            fileInput.addEventListener('change', handleFileUpload);
+            
+            pointSizeInput.addEventListener('input', (e) => {
+                const size = parseInt(e.target.value);
+                pointSizeValue.textContent = size;
+                if (program && program.uPointSize) {
+                    gl.uniform1f(program.uPointSize, size);
+                }
+            });
+            
+            pointColorInput.addEventListener('input', (e) => {
+                if (program && program.uColor) {
+                    const color = e.target.value;
+                    const r = parseInt(color.slice(1, 3), 16) / 255;
+                    const g = parseInt(color.slice(3, 5), 16) / 255;
+                    const b = parseInt(color.slice(5, 7), 16) / 255;
+                    gl.uniform3f(program.uColor, r, g, b);
+                }
+            });
+            
+            // 交互灵敏度设置 - 扩大范围
+            rotationSpeedInput.addEventListener('input', (e) => {
+                interactionSettings.rotationSpeed = parseFloat(e.target.value);
+                log(`Rotation speed set to ${interactionSettings.rotationSpeed}`, 'info');
+            });
+            
+            panSpeedInput.addEventListener('input', (e) => {
+                interactionSettings.panSpeed = parseFloat(e.target.value);
+                log(`Pan speed set to ${interactionSettings.panSpeed}`, 'info');
+            });
+            
+            zoomSpeedInput.addEventListener('input', (e) => {
+                interactionSettings.zoomSpeed = parseFloat(e.target.value);
+                log(`Zoom speed set to ${interactionSettings.zoomSpeed}`, 'info');
+            });
+            
+            // 重置相机
+            resetCameraBtn.addEventListener('click', () => {
+                resetCamera();
+            });
+            
+            // 适配所有点
+            fitViewBtn.addEventListener('click', () => {
+                fitAllPoints();
+            });
+            
+            // 调试顶点
+            debugVerticesBtn.addEventListener('click', showVertexDebug);
+            closeVertexModalBtn.addEventListener('click', () => {
+                vertexModal.style.display = 'none';
+            });
+            
+            // 显示/隐藏操作提示
+            closeHintBtn.addEventListener('click', toggleControlsHint);
+            toggleControlsBtn.addEventListener('click', toggleControlsHint);
+            
+            window.addEventListener('resize', resizeCanvas);
+            
+            // 监听Alt键按下和释放
+            window.addEventListener('keydown', (e) => {
+                if (e.key === 'Alt') {
+                    isAltPressed = true;
+                    // 显示提示光标
+                    if (isDragging) {
+                        canvas.style.cursor = 'grabbing';
+                    } else {
+                        canvas.style.cursor = 'grab';
+                    }
+                }
+            });
+            
+            window.addEventListener('keyup', (e) => {
+                if (e.key === 'Alt') {
+                    isAltPressed = false;
+                    // 恢复默认光标
+                    if (!isDragging) {
+                        canvas.style.cursor = 'default';
+                    }
+                }
+            });
+            
+            // 鼠标按下
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+                
+                // 根据Alt键状态显示不同光标
+                if (isAltPressed) {
+                    canvas.style.cursor = 'grabbing';
+                } else {
+                    canvas.style.cursor = 'grabbing';
+                }
+            });
+            
+            // 鼠标移动
+            window.addEventListener('mousemove', (e) => {
+                if (!isDragging || pointCount === 0) return;
+                
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+                
+                // Alt+左键 平移
+                if (isAltPressed) {
+                    // 平移速度与缩放级别和点云规模相关
+                    const panFactor = 0.001 * dataRanges.maxExtent / camera.zoom * interactionSettings.panSpeed;
+                    camera.pan.x += deltaX * panFactor;
+                    camera.pan.y -= deltaY * panFactor;
+                } 
+                // 左键 旋转
+                else {
+                    // 旋转灵敏度与视口大小相关，确保不同分辨率下体验一致
+                    const sensitivity = 0.5 * interactionSettings.rotationSpeed / (canvas.width / 800);
+                    camera.rotation.y += deltaX * sensitivity;
+                    camera.rotation.x += deltaY * sensitivity;
+                    
+                    // 限制X轴旋转范围，避免翻转
+                    camera.rotation.x = Math.max(-89, Math.min(89, camera.rotation.x));
+                }
+                
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+            
+            // 鼠标释放
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                // 根据Alt键状态恢复光标
+                if (isAltPressed) {
+                    canvas.style.cursor = 'grab';
+                } else {
+                    canvas.style.cursor = 'default';
+                }
+            });
+            
+            // 鼠标离开画布时结束拖动
+            canvas.addEventListener('mouseleave', () => {
+                isDragging = false;
+                canvas.style.cursor = 'default';
+            });
+            
+            // 鼠标滚轮缩放
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                if (pointCount === 0) return;
+                
+                // 根据滚轮方向计算缩放因子
+                const zoomFactor = e.deltaY < 0 ? 
+                    (1 - interactionSettings.zoomSpeed) : 
+                    (1 + interactionSettings.zoomSpeed);
+                
+                // 应用缩放限制
+                const newZoom = camera.zoom * zoomFactor;
+                camera.zoom = Math.max(0.05, Math.min(20, newZoom));
+                
+                // 鼠标位置处缩放（更自然的缩放体验）
+                const rect = canvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                
+                // 计算鼠标在视口中的相对位置
+                const mouseNormX = (mouseX / rect.width) * 2 - 1;
+                const mouseNormY = -(mouseY / rect.height) * 2 + 1;
+                
+                // 基于鼠标位置调整平移，实现"鼠标点缩放"效果
+                const panAdjustFactor = (1 - zoomFactor) * 0.5 * dataRanges.maxExtent;
+                camera.pan.x += mouseNormX * panAdjustFactor;
+                camera.pan.y += mouseNormY * panAdjustFactor;
+            });
+            
+            // 防止右键菜单干扰
+            canvas.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                return false;
+            });
+        }
+        
+        // 重置相机位置
+        function resetCamera() {
+            camera.rotation = { x: 30, y: 45 };
+            camera.pan = { x: 0, y: 0 };
+            
+            // 如果有数据，调整到合适的缩放
+            if (pointCount > 0) {
+                adjustZoomToFit();
+            } else {
+                camera.zoom = 1;
+            }
+            
+            log('Camera reset to initial position', 'info');
+        }
+        
+        // 调整缩放以适应所有点
+        function adjustZoomToFit() {
+            if (pointCount === 0 || dataRanges.maxExtent === 0) return;
+            
+            // 计算所需的缩放因子，确保所有点可见
+            // 增加了安全系数1.3，确保边缘点完全可见
+            const fovFactor = Math.tan(camera.fov / 2);
+            const aspectRatio = canvas.width / canvas.height;
+            
+            // 考虑视口比例和FOV的综合缩放计算
+            const requiredZoom = (dataRanges.maxExtent * 1.3) / (2 * fovFactor);
+            camera.zoom = Math.min(20, Math.max(0.05, requiredZoom));
+            
+            log(`Zoom adjusted to fit all points (${camera.zoom.toFixed(2)})`, 'info');
+        }
+        
+        // 适配所有点到视图中
+        function fitAllPoints() {
+            if (pointCount === 0) {
+                log('No points to fit', 'warning');
+                return;
+            }
+            
+            // 重置位置和旋转
+            camera.rotation = { x: 30, y: 45 };
+            camera.pan = { x: 0, y: 0 };
+            
+            // 调整缩放
+            adjustZoomToFit();
+            
+            log('View adjusted to show all points', 'info');
+        }
+        
+        // 处理文件上传
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            // 显示加载指示器
+            loadingIndicator.style.display = 'block';
+            // 隐藏初始提示
+            initialHint.style.display = 'none';
+            
+            log(`Loading file: ${file.name} (${(file.size / 1024).toFixed(1)} KB)`, 'info');
+            
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const arrayBuffer = event.target.result;
+                    const textDecoder = new TextDecoder('utf-8');
+                    const headerBuffer = arrayBuffer.slice(0, Math.min(4096, arrayBuffer.byteLength));
+                    const headerText = textDecoder.decode(headerBuffer);
+                    
+                    parsePCDHeader(headerText, arrayBuffer, file.name);
+                } catch (error) {
+                    log(`Error parsing PCD: ${error.message}`, 'error');
+                } finally {
+                    // 隐藏加载指示器
+                    loadingIndicator.style.display = 'none';
+                }
+            };
+            reader.onerror = () => {
+                log(`Error reading file: ${reader.error.message}`, 'error');
+                loadingIndicator.style.display = 'none';
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+        
+        // 解析PCD头部
+        function parsePCDHeader(headerText, arrayBuffer, fileName) {
+            const lines = headerText.split(/\r?\n/).map(line => line.trim());
+            let dataFormat = '';
+            let width = 0;
+            let height = 0;
+            let fields = [];
+            let types = [];
+            let sizes = [];
+            let counts = [];
+            let pointStep = 0;
+            let headerSize = 0;
+            
+            log(`Parsing PCD header for ${fileName}`, 'info');
+            
+            // 解析头部信息
+            for (let i = 0; i < lines.length; i++) {
+                const line = lines[i];
+                if (line === '') continue;
+                if (line.startsWith('#')) continue;
+                
+                const parts = line.split(/\s+/).filter(p => p !== '');
+                if (parts.length < 1) continue;
+                
+                const key = parts[0].toLowerCase();
+                
+                switch (key) {
+                    case 'data':
+                        if (parts.length > 1) {
+                            dataFormat = parts[1].toLowerCase();
+                            log(`Data format detected: ${dataFormat}`, 'info');
+                        }
+                        headerSize = headerText.indexOf(line) + line.length + 1;
+                        break;
+                    case 'width':
+                        width = parseInt(parts[1]) || 0;
+                        break;
+                    case 'height':
+                        height = parseInt(parts[1]) || 0;
+                        break;
+                    case 'fields':
+                        fields = parts.slice(1);
+                        log(`Fields: ${fields.join(', ')}`, 'info');
+                        break;
+                    case 'type':
+                        types = parts.slice(1);
+                        break;
+                    case 'size':
+                        sizes = parts.slice(1).map(Number);
+                        break;
+                    case 'count':
+                        counts = parts.slice(1).map(Number);
+                        break;
+                    case 'point_step':
+                        pointStep = parseInt(parts[1]) || 0;
+                        break;
+                }
+            }
+            
+            // 计算点数量
+            pointCount = width * height;
+            if (pointCount <= 0) {
+                throw new Error(`Invalid point count: ${pointCount}`);
+            }
+            
+            log(`Expected point count: ${pointCount}`, 'info');
+            
+            // 验证是否有X、Y、Z字段
+            const hasXYZ = fields.includes('x') && fields.includes('y') && fields.includes('z');
+            if (!hasXYZ) {
+                throw new Error('PCD file must contain x, y, and z fields');
+            }
+            
+            // 根据数据格式解析点数据
+            let points;
+            pcdFormat = dataFormat;
+            
+            if (dataFormat.includes('ascii')) {
+                const text = new TextDecoder('utf-8').decode(arrayBuffer);
+                points = parseAsciiPoints(text, headerSize, pointCount);
+            } else if (dataFormat.includes('binary')) {
+                points = parseBinaryPoints(arrayBuffer, headerSize, pointCount, 
+                                         fields, types, sizes, counts, pointStep);
+            } else {
+                throw new Error(`Unsupported data format: ${dataFormat}`);
+            }
+            
+            // 存储原始顶点数据
+            vertices = points;
+            
+            // 分析点数据范围
+            dataRanges = analyzePointData(vertices);
+            
+            // 归一化点数据
+            const normalizedPoints = normalizePointData(vertices, dataRanges);
+            
+            // 更新缓冲区
+            gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, normalizedPoints, gl.STATIC_DRAW);
+            
+            // 更新属性指针
+            if (program.aPosition !== -1) {
+                gl.vertexAttribPointer(program.aPosition, 3, gl.FLOAT, false, 0, 0);
+            }
+            
+            // 更新显示信息
+            updateDataInfo();
+            
+            // 自动调整视图以显示所有点
+            fitAllPoints();
+        }
+        
+        // 解析ASCII格式点数据
+        function parseAsciiPoints(text, headerSize, expectedCount) {
+            const dataText = text.substring(headerSize);
+            const lines = dataText.split(/\r?\n/).map(line => line.trim());
+            
+            const points = [];
+            let count = 0;
+            
+            for (const line of lines) {
+                if (line === '' || count >= expectedCount) break;
+                
+                const parts = line.split(/\s+/).map(Number);
+                if (parts.length >= 3) {
+                    points.push(parts[0], parts[1], parts[2]);
+                    count++;
+                }
+            }
+            
+            log(`Parsed ${count} ASCII points`, 'info');
+            return new Float32Array(points);
+        }
+        
+        // 解析二进制格式点数据
+        function parseBinaryPoints(arrayBuffer, headerSize, expectedCount, 
+                                 fields, types, sizes, counts, pointStep) {
+            const dataView = new DataView(arrayBuffer, headerSize);
+            const points = new Float32Array(expectedCount * 3);
+            
+            // 找到x、y、z字段的索引
+            const xIndex = fields.indexOf('x');
+            const yIndex = fields.indexOf('y');
+            const zIndex = fields.indexOf('z');
+            
+            if (xIndex === -1 || yIndex === -1 || zIndex === -1) {
+                throw new Error('PCD file must contain x, y, and z fields');
+            }
+            
+            // 计算每个字段的字节偏移量
+            const offsets = [0];
+            for (let i = 1; i < fields.length; i++) {
+                offsets[i] = offsets[i-1] + sizes[i-1] * counts[i-1];
+            }
+            
+            // 如果没有提供point_step，计算它
+            const calculatedPointStep = offsets[offsets.length - 1] + sizes[sizes.length - 1] * counts[counts.length - 1];
+            const actualPointStep = pointStep || calculatedPointStep;
+            
+            log(`Parsing binary points (point step: ${actualPointStep} bytes)`, 'info');
+            
+            // 解析每个点
+            for (let i = 0; i < expectedCount; i++) {
+                const pointOffset = i * actualPointStep;
+                
+                // 读取x、y、z值
+                const x = readBinaryValue(dataView, pointOffset + offsets[xIndex], types[xIndex], sizes[xIndex]);
+                const y = readBinaryValue(dataView, pointOffset + offsets[yIndex], types[yIndex], sizes[yIndex]);
+                const z = readBinaryValue(dataView, pointOffset + offsets[zIndex], types[zIndex], sizes[zIndex]);
+                
+                points[i * 3] = x;
+                points[i * 3 + 1] = y;
+                points[i * 3 + 2] = z;
+            }
+            
+            log(`Parsed ${expectedCount} binary points`, 'info');
+            return points;
+        }
+        
+        // 读取二进制值
+        function readBinaryValue(dataView, offset, type, size) {
+            switch (type.toLowerCase()) {
+                case 'i': // 有符号整数
+                    switch (size) {
+                        case 1: return dataView.getInt8(offset);
+                        case 2: return dataView.getInt16(offset, true);
+                        case 4: return dataView.getInt32(offset, true);
+                        case 8: return Number(dataView.getBigInt64(offset, true));
+                    }
+                    break;
+                case 'u': // 无符号整数
+                    switch (size) {
+                        case 1: return dataView.getUint8(offset);
+                        case 2: return dataView.getUint16(offset, true);
+                        case 4: return dataView.getUint32(offset, true);
+                        case 8: return Number(dataView.getBigUint64(offset, true));
+                    }
+                    break;
+                case 'f': // 浮点数
+                    switch (size) {
+                        case 4: return dataView.getFloat32(offset, true);
+                        case 8: return dataView.getFloat64(offset, true);
+                    }
+                    break;
+            }
+            
+            throw new Error(`Unsupported type/size combination: ${type}${size}`);
+        }
+        
+        // 分析点数据范围
+        function analyzePointData(points) {
+            const ranges = {
+                x: { min: Infinity, max: -Infinity },
+                y: { min: Infinity, max: -Infinity },
+                z: { min: Infinity, max: -Infinity }
+            };
+            
+            // 遍历所有点计算边界
+            for (let i = 0; i < points.length; i += 3) {
+                const x = points[i];
+                const y = points[i + 1];
+                const z = points[i + 2];
+                
+                // 处理可能的异常值
+                if (!isNaN(x) && isFinite(x)) {
+                    ranges.x.min = Math.min(ranges.x.min, x);
+                    ranges.x.max = Math.max(ranges.x.max, x);
+                }
+                if (!isNaN(y) && isFinite(y)) {
+                    ranges.y.min = Math.min(ranges.y.min, y);
+                    ranges.y.max = Math.max(ranges.y.max, y);
+                }
+                if (!isNaN(z) && isFinite(z)) {
+                    ranges.z.min = Math.min(ranges.z.min, z);
+                    ranges.z.max = Math.max(ranges.z.max, z);
+                }
+            }
+            
+            // 计算范围
+            ranges.x.range = ranges.x.max - ranges.x.min;
+            ranges.y.range = ranges.y.max - ranges.y.min;
+            ranges.z.range = ranges.z.max - ranges.z.min;
+            
+            // 计算中心点
+            ranges.center = {
+                x: (ranges.x.min + ranges.x.max) / 2,
+                y: (ranges.y.min + ranges.y.max) / 2,
+                z: (ranges.z.min + ranges.z.max) / 2
+            };
+            
+            // 计算最大范围，用于初始缩放
+            ranges.maxExtent = Math.max(
+                ranges.x.range, 
+                ranges.y.range, 
+                ranges.z.range
+            ) / 2; // 除以2是因为我们从中心开始
+            
+            // 处理特殊情况：如果所有点都相同
+            if (ranges.maxExtent === 0 || !isFinite(ranges.maxExtent)) {
+                ranges.maxExtent = 1.0; // 设置默认范围
+                log('All points appear to be in the same location, using default extent', 'warning');
+            }
+            
+            log(`Data analysis: Max extent = ${ranges.maxExtent.toFixed(4)}`, 'info');
+            log(`X: [${ranges.x.min.toFixed(2)}, ${ranges.x.max.toFixed(2)}], Y: [${ranges.y.min.toFixed(2)}, ${ranges.y.max.toFixed(2)}], Z: [${ranges.z.min.toFixed(2)}, ${ranges.z.max.toFixed(2)}]`, 'info');
+            
+            return ranges;
+        }
+        
+        // 归一化点数据
+        function normalizePointData(points, ranges) {
+            // 平移到中心，不缩放（保持原始比例）
+            const centered = new Float32Array(points.length);
+            for (let i = 0; i < points.length; i += 3) {
+                centered[i] = points[i] - ranges.center.x;
+                centered[i + 1] = points[i + 1] - ranges.center.y;
+                centered[i + 2] = points[i + 2] - ranges.center.z;
+            }
+            return centered;
+        }
+        
+        // 计算MVP矩阵
+        function calculateMVPMatrix() {
+            const mvp = mat4.create();
+            mvp.set(camera.projection);
+            
+            const view = mat4.create();
+            mat4.identity(view);
+            
+            // 应用平移：先平移相机位置，再平移用户的pan操作
+            mat4.translate(view, view, [0, 0, -camera.distance]);
+            mat4.translate(view, view, [camera.pan.x, camera.pan.y, 0]);
+            
+            // 应用旋转
+            const rotX = camera.rotation.x * Math.PI / 180;
+            const rotY = camera.rotation.y * Math.PI / 180;
+            
+            mat4.rotateX(view, view, rotX);
+            mat4.rotateY(view, view, rotY);
+            
+            // 应用缩放
+            const scale = 1 / camera.zoom;
+            mat4.scale(view, view, scale);
+            
+            // 计算MVP矩阵
+            return multiplyMatrices(mvp, view);
+        }
+        
+        // 矩阵乘法
+        function multiplyMatrices(a, b) {
+            const result = mat4.create();
+            for (let i = 0; i < 4; i++) {
+                for (let j = 0; j < 4; j++) {
+                    result[i * 4 + j] = 
+                        a[i * 4 + 0] * b[0 * 4 + j] +
+                        a[i * 4 + 1] * b[1 * 4 + j] +
+                        a[i * 4 + 2] * b[2 * 4 + j] +
+                        a[i * 4 + 3] * b[3 * 4 + j];
+                }
+            }
+            return result;
+        }
+        
+        // 渲染函数
+        function render() {
+            if (!gl || !program) {
+                requestAnimationFrame(render);
+                return;
+            }
+            
+            // 清除画布
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            
+            // 计算MVP矩阵
+            const mvpMatrix = calculateMVPMatrix();
+            
+            // 设置矩阵
+            if (program.uMVPMatrix) {
+                gl.uniformMatrix4fv(program.uMVPMatrix, false, mvpMatrix);
+            }
+            
+            // 绘制点
+            if (pointCount > 0 && program.aPosition !== -1) {
+                gl.drawArrays(gl.POINTS, 0, pointCount);
+            }
+            
+            // 继续渲染循环
+            requestAnimationFrame(render);
+        }
+        
+        // 初始化
+        window.onload = initWebGL;
+    </script>
+</body>
+</html>

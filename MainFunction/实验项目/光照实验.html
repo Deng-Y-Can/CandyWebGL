@@ -1,0 +1,1022 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interactive 2D Ray Optics Simulator 光照实验V1</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #header {
+            background-color: #2d2d30;
+            padding: 10px 15px;
+            border-bottom: 1px solid #3c3c3c;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        #title {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+
+        #toolbar {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #3a3d41;
+            color: #d4d4d4;
+            border: 1px solid #555;
+            padding: 5px 10px;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: background-color 0.2s;
+        }
+
+            button:hover {
+                background-color: #4b4e52;
+            }
+
+            button.active {
+                background-color: #094771;
+                border-color: #007acc;
+            }
+
+        #main-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 250px;
+            background-color: #252526;
+            padding: 15px;
+            border-right: 1px solid #3c3c3c;
+            overflow-y: auto;
+            flex-shrink: 0;
+        }
+
+        .control-group {
+            margin-bottom: 20px;
+        }
+
+            .control-group h3 {
+                margin-top: 0;
+                margin-bottom: 10px;
+                font-size: 1em;
+                color: #cccccc;
+            }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 10px;
+        }
+
+        input[type="number"], select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 10px;
+            background-color: #3c3c3c;
+            color: #d4d4d4;
+            border: 1px solid #555;
+        }
+
+        #canvas-container {
+            flex: 1;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            background-color: #1e1e1e;
+        }
+
+        #simulationCanvas {
+            background-color: #121212;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            cursor: crosshair;
+        }
+
+        #status-bar {
+            background-color: #007acc;
+            color: white;
+            padding: 5px 10px;
+            font-size: 0.85em;
+            text-align: center;
+        }
+
+        .shape-info {
+            background-color: #2d2d30;
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 3px;
+            border: 1px solid #3c3c3c;
+        }
+
+            .shape-info h4 {
+                margin: 0 0 5px 0;
+                font-size: 0.95em;
+            }
+
+            .shape-info p {
+                margin: 2px 0;
+                font-size: 0.85em;
+            }
+
+        #instructions {
+            font-size: 0.8em;
+            color: #aaaaaa;
+            margin-top: 10px;
+            line-height: 1.4;
+        }
+
+            #instructions ul {
+                padding-left: 15px;
+                margin: 5px 0;
+            }
+
+            #instructions li {
+                margin-bottom: 3px;
+            }
+    </style>
+</head>
+<body>
+
+    <div id="header">
+        <div id="title">Interactive 2D Ray Optics Simulator</div>
+        <div id="toolbar">
+            <button id="modeLightBtn" class="active">Place Light Source</button>
+            <button id="modeCircleBtn">Place Circle</button>
+            <button id="modeLensBtn">Place Lens</button>
+            <button id="modeMirrorBtn">Place Mirror</button>
+            <button id="clearBtn">Clear All</button>
+            <button id="simulateBtn">Simulate Rays</button>
+        </div>
+    </div>
+
+    <div id="main-content">
+        <div id="sidebar">
+            <div class="control-group">
+                <h3>Current Tool Settings</h3>
+                <div id="toolSettings">
+                    <!-- Settings will be dynamically inserted here -->
+                </div>
+            </div>
+
+            <div class="control-group">
+                <h3>Material Properties</h3>
+                <label for="materialType">Material Type:</label>
+                <select id="materialType">
+                    <option value="glass">Glass (n=1.5)</option>
+                    <option value="water">Water (n=1.33)</option>
+                    <option value="diamond">Diamond (n=2.42)</option>
+                    <option value="custom">Custom</option>
+                </select>
+
+                <label for="refractiveIndex">Refractive Index (n):</label>
+                <input type="number" id="refractiveIndex" min="1.0" max="5.0" step="0.01" value="1.5">
+
+                <label for="reflectivity">Reflectivity:</label>
+                <input type="range" id="reflectivity" min="0" max="1" step="0.05" value="0.05">
+
+                <label for="transparency">Transparency:</label>
+                <input type="range" id="transparency" min="0" max="1" step="0.05" value="0.95">
+
+                <label for="absorptionR">Absorption (R):</label>
+                <input type="range" id="absorptionR" min="0" max="1" step="0.01" value="0.01">
+                <label for="absorptionG">Absorption (G):</label>
+                <input type="range" id="absorptionG" min="0" max="1" step="0.01" value="0.01">
+                <label for="absorptionB">Absorption (B):</label>
+                <input type="range" id="absorptionB" min="0" max="1" step="0.01" value="0.01">
+            </div>
+
+            <div class="control-group">
+                <h3>Simulation Settings</h3>
+                <label for="maxRayDepth">Max Ray Depth:</label>
+                <input type="number" id="maxRayDepth" min="1" max="10" step="1" value="5">
+
+                <label for="numRays">Number of Rays per Source:</label>
+                <input type="number" id="numRays" min="1" max="360" step="1" value="36">
+            </div>
+
+            <div class="control-group">
+                <h3>Scene Objects</h3>
+                <div id="sceneObjectsList">
+                    <!-- Object list will be populated here -->
+                    <p>No objects placed yet.</p>
+                </div>
+            </div>
+
+            <div id="instructions">
+                <h3>Instructions</h3>
+                <ul>
+                    <li><strong>Select a tool</strong> from the toolbar.</li>
+                    <li><strong>Click and drag</strong> on the canvas to place an object.</li>
+                    <li>For lenses/mirrors, <strong>click once</strong> for start point, then <strong>click again</strong> for end point.</li>
+                    <li>Adjust <strong>Material Properties</strong> before placing a shape.</li>
+                    <li>Click <strong>Simulate Rays</strong> to see the light paths.</li>
+                    <li>Use <strong>Clear All</strong> to reset the scene.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div id="canvas-container">
+            <canvas id="simulationCanvas" width="800" height="600"></canvas>
+        </div>
+    </div>
+
+    <div id="status-bar">
+        Ready. Select a tool and start placing objects.
+    </div>
+
+    <script>
+        // --- Utility Functions ---
+        function clamp(value, min, max) {
+            return Math.min(Math.max(value, min), max);
+        }
+
+        function vec2(x, y) {
+            return { x: x, y: y };
+        }
+
+        function vec2Add(a, b) {
+            return vec2(a.x + b.x, a.y + b.y);
+        }
+
+        function vec2Subtract(a, b) {
+            return vec2(a.x - b.x, a.y - b.y);
+        }
+
+        function vec2Scale(v, s) {
+            return vec2(v.x * s, v.y * s);
+        }
+
+        function vec2Dot(a, b) {
+            return a.x * b.x + a.y * b.y;
+        }
+
+        function vec2Length(v) {
+            return Math.sqrt(vec2Dot(v, v));
+        }
+
+        function vec2Normalize(v) {
+            const len = vec2Length(v);
+            if (len > 1e-10) {
+                return vec2Scale(v, 1.0 / len);
+            }
+            return vec2(1, 0); // Avoid division by zero
+        }
+
+        function vec2Rotate(v, angleRad) {
+            const cos = Math.cos(angleRad);
+            const sin = Math.sin(angleRad);
+            return vec2(v.x * cos - v.y * sin, v.x * sin + v.y * cos);
+        }
+
+        function vec2Distance(a, b) {
+            return vec2Length(vec2Subtract(a, b));
+        }
+
+        function lerp(a, b, t) {
+            return a + (b - a) * t;
+        }
+
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? {
+                r: parseInt(result[1], 16) / 255,
+                g: parseInt(result[2], 16) / 255,
+                b: parseInt(result[3], 16) / 255
+            } : { r: 1, g: 1, b: 1 };
+        }
+
+        // --- Core Simulation Logic ---
+
+        const canvas = document.getElementById('simulationCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusBar = document.getElementById('status-bar');
+        const sceneObjectsList = document.getElementById('sceneObjectsList');
+
+        let currentMode = 'light'; // 'light', 'circle', 'lens', 'mirror'
+        let isPlacingObject = false;
+        let placementStartPoint = null;
+        let tempPreviewObject = null;
+
+        const scene = {
+            lights: [],
+            shapes: []
+        };
+
+        const defaultMaterials = {
+            glass: { n: 1.5, reflectivity: 0.05, transparency: 0.95, absorption: { r: 0.01, g: 0.01, b: 0.01 } },
+            water: { n: 1.33, reflectivity: 0.02, transparency: 0.98, absorption: { r: 0.005, g: 0.005, b: 0.005 } },
+            diamond: { n: 2.42, reflectivity: 0.1, transparency: 0.9, absorption: { r: 0.02, g: 0.02, b: 0.02 } },
+            custom: { n: 1.5, reflectivity: 0.05, transparency: 0.95, absorption: { r: 0.01, g: 0.01, b: 0.01 } }
+        };
+
+        // --- UI Interaction ---
+
+        document.getElementById('modeLightBtn').addEventListener('click', () => setMode('light'));
+        document.getElementById('modeCircleBtn').addEventListener('click', () => setMode('circle'));
+        document.getElementById('modeLensBtn').addEventListener('click', () => setMode('lens'));
+        document.getElementById('modeMirrorBtn').addEventListener('click', () => setMode('mirror'));
+        document.getElementById('clearBtn').addEventListener('click', clearScene);
+        document.getElementById('simulateBtn').addEventListener('click', simulateRays);
+
+        function setMode(mode) {
+            currentMode = mode;
+            document.querySelectorAll('#toolbar button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`mode${mode.charAt(0).toUpperCase() + mode.slice(1)}Btn`).classList.add('active');
+            updateToolSettingsUI(); // Update settings panel when mode changes
+            statusBar.textContent = `Mode: ${mode}. ${mode === 'light' ? 'Click to place a light source.' : 'Click and drag to place a shape.'}`;
+            isPlacingObject = false;
+            placementStartPoint = null;
+            tempPreviewObject = null;
+            redraw();
+        }
+
+        function updateToolSettingsUI() {
+            const settingsDiv = document.getElementById('toolSettings');
+            settingsDiv.innerHTML = ''; // Clear previous settings
+
+            if (currentMode === 'light') {
+                settingsDiv.innerHTML += `
+                            <label for="lightIntensity">Light Intensity:</label>
+                            <input type="range" id="lightIntensity" min="0.1" max="2" step="0.1" value="1">
+                        `;
+            } else if (currentMode === 'circle') {
+                settingsDiv.innerHTML += `
+                            <label for="circleRadius">Circle Radius:</label>
+                            <input type="range" id="circleRadius" min="10" max="100" step="1" value="30">
+                        `;
+            } else if (currentMode === 'lens') {
+                settingsDiv.innerHTML += `
+                            <label for="lensRadius">Lens Radius:</label>
+                            <input type="range" id="lensRadius" min="20" max="150" step="1" value="60">
+                            <label for="lensFocalLength">Lens Focal Length:</label>
+                            <input type="number" id="lensFocalLength" min="-500" max="500" step="1" value="100">
+                        `;
+            } else if (currentMode === 'mirror') {
+                settingsDiv.innerHTML += `
+                            <label for="mirrorLength">Mirror Length:</label>
+                            <input type="range" id="mirrorLength" min="20" max="200" step="1" value="100">
+                        `;
+            }
+        }
+
+        function updateMaterialUIFromPreset() {
+            const preset = document.getElementById('materialType').value;
+            const material = defaultMaterials[preset];
+            if (material) {
+                document.getElementById('refractiveIndex').value = material.n;
+                document.getElementById('reflectivity').value = material.reflectivity;
+                document.getElementById('transparency').value = material.transparency;
+                document.getElementById('absorptionR').value = material.absorption.r;
+                document.getElementById('absorptionG').value = material.absorption.g;
+                document.getElementById('absorptionB').value = material.absorption.b;
+            }
+        }
+
+        document.getElementById('materialType').addEventListener('change', updateMaterialUIFromPreset);
+
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
+
+            if (currentMode === 'light') {
+                const intensitySlider = document.getElementById('lightIntensity');
+                const intensity = intensitySlider ? parseFloat(intensitySlider.value) || 1.0 : 1.0;
+                scene.lights.push({ position: point, intensity: intensity });
+                updateSceneObjectList();
+                redraw();
+            } else {
+                if (!isPlacingObject) {
+                    isPlacingObject = true;
+                    placementStartPoint = point;
+                    if (currentMode === 'circle') {
+                        createTempCircle(point);
+                    } else if (currentMode === 'lens') {
+                        // For lens, we need two points. Start point is set.
+                    } else if (currentMode === 'mirror') {
+                        // For mirror, we need two points. Start point is set.
+                    }
+                } else { // Second click for lens/mirror
+                    if ((currentMode === 'lens' || currentMode === 'mirror') && placementStartPoint) {
+                        finalizeShape(placementStartPoint, point);
+                        isPlacingObject = false;
+                        placementStartPoint = null;
+                        tempPreviewObject = null;
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
+
+            if (isPlacingObject && placementStartPoint) {
+                if (currentMode === 'circle') {
+                    if (tempPreviewObject) {
+                        const radius = vec2Distance(placementStartPoint, point);
+                        tempPreviewObject.radius = radius;
+                    }
+                } else if (currentMode === 'lens' || currentMode === 'mirror') {
+                    // Update temporary line preview
+                    tempPreviewObject = {
+                        type: currentMode,
+                        p1: placementStartPoint,
+                        p2: point
+                    };
+                }
+                redraw();
+            }
+        });
+
+        canvas.addEventListener('mouseup', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const point = vec2(x, y);
+
+            if (isPlacingObject && placementStartPoint && (currentMode === 'circle')) {
+                finalizeShape(placementStartPoint, point);
+                isPlacingObject = false;
+                placementStartPoint = null;
+                tempPreviewObject = null;
+            }
+            // For lens/mirror, finalization happens on second mousedown
+        });
+
+
+        function createTempCircle(center) {
+            const radius = 30; // Default or from slider?
+            tempPreviewObject = {
+                type: 'circle',
+                center: center,
+                radius: radius
+            };
+        }
+
+        function getMaterialFromUI() {
+            return {
+                n: parseFloat(document.getElementById('refractiveIndex').value),
+                reflectivity: parseFloat(document.getElementById('reflectivity').value),
+                transparency: parseFloat(document.getElementById('transparency').value),
+                absorption: {
+                    r: parseFloat(document.getElementById('absorptionR').value),
+                    g: parseFloat(document.getElementById('absorptionG').value),
+                    b: parseFloat(document.getElementById('absorptionB').value)
+                }
+            };
+        }
+
+        function finalizeShape(p1, p2) {
+            const material = getMaterialFromUI();
+            let newShape = null;
+
+            if (currentMode === 'circle') {
+                const radius = vec2Distance(p1, p2);
+                newShape = {
+                    type: 'circle',
+                    center: p1,
+                    radius: radius,
+                    material: material
+                };
+            } else if (currentMode === 'lens') {
+                // Simple plano-convex lens representation
+                const center = vec2Scale(vec2Add(p1, p2), 0.5);
+                const axis = vec2Subtract(p2, p1);
+                const length = vec2Length(axis);
+                const rotation = Math.atan2(axis.y, axis.x);
+
+                // --- Fix: Get focal length safely ---
+                const focalLengthInput = document.getElementById('lensFocalLength');
+                const focalLength = focalLengthInput ? parseFloat(focalLengthInput.value) || 100 : 100;
+
+                newShape = {
+                    type: 'lens',
+                    p1: p1,
+                    p2: p2,
+                    center: center,
+                    axis: axis,
+                    length: length,
+                    rotation: rotation,
+                    focalLength: focalLength,
+                    material: material
+                };
+            } else if (currentMode === 'mirror') {
+                const center = vec2Scale(vec2Add(p1, p2), 0.5);
+                const axis = vec2Subtract(p2, p1);
+                const length = vec2Length(axis);
+                const rotation = Math.atan2(axis.y, axis.x);
+
+                newShape = {
+                    type: 'mirror',
+                    p1: p1,
+                    p2: p2,
+                    center: center,
+                    axis: axis,
+                    length: length,
+                    rotation: rotation
+                };
+            }
+
+            if (newShape) {
+                scene.shapes.push(newShape);
+                updateSceneObjectList();
+                redraw();
+            }
+        }
+
+        function clearScene() {
+            scene.lights = [];
+            scene.shapes = [];
+            updateSceneObjectList();
+            redraw();
+            statusBar.textContent = "Scene cleared.";
+        }
+
+        function updateSceneObjectList() {
+            sceneObjectsList.innerHTML = '';
+            if (scene.lights.length === 0 && scene.shapes.length === 0) {
+                sceneObjectsList.innerHTML = '<p>No objects placed yet.</p>';
+                return;
+            }
+
+            scene.lights.forEach((light, index) => {
+                const lightDiv = document.createElement('div');
+                lightDiv.className = 'shape-info';
+                lightDiv.innerHTML = `
+                            <h4>Light Source ${index + 1}</h4>
+                            <p>Pos: (${light.position.x.toFixed(1)}, ${light.position.y.toFixed(1)})</p>
+                            <p>Intensity: ${light.intensity.toFixed(2)}</p>
+                        `;
+                sceneObjectsList.appendChild(lightDiv);
+            });
+
+            scene.shapes.forEach((shape, index) => {
+                const shapeDiv = document.createElement('div');
+                shapeDiv.className = 'shape-info';
+                let info = `<h4>${shape.type.charAt(0).toUpperCase() + shape.type.slice(1)} ${index + 1}</h4>`;
+                if (shape.type === 'circle') {
+                    info += `<p>Center: (${shape.center.x.toFixed(1)}, ${shape.center.y.toFixed(1)})</p>`;
+                    info += `<p>Radius: ${shape.radius.toFixed(1)}</p>`;
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    info += `<p>P1: (${shape.p1.x.toFixed(1)}, ${shape.p1.y.toFixed(1)})</p>`;
+                    info += `<p>P2: (${shape.p2.x.toFixed(1)}, ${shape.p2.y.toFixed(1)})</p>`;
+                    if (shape.type === 'lens') {
+                        info += `<p>Focal Length: ${shape.focalLength.toFixed(1)}</p>`;
+                    }
+                }
+                info += `<p>n: ${shape.material ? shape.material.n.toFixed(2) : 'N/A'}</p>`;
+                shapeDiv.innerHTML = info;
+                sceneObjectsList.appendChild(shapeDiv);
+            });
+        }
+
+        // --- Ray Tracing and Physics ---
+
+        function solveQuadratic(a, b, c) {
+            const discriminant = b * b - 4 * a * c;
+            if (discriminant < 0) return [];
+            if (discriminant === 0) return [-b / (2 * a)];
+            const sqrtDiscriminant = Math.sqrt(discriminant);
+            return [(-b + sqrtDiscriminant) / (2 * a), (-b - sqrtDiscriminant) / (2 * a)];
+        }
+
+        function intersectRayCircle(rayOrigin, rayDirection, circleCenter, circleRadius) {
+            const oc = vec2Subtract(rayOrigin, circleCenter);
+            const a = vec2Dot(rayDirection, rayDirection);
+            const b = 2.0 * vec2Dot(oc, rayDirection);
+            const c = vec2Dot(oc, oc) - circleRadius * circleRadius;
+            const ts = solveQuadratic(a, b, c).filter(t => t > 1e-6); // Ignore hits behind the ray or too close
+            if (ts.length === 0) return null;
+            const t = Math.min(...ts);
+            const hitPoint = vec2Add(rayOrigin, vec2Scale(rayDirection, t));
+            const normal = vec2Normalize(vec2Subtract(hitPoint, circleCenter));
+            return { t, hitPoint, normal };
+        }
+
+        function intersectRayLineSegment(rayOrigin, rayDirection, p1, p2) {
+            // Based on Wikipedia's Line-line intersection article
+            const p3 = rayOrigin;
+            const p4 = vec2Add(rayOrigin, rayDirection); // Any point on the ray line
+            const denom = (p1.x - p2.x) * (p3.y - p4.y) - (p1.y - p2.y) * (p3.x - p4.x);
+
+            if (Math.abs(denom) < 1e-10) {
+                return null; // Lines are parallel
+            }
+
+            const t = ((p1.x - p3.x) * (p3.y - p4.y) - (p1.y - p3.y) * (p3.x - p4.x)) / denom;
+            const u = -((p1.x - p2.x) * (p1.y - p3.y) - (p1.y - p2.y) * (p1.x - p3.x)) / denom;
+
+            // Check if intersection is within the segment (t in [0,1]) and on the forward ray (u >= 0)
+            if (t >= 0 && t <= 1 && u >= 1e-6) {
+                const hitPoint = vec2Add(p1, vec2Scale(vec2Subtract(p2, p1), t));
+                // Normal for a line segment (perpendicular, pointing "up" relative to p1->p2)
+                const segmentVec = vec2Subtract(p2, p1);
+                const normal = vec2Normalize(vec2(-segmentVec.y, segmentVec.x));
+                // Ensure normal points towards the ray origin (for correct side detection)
+                // This might need refinement for complex cases, but works for simple reflection/mirror
+                return { t: u, hitPoint, normal };
+            }
+            return null;
+        }
+
+        function findClosestIntersection(rayOrigin, rayDirection, excludeShape = null) {
+            let closestHit = null;
+            let closestT = Infinity;
+            let hitShape = null;
+
+            for (const shape of scene.shapes) {
+                if (shape === excludeShape) continue; // Don't intersect with the shape the ray just left
+
+                let hitResult = null;
+                if (shape.type === 'circle') {
+                    hitResult = intersectRayCircle(rayOrigin, rayDirection, shape.center, shape.radius);
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    // Treat lens boundary as a line segment for now (simplified)
+                    hitResult = intersectRayLineSegment(rayOrigin, rayDirection, shape.p1, shape.p2);
+                    // Note: A real lens would involve Snell's law at the curved surfaces.
+                    // This is a simplification for visualization.
+                }
+
+                if (hitResult && hitResult.t < closestT) {
+                    closestT = hitResult.t;
+                    closestHit = hitResult;
+                    hitShape = shape;
+                }
+            }
+            return closestHit ? { ...closestHit, shape: hitShape } : null;
+        }
+
+        function reflectRay(incidentDir, normal) {
+            const dot = vec2Dot(incidentDir, normal);
+            return vec2Subtract(incidentDir, vec2Scale(normal, 2 * dot));
+        }
+
+        function refractRay(incidentDir, normal, n1, n2) {
+            const n = n1 / n2;
+            const cosI = -vec2Dot(normal, incidentDir);
+            const sinT2 = n * n * (1.0 - cosI * cosI);
+
+            if (sinT2 > 1.0) {
+                return null; // Total Internal Reflection
+            }
+
+            const cosT = Math.sqrt(1.0 - sinT2);
+            return vec2Add(vec2Scale(incidentDir, n), vec2Scale(normal, n * cosI - cosT));
+        }
+
+        function traceRay(origin, direction, intensity, depth, wavelength = 550) { // Default to green-ish
+            if (depth <= 0 || intensity < 0.01) {
+                return []; // Stop tracing if depth limit reached or intensity too low
+            }
+
+            const pathSegments = [];
+            let currentOrigin = origin;
+            let currentDirection = direction;
+            let currentIntensity = intensity;
+            let currentWavelength = wavelength;
+            let insideShape = null; // Track which shape's interior the ray is currently in
+
+            while (true) {
+                const hit = findClosestIntersection(currentOrigin, currentDirection, insideShape);
+
+                if (!hit) {
+                    // Ray exits to infinity
+                    pathSegments.push({
+                        start: currentOrigin,
+                        end: vec2Add(currentOrigin, vec2Scale(currentDirection, 10000)), // Draw a long line
+                        intensity: currentIntensity,
+                        wavelength: currentWavelength
+                    });
+                    break;
+                }
+
+                const { hitPoint, normal, shape } = hit;
+
+                // Determine if the ray is entering or exiting the shape
+                const rayDirectionDotNormal = vec2Dot(currentDirection, normal);
+                const isEntering = rayDirectionDotNormal < 0;
+                const trueNormal = isEntering ? normal : vec2Scale(normal, -1); // Use normal facing the ray
+
+                // Absorb a bit of light when hitting any surface
+                if (shape.material && shape.material.absorption) {
+                    const absorption = shape.material.absorption;
+                    // Simplified wavelength-dependent absorption could go here
+                    // For now, use average or a specific channel
+                    currentIntensity *= (1 - (absorption.r + absorption.g + absorption.b) / 3);
+                }
+
+                pathSegments.push({
+                    start: currentOrigin,
+                    end: hitPoint,
+                    intensity: currentIntensity,
+                    wavelength: currentWavelength
+                });
+
+                // Determine media indices
+                const n1 = insideShape ? insideShape.material.n : 1.0; // Outside is air/vacuum
+                const n2 = shape.material ? shape.material.n : 1.0;
+
+                let transmittedDir = null;
+                let transmittedIntensity = 0;
+                let reflectedDir = null;
+                let reflectedIntensity = 0;
+
+                if (shape.type === 'mirror') {
+                    // Perfect mirror reflection
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity; // Assume perfect reflector for simplicity in this mode
+                } else if (shape.material) {
+                    // Handle transparent/refractive materials
+
+                    // Fresnel effect (Schlick's approximation) for reflectivity/transmission split
+                    const r0 = Math.pow((n1 - n2) / (n1 + n2), 2);
+                    const cosTheta = -vec2Dot(trueNormal, currentDirection);
+                    let fresnelReflectance = r0 + (1 - r0) * Math.pow(1 - cosTheta, 5);
+                    // Clamp reflectance based on material property
+                    fresnelReflectance = clamp(fresnelReflectance, 0, shape.material.reflectivity);
+
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity * fresnelReflectance;
+
+                    // Refraction
+                    if (n2 > 0) { // Avoid division by zero
+                        transmittedDir = refractRay(currentDirection, trueNormal, n1, n2);
+                    }
+                    transmittedIntensity = currentIntensity * (1 - fresnelReflectance) * shape.material.transparency;
+
+                    // Apply material absorption to transmitted ray
+                    if (transmittedDir && shape.material.absorption) {
+                        // This absorption is applied per segment, so it's cumulative over distance
+                        // A more accurate model would integrate absorption over the path length
+                    }
+
+                } else {
+                    // Default behavior if no special material (shouldn't happen with current setup)
+                    reflectedDir = reflectRay(currentDirection, trueNormal);
+                    reflectedIntensity = currentIntensity * 0.05; // Small default reflection
+                    transmittedDir = reflectRay(vec2Scale(currentDirection, -1), trueNormal); // Just pass through
+                    transmittedIntensity = currentIntensity * 0.95;
+                }
+
+                // Decide which ray(s) to follow
+                // In a full simulation, you'd trace both and add their contributions.
+                // Here, we'll follow one path probabilistically or the strongest one for visualization.
+
+                // Simple approach: Follow the path with higher intensity
+                if (reflectedIntensity > transmittedIntensity && reflectedIntensity > 0.01) {
+                    // Follow reflected ray
+                    currentOrigin = hitPoint;
+                    currentDirection = reflectedDir;
+                    currentIntensity = reflectedIntensity;
+                    // insideShape stays the same for reflection
+                } else if (transmittedIntensity > 0.01) {
+                    // Follow transmitted/refracted ray
+                    currentOrigin = hitPoint;
+                    currentDirection = transmittedDir;
+                    currentIntensity = transmittedIntensity;
+                    // Toggle inside/outside status
+                    insideShape = (insideShape === shape) ? null : shape;
+                } else {
+                    // Both intensities are too low, stop tracing this path
+                    break;
+                }
+                depth--;
+            }
+            return pathSegments;
+        }
+
+
+        function simulateRays() {
+            if (scene.lights.length === 0) {
+                statusBar.textContent = "No light sources to simulate.";
+                return;
+            }
+
+            const maxDepthInput = document.getElementById('maxRayDepth');
+            const numRaysInput = document.getElementById('numRays');
+
+            const maxDepth = maxDepthInput ? parseInt(maxDepthInput.value) || 5 : 5;
+            const numRaysPerSource = numRaysInput ? parseInt(numRaysInput.value) || 36 : 36;
+
+            const allPaths = [];
+
+            scene.lights.forEach(light => {
+                const intensity = light.intensity;
+                for (let i = 0; i < numRaysPerSource; i++) {
+                    const angle = (2 * Math.PI * i) / numRaysPerSource;
+                    const direction = vec2(Math.cos(angle), Math.sin(angle));
+                    // Slightly offset origin to prevent self-intersection
+                    const origin = vec2Add(light.position, vec2Scale(direction, 0.1));
+
+                    // Assign a pseudo-random wavelength for color coding (400nm - 700nm)
+                    const wavelength = 400 + (300 * (i / Math.max(1, numRaysPerSource - 1)));
+
+                    const paths = traceRay(origin, direction, intensity, maxDepth, wavelength);
+                    allPaths.push(...paths);
+                }
+            });
+
+            drawRayPaths(allPaths);
+            statusBar.textContent = `Simulation complete. Traced ${allPaths.length} ray segments.`;
+        }
+
+
+        // --- Rendering ---
+
+        function wavelengthToRgb(wavelength) {
+            let r, g, b, alpha, wl = wavelength;
+
+            // Based on: http://www.physics.sfasu.edu/astro/color/spectra.html
+            // And adapted from: https://stackoverflow.com/a/34002550
+            if (wl >= 380 && wl < 440) {
+                r = -(wl - 440) / (440 - 380);
+                g = 0.0;
+                b = 1.0;
+            } else if (wl >= 440 && wl < 490) {
+                r = 0.0;
+                g = (wl - 440) / (490 - 440);
+                b = 1.0;
+            } else if (wl >= 490 && wl < 510) {
+                r = 0.0;
+                g = 1.0;
+                b = -(wl - 510) / (510 - 490);
+            } else if (wl >= 510 && wl < 580) {
+                r = (wl - 510) / (580 - 510);
+                g = 1.0;
+                b = 0.0;
+            } else if (wl >= 580 && wl < 645) {
+                r = 1.0;
+                g = -(wl - 645) / (645 - 580);
+                b = 0.0;
+            } else if (wl >= 645 && wl <= 700) {
+                r = 1.0;
+                g = 0.0;
+                b = 0.0;
+            } else {
+                r = 0.0;
+                g = 0.0;
+                b = 0.0;
+            }
+
+            // Intensity correction near vision limits
+            if (wl >= 380 && wl < 420) {
+                alpha = 0.3 + 0.7 * (wl - 380) / (420 - 380);
+            } else if (wl >= 420 && wl < 700) {
+                alpha = 1.0;
+            } else if (wl >= 700 && wl <= 780) {
+                alpha = 0.3 + 0.7 * (780 - wl) / (780 - 700);
+            } else {
+                alpha = 0.0;
+            }
+
+            // Scale down intensities for purples and blues for better visual balance
+            // The human eye is less sensitive to blue/violet
+            if (wl >= 380 && wl < 440) {
+                r *= 0.7; // Reduce red component in violet
+            }
+            if (wl >= 440 && wl < 500) {
+                b *= 0.8; // Reduce blue component in blue
+            }
+
+            return { r: r * alpha, g: g * alpha, b: b * alpha };
+        }
+
+        function drawRayPaths(paths) {
+            redraw(); // Clear previous paths
+            ctx.lineCap = 'round';
+
+            paths.forEach(segment => {
+                const startX = segment.start.x;
+                const startY = segment.start.y;
+                const endX = segment.end.x;
+                const endY = segment.end.y;
+
+                // Map wavelength to color
+                const color = wavelengthToRgb(segment.wavelength);
+
+                // Scale intensity (can be non-linear for better visuals)
+                const scaledIntensity = Math.sqrt(clamp(segment.intensity, 0, 1)); // sqrt for perceptual brightness
+                const lineAlpha = clamp(scaledIntensity, 0.1, 1.0); // Minimum visibility
+
+                const lineColor = `rgba(${Math.floor(color.r * 255)}, ${Math.floor(color.g * 255)}, ${Math.floor(color.b * 255)}, ${lineAlpha})`;
+
+                // Line width can also represent intensity or be fixed
+                const lineWidth = Math.max(0.5, scaledIntensity * 2);
+
+                ctx.beginPath();
+                ctx.moveTo(startX, startY);
+                ctx.lineTo(endX, endY);
+                ctx.strokeStyle = lineColor;
+                ctx.lineWidth = lineWidth;
+                ctx.stroke();
+            });
+        }
+
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw Shapes
+            scene.shapes.forEach(shape => {
+                ctx.beginPath();
+                if (shape.type === 'circle') {
+                    ctx.arc(shape.center.x, shape.center.y, shape.radius, 0, 2 * Math.PI);
+                } else if (shape.type === 'lens' || shape.type === 'mirror') {
+                    ctx.moveTo(shape.p1.x, shape.p1.y);
+                    ctx.lineTo(shape.p2.x, shape.p2.y);
+                }
+
+                if (shape.type === 'mirror') {
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                } else if (shape.type === 'lens') {
+                    ctx.strokeStyle = '#a0d0ff'; // Light blueish
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    // Could draw a more complex lens shape here
+                } else if (shape.type === 'circle') {
+                    // Fill for solid objects like glass/water spheres
+                    if (shape.material && shape.material.transparency < 1.0) {
+                        // Darker fill color based on absorption
+                        const avgAbsorption = (shape.material.absorption.r + shape.material.absorption.g + shape.material.absorption.b) / 3;
+                        const fillAlpha = 1.0 - shape.material.transparency;
+                        // Base color could be derived from material or fixed
+                        ctx.fillStyle = `rgba(100, 150, 255, ${fillAlpha * (1 - avgAbsorption)})`; // Example blueish
+                        ctx.fill();
+                    }
+                    ctx.strokeStyle = '#cccccc';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                }
+            });
+
+            // Draw Temporary Preview Object (while placing)
+            if (tempPreviewObject) {
+                ctx.beginPath();
+                if (tempPreviewObject.type === 'circle' && tempPreviewObject.center) {
+                    ctx.arc(tempPreviewObject.center.x, tempPreviewObject.center.y, tempPreviewObject.radius, 0, 2 * Math.PI);
+                    ctx.setLineDash([5, 3]);
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 1;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                } else if ((tempPreviewObject.type === 'lens' || tempPreviewObject.type === 'mirror') && tempPreviewObject.p1 && tempPreviewObject.p2) {
+                    ctx.moveTo(tempPreviewObject.p1.x, tempPreviewObject.p1.y);
+                    ctx.lineTo(tempPreviewObject.p2.x, tempPreviewObject.p2.y);
+                    ctx.setLineDash([5, 3]);
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = tempPreviewObject.type === 'mirror' ? 3 : 2;
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                }
+            }
+
+            // Draw Lights
+            scene.lights.forEach(light => {
+                ctx.beginPath();
+                ctx.arc(light.position.x, light.position.y, 5, 0, 2 * Math.PI);
+                ctx.fillStyle = '#ffff00'; // Yellow
+                ctx.fill();
+                ctx.strokeStyle = '#ffaa00'; // Orange stroke
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+        }
+
+        // --- Initialization ---
+        updateToolSettingsUI(); // Initialize tool settings UI
+        updateMaterialUIFromPreset(); // Initialize material UI based on default selection
+        redraw();
+
+    </script>
+
+</body>
+</html>

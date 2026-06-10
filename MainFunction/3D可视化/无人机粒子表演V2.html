@@ -1,0 +1,1912 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D粒子无人机表演模拟器--V2</title>
+    <!-- 引入Three.js库 -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', 'Inter', 'Arial', sans-serif;
+            transition: all 0.25s ease;
+        }
+
+        body {
+            background: #020617; /* 深空黑背景 */
+            min-height: 100vh;
+            color: #e2e8f0;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* 3D场景容器 - 全屏显示 */
+        #scene-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            cursor: grab;
+            z-index: 1;
+        }
+
+            #scene-container:active {
+                cursor: grabbing;
+            }
+
+        /* 顶部控制栏 - 悬浮居中 */
+        .top-controls {
+            position: fixed;
+            top: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            border-radius: 16px;
+            padding: 12px 24px;
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            z-index: 10;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .control-btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #3b82f6;
+            color: white;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+            .control-btn:hover {
+                background: #2563eb;
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+            }
+
+            .control-btn:disabled {
+                background: #475569;
+                color: #94a3b8;
+                cursor: not-allowed;
+                transform: none;
+                box-shadow: none;
+            }
+
+            .control-btn.secondary {
+                background: rgba(255, 255, 255, 0.1);
+                color: #e2e8f0;
+                box-shadow: none;
+            }
+
+                .control-btn.secondary:hover {
+                    background: rgba(255, 255, 255, 0.15);
+                    box-shadow: none;
+                }
+
+        /* 播放速度控制 */
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+            .speed-control label {
+                font-size: 14px;
+                color: #cbd5e1;
+                white-space: nowrap;
+            }
+
+            .speed-control input {
+                width: 120px;
+                accent-color: #3b82f6;
+            }
+
+        /* 状态提示 */
+        .status-hint {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(8px);
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            color: #94a3b8;
+            z-index: 10;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            opacity: 0;
+            pointer-events: none;
+        }
+
+            .status-hint.show {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+        /* 编辑面板 - 底部抽屉式弹窗 */
+        .editor-drawer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100vw;
+            max-height: 90vh;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(16px);
+            border-top-left-radius: 20px;
+            border-top-right-radius: 20px;
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.4);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 20;
+            transform: translateY(100%); /* 默认隐藏 */
+            overflow: hidden;
+        }
+
+            .editor-drawer.open {
+                transform: translateY(0); /* 打开时滑入 */
+            }
+
+        /* 抽屉头部 */
+        .drawer-header {
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .drawer-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #f1f5f9;
+        }
+
+        .drawer-actions {
+            display: flex;
+            gap: 12px;
+        }
+
+        .drawer-btn {
+            padding: 8px 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        /* 抽屉内容区 */
+        .drawer-content {
+            padding: 24px;
+            overflow-y: auto;
+            max-height: calc(90vh - 70px);
+        }
+
+            .drawer-content::-webkit-scrollbar {
+                width: 6px;
+            }
+
+            .drawer-content::-webkit-scrollbar-thumb {
+                background: #475569;
+                border-radius: 3px;
+            }
+
+            .drawer-content::-webkit-scrollbar-track {
+                background: rgba(255, 255, 255, 0.05);
+            }
+
+        /* 帧编辑区域 */
+        .frames-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .frames-title {
+            font-size: 16px;
+            font-weight: 500;
+            color: #cbd5e1;
+        }
+
+        /* 帧列表 - 横向滚动 */
+        .frames-container {
+            display: flex;
+            gap: 16px;
+            padding-bottom: 12px;
+            overflow-x: auto;
+        }
+
+            .frames-container::-webkit-scrollbar {
+                height: 6px;
+            }
+
+            .frames-container::-webkit-scrollbar-thumb {
+                background: #475569;
+                border-radius: 3px;
+            }
+
+        /* 帧卡片样式 */
+        .frame-card {
+            min-width: 300px;
+            background: rgba(30, 41, 59, 0.8);
+            border-radius: 12px;
+            padding: 16px;
+            border: 2px solid transparent;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+            .frame-card.active {
+                border-color: #3b82f6;
+                background: rgba(30, 41, 59, 1);
+                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2), 0 4px 12px rgba(0, 0, 0, 0.2);
+            }
+
+        .frame-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .frame-index {
+            font-weight: 600;
+            color: #3b82f6;
+            font-size: 14px;
+        }
+
+        .frame-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .frame-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 6px;
+            border: none;
+            background: rgba(255, 255, 255, 0.08);
+            color: #e2e8f0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+
+            .frame-btn:hover {
+                background: rgba(255, 255, 255, 0.15);
+            }
+
+            .frame-btn.delete {
+                background: rgba(239, 68, 68, 0.15);
+                color: #ef4444;
+            }
+
+                .frame-btn.delete:hover {
+                    background: rgba(239, 68, 68, 0.25);
+                }
+
+            .frame-btn.preview {
+                background: rgba(59, 130, 246, 0.15);
+                color: #3b82f6;
+            }
+
+                .frame-btn.preview:hover {
+                    background: rgba(59, 130, 246, 0.25);
+                }
+
+        /* 表单控件样式 */
+        .form-group {
+            margin-bottom: 14px;
+        }
+
+        .form-label {
+            display: block;
+            font-size: 13px;
+            color: #94a3b8;
+            margin-bottom: 8px;
+        }
+
+        .form-input {
+            width: 100%;
+            padding: 10px 12px;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.05);
+            color: #f1f5f9;
+            font-size: 14px;
+        }
+
+            .form-input:focus {
+                outline: none;
+                border-color: #3b82f6;
+                box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+            }
+
+        /* 多行文本框样式 */
+        .text-input {
+            min-height: 80px;
+            resize: vertical;
+            white-space: pre-wrap;
+            font-family: Arial, sans-serif;
+        }
+
+        /* 行间距控制 */
+        .line-spacing-control {
+            margin-bottom: 14px;
+        }
+
+        /* 位置控制滑块组 */
+        .position-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .position-control {
+            flex: 1;
+        }
+
+            .position-control input {
+                width: 100%;
+            }
+
+        /* 颜色选择器组 */
+        .color-mode {
+            margin-bottom: 14px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .gradient-colors {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .color-input-wrapper {
+            flex: 1;
+            position: relative;
+        }
+
+        .color-input {
+            width: 100%;
+            height: 40px;
+            border: none;
+            border-radius: 8px;
+            padding: 0;
+            cursor: pointer;
+            background: transparent;
+        }
+
+        .color-label {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .gradient-type {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        .radio-label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #cbd5e1;
+            cursor: pointer;
+        }
+
+        .radio-input {
+            accent-color: #3b82f6;
+        }
+
+        /* 特效控制区 */
+        .effects-section {
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .effects-title {
+            font-size: 14px;
+            font-weight: 500;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+        }
+
+        /* Z轴模式控制 */
+        .z-axis-mode {
+            margin-bottom: 14px;
+            display: flex;
+            gap: 12px;
+        }
+
+        /* 时间控制区域 */
+        .timing-controls {
+            margin-bottom: 14px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .timing-control {
+            flex: 1;
+        }
+
+        /* 过渡控制区域 */
+        .transition-control {
+            margin-bottom: 14px;
+        }
+
+        /* 添加帧按钮 */
+        .add-frame-btn {
+            min-width: 300px;
+            height: 100%;
+            border: 2px dashed rgba(255, 255, 255, 0.15);
+            border-radius: 12px;
+            background: rgba(30, 41, 59, 0.3);
+            color: #94a3b8;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 16px;
+        }
+
+            .add-frame-btn:hover {
+                border-color: #3b82f6;
+                color: #3b82f6;
+                background: rgba(30, 41, 59, 0.5);
+            }
+
+        .add-frame-icon {
+            font-size: 24px;
+        }
+
+        /* 遮罩层 - 打开抽屉时显示 */
+        .overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(2px);
+            z-index: 15;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.25s ease;
+        }
+
+            .overlay.show {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .top-controls {
+                flex-wrap: wrap;
+                width: 90%;
+                gap: 10px;
+                padding: 10px 15px;
+            }
+
+            .control-btn {
+                padding: 8px 12px;
+                font-size: 13px;
+            }
+
+            .drawer-content {
+                padding: 16px;
+            }
+
+            .frame-card, .add-frame-btn {
+                min-width: 260px;
+            }
+
+            .gradient-colors, .position-controls, .timing-controls {
+                flex-wrap: wrap;
+            }
+
+            .color-input-wrapper, .position-control, .timing-control {
+                flex: 1 0 40%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- 3D场景容器 -->
+    <div id="scene-container"></div>
+
+    <!-- 顶部控制栏 -->
+    <div class="top-controls">
+        <button class="control-btn" id="playBtn">
+            <span>▶ 播放</span>
+        </button>
+        <button class="control-btn" id="pauseBtn" disabled>
+            <span>⏸ 暂停</span>
+        </button>
+        <button class="control-btn" id="resetBtn">
+            <span>↺ 重置视角</span>
+        </button>
+        <div class="speed-control">
+            <label>播放速度</label>
+            <input type="range" id="playSpeed" min="0.5" max="2" step="0.1" value="1">
+        </div>
+        <button class="control-btn secondary" id="editBtn">
+            <span>✎ 编辑方案</span>
+        </button>
+    </div>
+
+    <!-- 状态提示 -->
+    <div class="status-hint" id="statusHint">编辑面板已打开</div>
+
+    <!-- 遮罩层 -->
+    <div class="overlay" id="overlay"></div>
+
+    <!-- 编辑抽屉面板 -->
+    <div class="editor-drawer" id="editorDrawer">
+        <div class="drawer-header">
+            <div class="drawer-title">动态方案编辑</div>
+            <div class="drawer-actions">
+                <button class="drawer-btn control-btn secondary" id="closeEditorBtn">关闭</button>
+                <button class="drawer-btn control-btn" id="applyEditorBtn">应用方案</button>
+            </div>
+        </div>
+        <div class="drawer-content">
+            <div class="frames-header">
+                <div class="frames-title">帧序列（点击帧卡片进行编辑）</div>
+            </div>
+            <div class="frames-container" id="framesContainer">
+                <!-- 初始帧1 -->
+                <div class="frame-card active" data-index="0">
+                    <div class="frame-header">
+                        <div class="frame-index">帧 1</div>
+                        <div class="frame-actions">
+                            <button class="frame-btn preview" onclick="previewFrame(0)">👁</button>
+                            <button class="frame-btn delete" onclick="deleteFrame(0)">×</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文字内容（支持多行）</label>
+                        <textarea class="form-input text-input" maxlength="50">你好
+世界</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文字大小（像素）</label>
+                        <input type="number" class="form-input size-input" min="40" max="180" value="80">
+                    </div>
+                    <div class="form-group line-spacing-control">
+                        <label class="form-label">行间距（%）</label>
+                        <input type="range" class="form-input line-spacing" min="50" max="200" value="150">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">粒子密度（越小越密）</label>
+                        <input type="number" class="form-input density-input" min="3" max="20" value="6">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">时间控制</label>
+                        <div class="timing-controls">
+                            <div class="timing-control">
+                                <label class="form-label">开始时间（秒）</label>
+                                <input type="number" class="form-input start-time" min="0" step="0.5" value="0">
+                            </div>
+                            <div class="timing-control">
+                                <label class="form-label">停留时间（秒）</label>
+                                <input type="number" class="form-input duration-input" min="0.5" step="0.5" value="2">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group transition-control">
+                        <label class="form-label">过渡时间（秒）</label>
+                        <input type="number" class="form-input transition-time" min="0.1" max="3" step="0.1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">位置调整</label>
+                        <div class="position-controls">
+                            <div class="position-control">
+                                <label class="form-label">X轴</label>
+                                <input type="range" class="form-input x-position" min="-100" max="100" value="0">
+                            </div>
+                            <div class="position-control">
+                                <label class="form-label">Y轴</label>
+                                <input type="range" class="form-input y-position" min="-100" max="100" value="0">
+                            </div>
+                            <div class="position-control">
+                                <label class="form-label">Z轴偏移</label>
+                                <input type="range" class="form-input z-offset" min="-50" max="50" value="0">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-label">Z轴分布模式</div>
+                    <div class="z-axis-mode">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode0" value="random" checked> 随机分布
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode0" value="x-dependent"> 随X轴变化
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode0" value="y-dependent"> 随Y轴变化
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Z轴深度范围</label>
+                        <input type="range" class="form-input z-range" min="10" max="100" value="30">
+                    </div>
+                    <div class="form-label">颜色模式</div>
+                    <div class="color-mode">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input color-mode-radio" name="colorMode0" value="single" checked> 单色
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input color-mode-radio" name="colorMode0" value="gradient"> 渐变
+                        </label>
+                    </div>
+                    <div class="form-label">颜色选择</div>
+                    <div class="gradient-colors">
+                        <div class="color-input-wrapper">
+                            <span class="color-label">颜色1</span>
+                            <input type="color" class="color-input color-1" value="#3b82f6">
+                        </div>
+                        <div class="color-input-wrapper" style="display:none">
+                            <span class="color-label">颜色2</span>
+                            <input type="color" class="color-input color-2" value="#8b5cf6">
+                        </div>
+                        <div class="color-input-wrapper" style="display:none">
+                            <span class="color-label">颜色3</span>
+                            <input type="color" class="color-input color-3" value="#ec4899">
+                        </div>
+                    </div>
+                    <div class="gradient-type" style="display:none">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType0" value="linear-x" checked> X轴线性渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType0" value="linear-y"> Y轴线性渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType0" value="radial"> 径向渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType0" value="random"> 随机渐变
+                        </label>
+                    </div>
+
+                    <div class="effects-section">
+                        <div class="effects-title">粒子特效</div>
+                        <div class="form-group">
+                            <label class="form-label">尾迹长度</label>
+                            <input type="range" class="form-input trail-length" min="0" max="10" value="3">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">闪烁强度</label>
+                            <input type="range" class="form-input flicker-intensity" min="0" max="10" value="5">
+                        </div>
+                    </div>
+                </div>
+                <!-- 初始帧2 -->
+                <div class="frame-card" data-index="1">
+                    <div class="frame-header">
+                        <div class="frame-index">帧 2</div>
+                        <div class="frame-actions">
+                            <button class="frame-btn preview" onclick="previewFrame(1)">👁</button>
+                            <button class="frame-btn delete" onclick="deleteFrame(1)">×</button>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文字内容（支持多行）</label>
+                        <textarea class="form-input text-input" maxlength="50">3D
+粒子
+表演</textarea>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">文字大小（像素）</label>
+                        <input type="number" class="form-input size-input" min="40" max="180" value="70">
+                    </div>
+                    <div class="form-group line-spacing-control">
+                        <label class="form-label">行间距（%）</label>
+                        <input type="range" class="form-input line-spacing" min="50" max="200" value="130">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">粒子密度（越小越密）</label>
+                        <input type="number" class="form-input density-input" min="3" max="20" value="6">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">时间控制</label>
+                        <div class="timing-controls">
+                            <div class="timing-control">
+                                <label class="form-label">开始时间（秒）</label>
+                                <input type="number" class="form-input start-time" min="0" step="0.5" value="3">
+                            </div>
+                            <div class="timing-control">
+                                <label class="form-label">停留时间（秒）</label>
+                                <input type="number" class="form-input duration-input" min="0.5" step="0.5" value="2">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group transition-control">
+                        <label class="form-label">过渡时间（秒）</label>
+                        <input type="number" class="form-input transition-time" min="0.1" max="3" step="0.1" value="1">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">位置调整</label>
+                        <div class="position-controls">
+                            <div class="position-control">
+                                <label class="form-label">X轴</label>
+                                <input type="range" class="form-input x-position" min="-100" max="100" value="0">
+                            </div>
+                            <div class="position-control">
+                                <label class="form-label">Y轴</label>
+                                <input type="range" class="form-input y-position" min="-100" max="100" value="10">
+                            </div>
+                            <div class="position-control">
+                                <label class="form-label">Z轴偏移</label>
+                                <input type="range" class="form-input z-offset" min="-50" max="50" value="10">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-label">Z轴分布模式</div>
+                    <div class="z-axis-mode">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode1" value="random"> 随机分布
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode1" value="x-dependent" checked> 随X轴变化
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input z-axis-mode-radio" name="zMode1" value="y-dependent"> 随Y轴变化
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Z轴深度范围</label>
+                        <input type="range" class="form-input z-range" min="10" max="100" value="40">
+                    </div>
+                    <div class="form-label">颜色模式</div>
+                    <div class="color-mode">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input color-mode-radio" name="colorMode1" value="single"> 单色
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input color-mode-radio" name="colorMode1" value="gradient" checked> 渐变
+                        </label>
+                    </div>
+                    <div class="form-label">颜色选择</div>
+                    <div class="gradient-colors">
+                        <div class="color-input-wrapper">
+                            <span class="color-label">颜色1</span>
+                            <input type="color" class="color-input color-1" value="#10b981">
+                        </div>
+                        <div class="color-input-wrapper">
+                            <span class="color-label">颜色2</span>
+                            <input type="color" class="color-input color-2" value="#3b82f6">
+                        </div>
+                        <div class="color-input-wrapper">
+                            <span class="color-label">颜色3</span>
+                            <input type="color" class="color-input color-3" value="#8b5cf6">
+                        </div>
+                    </div>
+                    <div class="gradient-type">
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType1" value="linear-x"> X轴线性渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType1" value="linear-y" checked> Y轴线性渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType1" value="radial"> 径向渐变
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" class="radio-input gradient-type-radio" name="gradientType1" value="random"> 随机渐变
+                        </label>
+                    </div>
+
+                    <div class="effects-section">
+                        <div class="effects-title">粒子特效</div>
+                        <div class="form-group">
+                            <label class="form-label">尾迹长度</label>
+                            <input type="range" class="form-input trail-length" min="0" max="10" value="4">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">闪烁强度</label>
+                            <input type="range" class="form-input flicker-intensity" min="0" max="10" value="4">
+                        </div>
+                    </div>
+                </div>
+                <!-- 添加帧按钮 -->
+                <button class="add-frame-btn" id="addFrameBtn">
+                    <div class="add-frame-icon">+</div>
+                    <div>添加新帧</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. Three.js核心初始化
+        const scene = new THREE.Scene();
+        const container = document.getElementById('scene-container');
+        let width = window.innerWidth;
+        let height = window.innerHeight;
+
+        // 透视相机（增强景深效果）
+        const camera = new THREE.PerspectiveCamera(70, width / height, 0.1, 2000);
+        camera.position.z = 200;
+
+        // WebGL渲染器（开启抗锯齿）
+        const renderer = new THREE.WebGLRenderer({
+            antialias: true,
+            alpha: true
+        });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // 限制高分辨率渲染压力
+        renderer.setClearColor(0x020617);
+        container.appendChild(renderer.domElement);
+
+        // 2. 粒子系统核心变量
+        let particleSystem = null; // 当前粒子系统
+        let particleGeometry = null;
+        let particleMaterial = null;
+        let particles = []; // 粒子位置和颜色数据
+        let particleTrails = []; // 粒子尾迹数据
+        let frameData = []; // 存储所有帧数据
+        let activeFrames = []; // 当前激活的帧（可能有多个同时激活的帧）
+        let currentTime = 0; // 当前播放时间（秒）
+        let totalDuration = 0; // 总动画时长（秒）
+        let isPlaying = false; // 播放状态
+        let playTimer = null; // 播放计时器
+        let playSpeed = 1; // 播放速度
+        let rotationX = 0, rotationY = 0; // 旋转角度
+        let isDragging = false;
+        let lastX, lastY;
+        let isEditorOpen = false; // 编辑面板状态
+        let globalTime = 0; // 全局时间变量，用于替代着色器中的time
+
+        // 3. 初始化帧数据
+        function initFrameData() {
+            const frameCards = document.querySelectorAll('.frame-card');
+            frameCards.forEach((card, index) => {
+                frameData.push(getFrameDataFromCard(card, index));
+
+                // 为颜色模式和Z轴模式添加事件监听
+                setupModeListeners(card, index);
+            });
+
+            // 计算总时长
+            calculateTotalDuration();
+
+            // 初始渲染第一帧
+            renderFrame(0);
+        }
+
+        // 计算总动画时长
+        function calculateTotalDuration() {
+            if (frameData.length === 0) {
+                totalDuration = 0;
+                return;
+            }
+
+            // 总时长为最后一帧的结束时间
+            const lastFrameEndTime = Math.max(...frameData.map(frame =>
+                frame.startTime + frame.duration
+            ));
+            totalDuration = lastFrameEndTime;
+        }
+
+        // 设置模式切换监听（颜色和Z轴）
+        function setupModeListeners(card, index) {
+            // 颜色模式监听
+            const colorRadioInputs = card.querySelectorAll('.color-mode-radio');
+            const colorInputs = card.querySelectorAll('.color-input-wrapper');
+            const gradientType = card.querySelector('.gradient-type');
+
+            // Z轴模式监听
+            const zRadioInputs = card.querySelectorAll('.z-axis-mode-radio');
+
+            // 显示/隐藏相关控件
+            function updateColorControls() {
+                const isGradient = card.querySelector('.color-mode-radio[value="gradient"]').checked;
+
+                // 显示第一个颜色选择器，根据模式显示其他
+                for (let i = 0; i < colorInputs.length; i++) {
+                    colorInputs[i].style.display = i === 0 || isGradient ? 'block' : 'none';
+                }
+
+                gradientType.style.display = isGradient ? 'flex' : 'none';
+            }
+
+            // 初始更新
+            updateColorControls();
+
+            // 颜色模式事件监听
+            colorRadioInputs.forEach(input => {
+                input.addEventListener('change', () => {
+                    updateColorControls();
+                    if (index === currentFrameIndex) {
+                        frameData[index] = getFrameDataFromCard(card, index);
+                    }
+                });
+            });
+
+            // Z轴模式事件监听
+            zRadioInputs.forEach(input => {
+                input.addEventListener('change', () => {
+                    if (index === currentFrameIndex) {
+                        frameData[index] = getFrameDataFromCard(card, index);
+                        // 实时更新当前帧的Z轴效果
+                        renderFrame(index);
+                    }
+                });
+            });
+        }
+
+        // 从帧卡片获取数据
+        function getFrameDataFromCard(card, index) {
+            const text = card.querySelector('.text-input').value.trim() || `${index + 1}`;
+            const size = parseInt(card.querySelector('.size-input').value) || 80;
+            const lineSpacing = parseInt(card.querySelector('.line-spacing').value) || 150;
+            const duration = parseFloat(card.querySelector('.duration-input').value) || 2;
+            const startTime = parseFloat(card.querySelector('.start-time').value) || 0;
+            const transitionTime = parseFloat(card.querySelector('.transition-time').value) || 1;
+            const density = parseInt(card.querySelector('.density-input').value) || 6;
+            const xPos = parseInt(card.querySelector('.x-position').value) || 0;
+            const yPos = parseInt(card.querySelector('.y-position').value) || 0;
+            const zOffset = parseInt(card.querySelector('.z-offset').value) || 0;
+            const zMode = card.querySelector('.z-axis-mode-radio:checked').value;
+            const zRange = parseInt(card.querySelector('.z-range').value) || 30;
+            const colorMode = card.querySelector('.color-mode-radio:checked').value;
+            const colors = [
+                card.querySelector('.color-1').value,
+                card.querySelector('.color-2')?.value || card.querySelector('.color-1').value,
+                card.querySelector('.color-3')?.value || card.querySelector('.color-1').value
+            ];
+            const gradientType = colorMode === 'gradient' ?
+                card.querySelector('.gradient-type-radio:checked').value : 'linear-x';
+            const trailLength = parseInt(card.querySelector('.trail-length').value) || 3;
+            const flickerIntensity = parseInt(card.querySelector('.flicker-intensity').value) / 10 || 0.5;
+
+            return {
+                text,
+                size,
+                lineSpacing,
+                duration,
+                startTime,
+                transitionTime,
+                density,
+                position: { x: xPos, y: yPos, z: zOffset },
+                zMode,
+                zRange,
+                colorMode,
+                colors,
+                gradientType,
+                trailLength,
+                flickerIntensity,
+                // 计算结束时间
+                endTime: startTime + duration
+            };
+        }
+
+        // 4. 文字转3D粒子（核心渲染函数，支持多行文本）
+        function textToParticles(text, size, lineSpacing, density, position, zMode, zRange, colorMode, colors, gradientType, isTarget = false) {
+            // 创建临时Canvas生成文字像素
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // 按换行符分割文本为多行
+            const lines = text.split('\n').filter(line => line.trim() !== '');
+            const lineCount = Math.max(lines.length, 1); // 至少一行
+
+            // 计算行高和总高度
+            const lineHeight = size * 1.2; // 行高为字号的1.2倍
+            const spacingMultiplier = lineSpacing / 100; // 行间距百分比转为倍数
+            const totalTextHeight = lineHeight * lineCount + (lineCount - 1) * lineHeight * (spacingMultiplier - 1);
+
+            // 设置画布大小 - 根据文字内容自动调整
+            canvas.width = 1200; // 足够宽以容纳长文本
+            canvas.height = Math.max(300, totalTextHeight + 100); // 确保足够高度
+
+            // 清除画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 设置文字样式
+            ctx.font = `bold ${size}px Arial, sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top'; // 使用top基线便于多行计算
+            ctx.fillStyle = '#fff';
+
+            // 计算第一行的Y坐标（居中显示）
+            const firstLineY = (canvas.height - totalTextHeight) / 2;
+
+            // 绘制每行文字
+            lines.forEach((line, i) => {
+                const y = firstLineY + i * lineHeight * spacingMultiplier;
+                ctx.fillText(line, canvas.width / 2, y);
+            });
+
+            // 获取像素数据
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+
+            // 处理颜色
+            const colorValues = colors.map(color => new THREE.Color(color));
+
+            // 生成粒子数据
+            const particleData = [];
+            // 计算画布中心，用于相对位置计算
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+
+            // 调整密度计算方式，确保足够的粒子数量
+            const adjustedDensity = Math.max(2, density);
+
+            for (let y = 0; y < canvas.height; y += adjustedDensity) {
+                for (let x = 0; x < canvas.width; x += adjustedDensity) {
+                    const index = (y * canvas.width + x) * 4;
+                    const alpha = imageData[index + 3];
+
+                    if (alpha > 100) { // 只取不透明的像素
+                        // 计算3D坐标并应用位置偏移（缩放因子调整为更合适的值）
+                        const posX = ((x - centerX) / 6) + position.x;
+                        const posY = ((centerY - y) / 6) + position.y;
+
+                        // 根据选择的Z轴模式计算Z值
+                        let posZ;
+                        const halfRange = zRange / 2;
+
+                        switch (zMode) {
+                            case 'x-dependent':
+                                // Z轴随X轴变化（左右深度不同）
+                                const xRatio = (x - centerX) / centerX; // -1到1之间
+                                posZ = xRatio * halfRange + position.z;
+                                break;
+                            case 'y-dependent':
+                                // Z轴随Y轴变化（上下深度不同）
+                                const yRatio = (y - centerY) / centerY; // -1到1之间
+                                posZ = yRatio * halfRange + position.z;
+                                break;
+                            case 'random':
+                            default:
+                                // 随机Z轴分布
+                                posZ = (Math.random() - 0.5) * zRange + position.z;
+                                break;
+                        }
+
+                        // 确定粒子颜色（修复渐变颜色效果）
+                        let color;
+                        if (colorMode === 'single') {
+                            // 单色模式
+                            color = colorValues[0].clone();
+                        } else {
+                            // 渐变模式，支持多种渐变方式
+                            if (gradientType === 'linear-x') {
+                                // X轴线性渐变
+                                const ratio = Math.min(1, Math.max(0, x / canvas.width)) * (colorValues.length - 1);
+                                const colorIndex = Math.floor(ratio);
+                                const blend = ratio - colorIndex;
+                                if (colorIndex < colorValues.length - 1) {
+                                    color = colorValues[colorIndex].clone().lerp(colorValues[colorIndex + 1], blend);
+                                } else {
+                                    color = colorValues[colorValues.length - 1].clone();
+                                }
+                            } else if (gradientType === 'linear-y') {
+                                // Y轴线性渐变
+                                const ratio = Math.min(1, Math.max(0, y / canvas.height)) * (colorValues.length - 1);
+                                const colorIndex = Math.floor(ratio);
+                                const blend = ratio - colorIndex;
+                                if (colorIndex < colorValues.length - 1) {
+                                    color = colorValues[colorIndex].clone().lerp(colorValues[colorIndex + 1], blend);
+                                } else {
+                                    color = colorValues[colorValues.length - 1].clone();
+                                }
+                            } else if (gradientType === 'radial') {
+                                // 径向渐变（基于中心距离）
+                                const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+                                const maxDistance = Math.sqrt(Math.pow(centerX, 2) + Math.pow(centerY, 2));
+                                const ratio = Math.min(1, Math.max(0, distance / maxDistance)) * (colorValues.length - 1);
+                                const colorIndex = Math.floor(ratio);
+                                const blend = ratio - colorIndex;
+                                if (colorIndex < colorValues.length - 1) {
+                                    color = colorValues[colorIndex].clone().lerp(colorValues[colorIndex + 1], blend);
+                                } else {
+                                    color = colorValues[colorValues.length - 1].clone();
+                                }
+                            } else if (gradientType === 'random') {
+                                // 随机渐变
+                                const randomIndex = Math.floor(Math.random() * colorValues.length);
+                                color = colorValues[randomIndex].clone();
+                            } else {
+                                // 默认使用第一种颜色
+                                color = colorValues[0].clone();
+                            }
+                        }
+
+                        // 添加粒子大小随机变化，增强真实感
+                        const particleSize = 1.2 + Math.random() * 1.3;
+
+                        particleData.push({
+                            position: new THREE.Vector3(posX, posY, posZ),
+                            color: color,
+                            size: particleSize,
+                            // 存储初始随机值用于特效
+                            random: Math.random()
+                        });
+                    }
+                }
+            }
+
+            // 确保有粒子生成，避免空场景
+            if (particleData.length === 0) {
+                console.warn('未生成任何粒子，请检查文字内容和密度设置');
+                // 添加一个默认粒子，避免完全空白
+                particleData.push({
+                    position: new THREE.Vector3(position.x, position.y, position.z),
+                    color: colorValues[0].clone(),
+                    size: 5,
+                    random: Math.random()
+                });
+                showStatusHint('未检测到有效文字像素，请调整文字或减小粒子密度');
+            }
+
+            return particleData;
+        }
+
+        // 更新粒子系统
+        function updateParticleSystem() {
+            // 清除旧粒子系统
+            if (particleSystem) {
+                scene.remove(particleSystem);
+                if (particleGeometry) particleGeometry.dispose();
+                if (particleMaterial) particleMaterial.dispose();
+            }
+
+            // 合并所有激活帧的粒子
+            let allParticles = [];
+
+            activeFrames.forEach(frame => {
+                // 计算当前帧的显示比例（用于淡入淡出效果）
+                let alpha = 1;
+                const transitionInStart = frame.startTime;
+                const transitionInEnd = frame.startTime + frame.transitionTime;
+                const transitionOutStart = frame.endTime - frame.transitionTime;
+                const transitionOutEnd = frame.endTime;
+
+                // 淡入阶段
+                if (currentTime < transitionInEnd && currentTime >= transitionInStart) {
+                    alpha = (currentTime - transitionInStart) / frame.transitionTime;
+                }
+                // 淡出阶段
+                else if (currentTime < transitionOutEnd && currentTime >= transitionOutStart) {
+                    alpha = 1 - (currentTime - transitionOutStart) / frame.transitionTime;
+                }
+                // 完全不在时间范围内
+                else if (currentTime < transitionInStart || currentTime >= transitionOutEnd) {
+                    alpha = 0;
+                }
+
+                // 只添加可见的粒子
+                if (alpha > 0) {
+                    frame.particles.forEach(particle => {
+                        allParticles.push({
+                            ...particle,
+                            alpha: alpha
+                        });
+                    });
+                }
+            });
+
+            // 创建新的粒子几何
+            particleGeometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            const sizes = [];
+            const alphas = [];
+
+            // 收集主粒子和尾迹粒子
+            allParticles.forEach(particle => {
+                // 查找该粒子所属的帧以获取特效设置
+                const frame = activeFrames.find(f =>
+                    f.particles.some(p => p.random === particle.random)
+                );
+                const trailLength = frame ? frame.trailLength : 0;
+
+                // 添加主粒子
+                positions.push(particle.position.x, particle.position.y, particle.position.z);
+                colors.push(particle.color.r, particle.color.g, particle.color.b);
+                sizes.push(particle.size);
+                alphas.push(particle.alpha);
+
+                // 添加尾迹粒子
+                if (trailLength > 0 && particle.trail) {
+                    particle.trail.forEach((trail, tIndex) => {
+                        // 尾迹随时间逐渐变小变透明
+                        const trailRatio = 1 - (tIndex / trailLength);
+                        positions.push(trail.x, trail.y, trail.z);
+                        colors.push(particle.color.r, particle.color.g, particle.color.b);
+                        sizes.push(particle.size * trailRatio * 0.7);
+                        alphas.push(particle.alpha * 0.5 * trailRatio);
+                    });
+                }
+            });
+
+            if (positions.length === 0) {
+                // 如果没有粒子，不创建新的粒子系统
+                return;
+            }
+
+            particleGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            particleGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            particleGeometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+            particleGeometry.setAttribute('alpha', new THREE.Float32BufferAttribute(alphas, 1));
+            // 添加随机值属性用于闪烁动画
+            particleGeometry.setAttribute('random', new THREE.Float32BufferAttribute(
+                allParticles.flatMap(p => {
+                    const vals = [p.random];
+                    // 为每个尾迹粒子添加相同的随机值
+                    if (p.trail && p.trail.length > 0) {
+                        for (let i = 0; i < p.trail.length; i++) {
+                            vals.push(p.random);
+                        }
+                    }
+                    return vals;
+                }), 1)
+            );
+
+            // 创建粒子材质
+            particleMaterial = new THREE.ShaderMaterial({
+                uniforms: {
+                    pointTexture: { value: new THREE.TextureLoader().load('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==') },
+                    flickerIntensity: { value: 0.5 },
+                    globalTime: { value: globalTime }
+                },
+                vertexShader: `
+                                attribute float size;
+                                attribute vec3 color;
+                                attribute float alpha;
+                                attribute float random;
+                                varying vec3 vColor;
+                                varying float vAlpha;
+                                varying float vRandom;
+                                void main() {
+                                    vColor = color;
+                                    vAlpha = alpha;
+                                    vRandom = random;
+                                    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+                                    gl_PointSize = size * (200.0 / -mvPosition.z);
+                                    gl_Position = projectionMatrix * mvPosition;
+                                }
+                            `,
+                fragmentShader: `
+                                varying vec3 vColor;
+                                varying float vAlpha;
+                                varying float vRandom;
+                                uniform sampler2D pointTexture;
+                                uniform float flickerIntensity;
+                                uniform float globalTime;
+
+                                void main() {
+                                    // 使用粒子随机值和全局时间创建更自然的闪烁效果
+                                    float flicker = 1.0 + (sin((globalTime + vRandom * 10.0) * 5.0) * 0.5 - 0.5) * flickerIntensity;
+                                    gl_FragColor = vec4(vColor * flicker, vAlpha);
+                                    gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+                                }
+                            `,
+                transparent: true,
+                blending: THREE.AdditiveBlending,
+                depthWrite: false,
+                uniformsNeedUpdate: true
+            });
+
+            // 创建点系统并添加到场景
+            particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+            particleSystem.rotation.x = rotationX;
+            particleSystem.rotation.y = rotationY;
+            scene.add(particleSystem);
+        }
+
+        // 更新粒子尾迹
+        function updateParticleTrails() {
+            activeFrames.forEach(frame => {
+                if (frame.trailLength <= 0) return;
+
+                frame.particles.forEach(particle => {
+                    if (!particle.trail) particle.trail = [];
+
+                    // 记录当前位置作为新的尾迹点
+                    particle.trail.unshift(new THREE.Vector3(
+                        particle.position.x,
+                        particle.position.y,
+                        particle.position.z
+                    ));
+
+                    // 限制尾迹长度
+                    if (particle.trail.length > frame.trailLength) {
+                        particle.trail.pop();
+                    }
+                });
+            });
+        }
+
+        // 5. 渲染指定帧
+        function renderFrame(index) {
+            if (!frameData[index]) return;
+
+            const frame = frameData[index];
+            // 生成粒子状态
+            const particles = textToParticles(
+                frame.text,
+                frame.size,
+                frame.lineSpacing,
+                frame.density,
+                frame.position,
+                frame.zMode,
+                frame.zRange,
+                frame.colorMode,
+                frame.colors,
+                frame.gradientType
+            );
+
+            // 存储粒子数据到帧
+            frame.particles = particles;
+
+            // 如果是预览模式，只显示当前帧
+            if (isPreviewing) {
+                activeFrames = [frame];
+                updateParticleSystem();
+            }
+        }
+
+        // 预览当前帧
+        let isPreviewing = false;
+        function previewFrame(index) {
+            if (!frameData[index]) return;
+
+            isPreviewing = true;
+
+            // 更新帧数据
+            const frameCard = document.querySelector(`.frame-card[data-index="${index}"]`);
+            if (frameCard) {
+                frameData[index] = getFrameDataFromCard(frameCard, index);
+            }
+
+            // 渲染该帧
+            renderFrame(index);
+
+            // 显示提示
+            showStatusHint(`已预览 帧 ${index + 1}`);
+
+            // 暂停播放（如果正在播放）
+            if (isPlaying) {
+                pausePlayback();
+            }
+        }
+
+        // 6. 播放控制
+        function startPlayback() {
+            if (isPlaying) return;
+
+            // 确保有帧
+            if (frameData.length === 0) {
+                showStatusHint("请添加至少1个帧才能播放动画");
+                return;
+            }
+
+            // 重置播放状态
+            isPreviewing = false;
+            currentTime = 0;
+
+            // 预先生成所有帧的粒子数据
+            frameData.forEach((frame, index) => {
+                renderFrame(index);
+            });
+
+            isPlaying = true;
+            document.getElementById('playBtn').disabled = true;
+            document.getElementById('pauseBtn').disabled = false;
+
+            // 如果编辑面板打开则关闭
+            if (isEditorOpen) {
+                toggleEditor(false);
+            }
+
+            // 开始播放循环
+            animatePlayback();
+        }
+
+        function pausePlayback() {
+            if (!isPlaying) return;
+
+            isPlaying = false;
+            if (playTimer) {
+                cancelAnimationFrame(playTimer);
+                playTimer = null;
+            }
+            document.getElementById('playBtn').disabled = false;
+            document.getElementById('pauseBtn').disabled = true;
+        }
+
+        // 播放循环函数
+        function animatePlayback() {
+            if (!isPlaying) return;
+
+            // 计算时间增量（基于播放速度）
+            const deltaTime = 0.016 * playSpeed;
+            currentTime += deltaTime;
+
+            // 检查是否循环播放
+            if (currentTime >= totalDuration) {
+                currentTime = 0; // 重置时间，重新开始
+            }
+
+            // 更新激活的帧
+            updateActiveFrames();
+
+            // 更新粒子尾迹
+            updateParticleTrails();
+
+            // 更新粒子系统
+            updateParticleSystem();
+
+            // 继续播放循环
+            playTimer = requestAnimationFrame(animatePlayback);
+        }
+
+        // 更新当前激活的帧
+        function updateActiveFrames() {
+            activeFrames = frameData.filter(frame => {
+                // 检查当前时间是否在帧的时间范围内（包括过渡时间）
+                return currentTime >= frame.startTime - frame.transitionTime / 2 &&
+                    currentTime <= frame.endTime + frame.transitionTime / 2;
+            });
+        }
+
+        // 7. 交互控制（鼠标拖拽旋转）
+        function initInteraction() {
+            container.addEventListener('pointerdown', (e) => {
+                if (isEditorOpen) return; // 编辑面板打开时不响应拖拽
+                isDragging = true;
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            container.addEventListener('pointermove', (e) => {
+                if (!isDragging || !particleSystem || isEditorOpen) return;
+
+                const deltaX = e.clientX - lastX;
+                const deltaY = e.clientY - lastY;
+
+                // 控制旋转速度
+                rotationY += deltaX * 0.005;
+                rotationX -= deltaY * 0.005;
+                rotationX = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, rotationX)); // 限制上下旋转
+
+                // 更新粒子旋转
+                particleSystem.rotation.x = rotationX;
+                particleSystem.rotation.y = rotationY;
+
+                lastX = e.clientX;
+                lastY = e.clientY;
+            });
+
+            container.addEventListener('pointerup', () => isDragging = false);
+            container.addEventListener('pointerleave', () => isDragging = false);
+
+            // 重置视角
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                rotationX = 0;
+                rotationY = 0;
+                if (particleSystem) {
+                    particleSystem.rotation.x = rotationX;
+                    particleSystem.rotation.y = rotationY;
+                }
+                showStatusHint("视角已重置");
+            });
+
+            // 播放/暂停控制
+            document.getElementById('playBtn').addEventListener('click', startPlayback);
+            document.getElementById('pauseBtn').addEventListener('click', pausePlayback);
+
+            // 播放速度控制
+            document.getElementById('playSpeed').addEventListener('input', (e) => {
+                playSpeed = parseFloat(e.target.value);
+                showStatusHint(`播放速度: ${playSpeed}x`);
+            });
+
+            // 编辑面板控制
+            document.getElementById('editBtn').addEventListener('click', () => {
+                toggleEditor(true);
+            });
+
+            document.getElementById('closeEditorBtn').addEventListener('click', () => {
+                toggleEditor(false);
+            });
+
+            document.getElementById('applyEditorBtn').addEventListener('click', () => {
+                // 保存所有帧数据
+                saveAllFrameData();
+                // 关闭编辑面板
+                toggleEditor(false);
+                // 重新计算总时长
+                calculateTotalDuration();
+                // 重新渲染当前帧
+                if (frameData.length > 0) {
+                    renderFrame(currentFrameIndex);
+                }
+                showStatusHint("方案已更新");
+            });
+
+            // 点击遮罩层关闭编辑面板
+            document.getElementById('overlay').addEventListener('click', () => {
+                toggleEditor(false);
+            });
+
+            // 添加新帧
+            document.getElementById('addFrameBtn').addEventListener('click', addNewFrame);
+        }
+
+        // 切换编辑面板显示状态
+        function toggleEditor(show) {
+            const drawer = document.getElementById('editorDrawer');
+            const overlay = document.getElementById('overlay');
+            const statusHint = document.getElementById('statusHint');
+
+            if (show) {
+                drawer.classList.add('open');
+                overlay.classList.add('show');
+                statusHint.textContent = "编辑帧序列，完成后点击应用方案";
+                statusHint.classList.add('show');
+                isEditorOpen = true;
+
+                // 如果正在播放，暂停
+                if (isPlaying) {
+                    pausePlayback();
+                }
+            } else {
+                drawer.classList.remove('open');
+                overlay.classList.remove('show');
+                statusHint.classList.remove('show');
+                isEditorOpen = false;
+            }
+        }
+
+        // 保存所有帧数据
+        function saveAllFrameData() {
+            const frameCards = document.querySelectorAll('.frame-card');
+            frameData = [];
+            frameCards.forEach((card, index) => {
+                frameData.push(getFrameDataFromCard(card, index));
+            });
+        }
+
+        // 显示状态提示
+        function showStatusHint(text) {
+            const statusHint = document.getElementById('statusHint');
+            statusHint.textContent = text;
+            statusHint.classList.add('show');
+
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                statusHint.classList.remove('show');
+            }, 3000);
+        }
+
+        // 8. 帧管理功能
+        function addNewFrame() {
+            const framesContainer = document.getElementById('framesContainer');
+            const newIndex = frameData.length;
+
+            // 计算新帧的默认开始时间（上一帧的结束时间）
+            let defaultStartTime = 0;
+            if (newIndex > 0 && frameData.length > 0) {
+                const lastFrame = frameData[frameData.length - 1];
+                defaultStartTime = lastFrame.startTime + lastFrame.duration;
+            }
+
+            // 创建新帧卡片
+            const newFrameCard = document.createElement('div');
+            newFrameCard.className = 'frame-card';
+            newFrameCard.dataset.index = newIndex;
+            newFrameCard.innerHTML = `
+                            <div class="frame-header">
+                                <div class="frame-index">帧 ${newIndex + 1}</div>
+                                <div class="frame-actions">
+                                    <button class="frame-btn preview" onclick="previewFrame(${newIndex})">👁</button>
+                                    <button class="frame-btn delete" onclick="deleteFrame(${newIndex})">×</button>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">文字内容（支持多行）</label>
+                                <textarea class="form-input text-input" maxlength="50">${newIndex + 1}</textarea>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">文字大小（像素）</label>
+                                <input type="number" class="form-input size-input" min="40" max="180" value="80">
+                            </div>
+                            <div class="form-group line-spacing-control">
+                                <label class="form-label">行间距（%）</label>
+                                <input type="range" class="form-input line-spacing" min="50" max="200" value="150">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">粒子密度（越小越密）</label>
+                                <input type="number" class="form-input density-input" min="3" max="20" value="6">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">时间控制</label>
+                                <div class="timing-controls">
+                                    <div class="timing-control">
+                                        <label class="form-label">开始时间（秒）</label>
+                                        <input type="number" class="form-input start-time" min="0" step="0.5" value="${defaultStartTime}">
+                                    </div>
+                                    <div class="timing-control">
+                                        <label class="form-label">停留时间（秒）</label>
+                                        <input type="number" class="form-input duration-input" min="0.5" step="0.5" value="2">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group transition-control">
+                                <label class="form-label">过渡时间（秒）</label>
+                                <input type="number" class="form-input transition-time" min="0.1" max="3" step="0.1" value="1">
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">位置调整</label>
+                                <div class="position-controls">
+                                    <div class="position-control">
+                                        <label class="form-label">X轴</label>
+                                        <input type="range" class="form-input x-position" min="-100" max="100" value="0">
+                                    </div>
+                                    <div class="position-control">
+                                        <label class="form-label">Y轴</label>
+                                        <input type="range" class="form-input y-position" min="-100" max="100" value="0">
+                                    </div>
+                                    <div class="position-control">
+                                        <label class="form-label">Z轴偏移</label>
+                                        <input type="range" class="form-input z-offset" min="-50" max="50" value="0">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-label">Z轴分布模式</div>
+                            <div class="z-axis-mode">
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input z-axis-mode-radio" name="zMode${newIndex}" value="random" checked> 随机分布
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input z-axis-mode-radio" name="zMode${newIndex}" value="x-dependent"> 随X轴变化
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input z-axis-mode-radio" name="zMode${newIndex}" value="y-dependent"> 随Y轴变化
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Z轴深度范围</label>
+                                <input type="range" class="form-input z-range" min="10" max="100" value="30">
+                            </div>
+                            <div class="form-label">颜色模式</div>
+                            <div class="color-mode">
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input color-mode-radio" name="colorMode${newIndex}" value="single" checked> 单色
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input color-mode-radio" name="colorMode${newIndex}" value="gradient"> 渐变
+                                </label>
+                            </div>
+                            <div class="form-label">颜色选择</div>
+                            <div class="gradient-colors">
+                                <div class="color-input-wrapper">
+                                    <span class="color-label">颜色1</span>
+                                    <input type="color" class="color-input color-1" value="#3b82f6">
+                                </div>
+                                <div class="color-input-wrapper" style="display:none">
+                                    <span class="color-label">颜色2</span>
+                                    <input type="color" class="color-input color-2" value="#8b5cf6">
+                                </div>
+                                <div class="color-input-wrapper" style="display:none">
+                                    <span class="color-label">颜色3</span>
+                                    <input type="color" class="color-input color-3" value="#ec4899">
+                                </div>
+                            </div>
+                            <div class="gradient-type" style="display:none">
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input gradient-type-radio" name="gradientType${newIndex}" value="linear-x" checked> X轴线性渐变
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input gradient-type-radio" name="gradientType${newIndex}" value="linear-y"> Y轴线性渐变
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input gradient-type-radio" name="gradientType${newIndex}" value="radial"> 径向渐变
+                                </label>
+                                <label class="radio-label">
+                                    <input type="radio" class="radio-input gradient-type-radio" name="gradientType${newIndex}" value="random"> 随机渐变
+                                </label>
+                            </div>
+
+                            <div class="effects-section">
+                                <div class="effects-title">粒子特效</div>
+                                <div class="form-group">
+                                    <label class="form-label">尾迹长度</label>
+                                    <input type="range" class="form-input trail-length" min="0" max="10" value="3">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">闪烁强度</label>
+                                    <input type="range" class="form-input flicker-intensity" min="0" max="10" value="5">
+                                </div>
+                            </div>
+                        `;
+
+            // 添加点击事件
+            newFrameCard.addEventListener('click', (e) => {
+                if (!e.target.closest('.frame-btn')) {
+                    selectFrame(newIndex);
+                }
+            });
+
+            // 添加输入变化事件
+            const inputs = newFrameCard.querySelectorAll('input:not(.color-mode-radio):not(.z-axis-mode-radio):not(.gradient-type-radio), textarea');
+            inputs.forEach(input => {
+                input.addEventListener('input', () => {
+                    if (newIndex === currentFrameIndex) {
+                        frameData[newIndex] = getFrameDataFromCard(newFrameCard, newIndex);
+                    }
+                });
+            });
+
+            // 为渐变类型添加事件监听
+            const gradientTypeRadios = newFrameCard.querySelectorAll('.gradient-type-radio');
+            gradientTypeRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    if (newIndex === currentFrameIndex) {
+                        frameData[newIndex] = getFrameDataFromCard(newFrameCard, newIndex);
+                        renderFrame(newIndex);
+                    }
+                });
+            });
+
+            // 设置模式监听
+            setupModeListeners(newFrameCard, newIndex);
+
+            // 插入到容器中（添加帧按钮前）
+            framesContainer.insertBefore(newFrameCard, document.getElementById('addFrameBtn'));
+
+            // 更新帧数据
+            frameData.push(getFrameDataFromCard(newFrameCard, newIndex));
+
+            // 选中新帧
+            selectFrame(newIndex);
+
+            // 更新总时长
+            calculateTotalDuration();
+
+            showStatusHint(`已添加 帧 ${newIndex + 1}`);
+        }
+
+        function deleteFrame(index) {
+            if (frameData.length <= 1) {
+                showStatusHint("至少保留1个帧");
+                return;
+            }
+
+            // 移除帧卡片
+            const frameCard = document.querySelector(`.frame-card[data-index="${index}"]`);
+            if (frameCard) frameCard.remove();
+
+            // 更新帧数据
+            frameData.splice(index, 1);
+
+            // 更新剩余帧的索引和事件
+            const remainingFrames = document.querySelectorAll('.frame-card');
+            remainingFrames.forEach((card, i) => {
+                card.dataset.index = i;
+                card.querySelector('.frame-index').textContent = `帧 ${i + 1}`;
+                card.querySelector('.preview').setAttribute('onclick', `previewFrame(${i})`);
+                card.querySelector('.delete').setAttribute('onclick', `deleteFrame(${i})`);
+
+                // 更新单选按钮名称（避免冲突）
+                const colorModeRadios = card.querySelectorAll('.color-mode-radio');
+                colorModeRadios.forEach(radio => {
+                    radio.name = `colorMode${i}`;
+                });
+
+                const zModeRadios = card.querySelectorAll('.z-axis-mode-radio');
+                zModeRadios.forEach(radio => {
+                    radio.name = `zMode${i}`;
+                });
+
+                const gradientRadios = card.querySelectorAll('.gradient-type-radio');
+                gradientRadios.forEach(radio => {
+                    radio.name = `gradientType${i}`;
+                });
+
+                // 重新设置事件监听
+                setupModeListeners(card, i);
+            });
+
+            // 如果删除的是当前帧，切换到第一帧
+            if (index === currentFrameIndex) {
+                const newIndex = Math.min(index, frameData.length - 1);
+                selectFrame(newIndex);
+                renderFrame(newIndex);
+            } else if (index < currentFrameIndex) {
+                // 如果删除的是当前帧前面的帧，更新当前索引
+                currentFrameIndex--;
+                updateActiveFrameCard();
+            }
+
+            // 更新总时长
+            calculateTotalDuration();
+
+            showStatusHint(`已删除 帧 ${index + 1}`);
+        }
+
+        let currentFrameIndex = 0;
+        function selectFrame(index) {
+            // 更新当前帧索引
+            currentFrameIndex = index;
+            updateActiveFrameCard();
+        }
+
+        function updateActiveFrameCard() {
+            // 移除所有帧的active类
+            document.querySelectorAll('.frame-card').forEach(card => {
+                card.classList.remove('active');
+            });
+
+            // 给当前帧添加active类
+            const activeCard = document.querySelector(`.frame-card[data-index="${currentFrameIndex}"]`);
+            if (activeCard) activeCard.classList.add('active');
+        }
+
+        // 9. 窗口大小适配
+        function onWindowResize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        window.addEventListener('resize', onWindowResize);
+
+        // 10. 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 更新全局时间
+            globalTime += 0.016;
+
+            // 更新着色器中的全局时间
+            if (particleMaterial && particleMaterial.uniforms) {
+                particleMaterial.uniforms.globalTime.value = globalTime;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // 初始化
+        window.addEventListener('load', () => {
+            initFrameData();
+            initInteraction();
+            animate();
+        });
+    </script>
+</body>
+</html>

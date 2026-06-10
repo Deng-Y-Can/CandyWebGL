@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBJ Viewer with Vertices</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F97316',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { overscroll-behavior: none; touch-action: manipulation; }
+        #glCanvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        #glCanvas:active { cursor: grabbing; }
+        .control-panel { backdrop-filter: blur(8px); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        #logPanel { font-family: monospace; font-size: 0.75rem; max-height: 150px; overflow-y: auto; }
+        .log-entry { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 2px 0; }
+        .log-info { color: #a5f3fc; }
+        .log-warning { color: #fde68a; }
+        .log-error { color: #fecaca; }
+    </style>
+</head>
+<body class="bg-slate-900 text-light overflow-hidden h-screen flex flex-col">
+    <!-- 头部 -->
+    <header class="bg-dark/80 border-b border-slate-700 px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <i class="fa fa-cube text-primary text-2xl"></i>
+            <h1 class="text-xl font-bold">OBJ Viewer</h1>
+        </div>
+        <label for="fileInput" class="cursor-pointer bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 rounded-md flex items-center gap-1">
+            <i class="fa fa-upload"></i>
+            <span>加载模型</span>
+        </label>
+        <input type="file" id="fileInput" accept=".obj" class="hidden">
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Canvas容器 -->
+        <div class="flex-1 relative">
+            <canvas id="glCanvas" class="w-full h-full"></canvas>
+            
+            <!-- 加载指示器 -->
+            <div id="loadingIndicator" class="absolute inset-0 bg-dark/50 flex items-center justify-center hidden">
+                <div class="text-center">
+                    <i class="fa fa-circle-o-notch loading-spinner text-4xl text-primary mb-3"></i>
+                    <p id="loadingText">加载中...</p>
+                </div>
+            </div>
+            
+            <!-- 操作说明 -->
+            <div class="absolute bottom-4 left-4 bg-dark/70 p-3 rounded-lg text-sm">
+                <p class="mb-1"><i class="fa fa-mouse-pointer mr-1"></i> 拖动旋转</p>
+                <p class="mb-1"><i class="fa fa-arrows mr-1"></i> Shift+拖动平移</p>
+                <p class="mb-1"><i class="fa fa-search mr-1"></i> 滚轮缩放</p>
+                <p><i class="fa fa-eye mr-1"></i> 勾选显示顶点</p>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="w-72 bg-dark/60 border-l border-slate-700 p-4 overflow-y-auto control-panel">
+            <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-slate-700">控制选项</h2>
+            
+            <!-- 显示选项 -->
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-eye text-secondary mr-2"></i>显示选项
+                </h3>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showVertices" class="rounded text-primary">
+                        <span>显示顶点</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showWireframe" class="rounded text-primary">
+                        <span>显示线框</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showFaces" checked class="rounded text-primary">
+                        <span>显示面</span>
+                    </label>
+                </div>
+                
+                <div class="mt-3">
+                    <label class="text-xs text-slate-400 block mb-1">顶点大小: <span id="vertexSizeValue">5</span></label>
+                    <input type="range" id="vertexSize" min="1" max="20" step="1" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg">
+                </div>
+            </div>
+            
+            <!-- 模型信息 -->
+            <div class="mb-6 p-3 bg-slate-800/50 rounded-lg">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-info-circle text-secondary mr-2"></i>模型信息
+                </h3>
+                <div class="text-xs text-slate-400 space-y-1">
+                    <p>顶点数量: <span id="vertexCount">0</span></p>
+                    <p>三角形数量: <span id="triangleCount">0</span></p>
+                    <p>模型名称: <span id="modelName">无</span></p>
+                </div>
+            </div>
+            
+            <!-- 日志面板 -->
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-list-alt text-secondary mr-2"></i>日志
+                </h3>
+                <div id="logPanel" class="bg-slate-800/50 p-2 rounded text-xs"></div>
+            </div>
+            
+            <!-- 重置按钮 -->
+            <button id="resetBtn" class="w-full bg-slate-700 hover:bg-slate-600 text-light py-2 rounded-md flex items-center justify-center gap-1">
+                <i class="fa fa-undo"></i>
+                <span>重置</span>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // 日志系统
+        const logPanel = document.getElementById('logPanel');
+        function log(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logPanel.appendChild(logEntry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        // 矩阵运算库 - 完整实现，包含rotateZ方法
+        const mat4 = {
+            create() { return new Float32Array(16); },
+            identity(out) {
+                out.set([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                return out;
+            },
+            perspective(out, fovy, aspect, near, far) {
+                const f = 1.0 / Math.tan(fovy / 2);
+                const nf = 1.0 / (near - far);
+                out.set([
+                    f / aspect, 0, 0, 0,
+                    0, f, 0, 0,
+                    0, 0, (far + near) * nf, -1,
+                    0, 0, 2 * far * near * nf, 0
+                ]);
+                return out;
+            },
+            translate(out, a, v) {
+                const x = v[0], y = v[1], z = v[2];
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                let a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+                if (a === out) {
+                    out[12] = a00*x + a10*y + a20*z + a30;
+                    out[13] = a01*x + a11*y + a21*z + a31;
+                    out[14] = a02*x + a12*y + a22*z + a32;
+                    out[15] = a03*x + a13*y + a23*z + a33;
+                } else {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a10, a11, a12, a13,
+                        a20, a21, a22, a23,
+                        a00*x + a10*y + a20*z + a30,
+                        a01*x + a11*y + a21*z + a31,
+                        a02*x + a12*y + a22*z + a32,
+                        a03*x + a13*y + a23*z + a33
+                    ]);
+                }
+                return out;
+            },
+            rotateX(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+
+                if (a !== out) {
+                    out.set([
+                        a[0], a[1], a[2], a[3],
+                        a10, a11, a12, a13,
+                        a20, a21, a22, a23,
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[4] = a10*cos + a20*sin;
+                out[5] = a11*cos + a21*sin;
+                out[6] = a12*cos + a22*sin;
+                out[7] = a13*cos + a23*sin;
+                out[8] = a10*(-sin) + a20*cos;
+                out[9] = a11*(-sin) + a21*cos;
+                out[10] = a12*(-sin) + a22*cos;
+                out[11] = a13*(-sin) + a23*cos;
+                return out;
+            },
+            rotateY(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+
+                if (a !== out) {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a[4], a[5], a[6], a[7],
+                        a20, a21, a22, a23,
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[0] = a00*cos + a20*(-sin);
+                out[1] = a01*cos + a21*(-sin);
+                out[2] = a02*cos + a22*(-sin);
+                out[3] = a03*cos + a23*(-sin);
+                out[8] = a00*sin + a20*cos;
+                out[9] = a01*sin + a21*cos;
+                out[10] = a02*sin + a22*cos;
+                out[11] = a03*sin + a23*cos;
+                return out;
+            },
+            // 完整实现Z轴旋转方法
+            rotateZ(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+
+                if (a !== out) {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a10, a11, a12, a13,
+                        a[8], a[9], a[10], a[11],
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[0] = a00 * cos + a10 * sin;
+                out[1] = a01 * cos + a11 * sin;
+                out[2] = a02 * cos + a12 * sin;
+                out[3] = a03 * cos + a13 * sin;
+                out[4] = a00 * (-sin) + a10 * cos;
+                out[5] = a01 * (-sin) + a11 * cos;
+                out[6] = a02 * (-sin) + a12 * cos;
+                out[7] = a03 * (-sin) + a13 * cos;
+                return out;
+            },
+            scale(out, a, v) {
+                const x = v[0], y = v[1], z = v[2];
+                out.set([
+                    a[0]*x, a[1]*x, a[2]*x, a[3]*x,
+                    a[4]*y, a[5]*y, a[6]*y, a[7]*y,
+                    a[8]*z, a[9]*z, a[10]*z, a[11]*z,
+                    a[12], a[13], a[14], a[15]
+                ]);
+                return out;
+            },
+            multiply(out, a, b) {
+                const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+                const b00 = b[0], b01 = b[1], b02 = b[2], b03 = b[3];
+                const b10 = b[4], b11 = b[5], b12 = b[6], b13 = b[7];
+                const b20 = b[8], b21 = b[9], b22 = b[10], b23 = b[11];
+                const b30 = b[12], b31 = b[13], b32 = b[14], b33 = b[15];
+
+                out.set([
+                    b00*a00 + b01*a10 + b02*a20 + b03*a30,
+                    b00*a01 + b01*a11 + b02*a21 + b03*a31,
+                    b00*a02 + b01*a12 + b02*a22 + b03*a32,
+                    b00*a03 + b01*a13 + b02*a23 + b03*a33,
+
+                    b10*a00 + b11*a10 + b12*a20 + b13*a30,
+                    b10*a01 + b11*a11 + b12*a21 + b13*a31,
+                    b10*a02 + b11*a12 + b12*a22 + b13*a32,
+                    b10*a03 + b11*a13 + b12*a23 + b13*a33,
+
+                    b20*a00 + b21*a10 + b22*a20 + b23*a30,
+                    b20*a01 + b21*a11 + b22*a21 + b23*a31,
+                    b20*a02 + b21*a12 + b22*a22 + b23*a32,
+                    b20*a03 + b21*a13 + b22*a23 + b23*a33,
+
+                    b30*a00 + b31*a10 + b32*a20 + b33*a30,
+                    b30*a01 + b31*a11 + b32*a21 + b33*a31,
+                    b30*a02 + b31*a12 + b32*a22 + b33*a32,
+                    b30*a03 + b31*a13 + b32*a23 + b33*a33
+                ]);
+                return out;
+            }
+        };
+
+        const mat3 = {
+            create() { return new Float32Array(9); },
+            fromMat4(out, m) {
+                out.set([m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
+                return out;
+            },
+            invert(out, a) {
+                const a00 = a[0], a01 = a[1], a02 = a[2];
+                const a10 = a[3], a11 = a[4], a12 = a[5];
+                const a20 = a[6], a21 = a[7], a22 = a[8];
+                
+                const b00 = a11*a22 - a12*a21;
+                const b01 = a02*a21 - a01*a22;
+                const b02 = a01*a12 - a02*a11;
+                const det = a00*b00 + a10*b01 + a20*b02;
+                
+                if (!det) return null;
+                const invDet = 1 / det;
+                
+                out.set([
+                    b00*invDet,
+                    b01*invDet,
+                    b02*invDet,
+                    (a12*a20 - a10*a22)*invDet,
+                    (a00*a22 - a02*a20)*invDet,
+                    (a02*a10 - a00*a12)*invDet,
+                    (a10*a21 - a11*a20)*invDet,
+                    (a01*a20 - a00*a21)*invDet,
+                    (a00*a11 - a01*a10)*invDet
+                ]);
+                return out;
+            },
+            transpose(out, a) {
+                if (out === a) {
+                    const a1 = a[1], a2 = a[2], a5 = a[5];
+                    out[1] = a[3];
+                    out[2] = a[6];
+                    out[3] = a1;
+                    out[5] = a[7];
+                    out[6] = a2;
+                    out[7] = a5;
+                } else {
+                    out.set([
+                        a[0], a[3], a[6],
+                        a[1], a[4], a[7],
+                        a[2], a[5], a[8]
+                    ]);
+                }
+                return out;
+            }
+        };
+
+        // 主程序
+        document.addEventListener('DOMContentLoaded', () => {
+            // 获取DOM元素
+            const canvas = document.getElementById('glCanvas');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const loadingText = document.getElementById('loadingText');
+            const fileInput = document.getElementById('fileInput');
+            const vertexCountEl = document.getElementById('vertexCount');
+            const triangleCountEl = document.getElementById('triangleCount');
+            const modelNameEl = document.getElementById('modelName');
+            
+            // 初始化WebGL上下文
+            let gl;
+            try {
+                const contextTypes = ['webgl', 'experimental-webgl', 'webkit-3d', 'moz-webgl'];
+                for (const type of contextTypes) {
+                    gl = canvas.getContext(type);
+                    if (gl) {
+                        log(`WebGL初始化成功 (${type})`);
+                        break;
+                    }
+                }
+                if (!gl) throw new Error('浏览器不支持WebGL');
+            } catch (error) {
+                alert(`初始化失败: ${error.message}`);
+                return;
+            }
+
+            // 初始化变量
+            let projectionMatrix = mat4.create();
+            let modelViewMatrix = mat4.create();
+            let normalMatrix = mat3.create();
+            
+            // 模型状态
+            let model = {
+                vertices: [],
+                normals: [],
+                indices: [],
+                vertexBuffer: null,
+                normalBuffer: null,
+                indexBuffer: null,
+                numIndices: 0,
+                numVertices: 0,
+                loaded: false,
+                name: "无"
+            };
+
+            // 变换状态
+            let transform = {
+                position: [0, 0, 0],
+                rotation: [0, 0, 0], // 角度
+                scale: 1,
+                cameraDistance: 5
+            };
+
+            // 显示状态
+            let display = {
+                showVertices: false,
+                showWireframe: false,
+                showFaces: true,
+                vertexSize: 5
+            };
+
+            // 颜色设置
+            let colors = {
+                model: [0.235, 0.509, 1.0], // 蓝色
+                vertices: [0.976, 0.451, 0.094] // 橙色
+            };
+
+            // 设置canvas尺寸
+            function resizeCanvas() {
+                const displayWidth = canvas.clientWidth;
+                const displayHeight = canvas.clientHeight;
+                
+                if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                    gl.viewport(0, 0, displayWidth, displayHeight);
+                    updateProjectionMatrix();
+                    if (model.loaded) render();
+                }
+            }
+            
+            window.addEventListener('resize', resizeCanvas);
+
+            // 着色器源码 - 包含精度声明
+            const mainVsSource = `
+                attribute vec4 aVertexPosition;
+                attribute vec3 aVertexNormal;
+                
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                uniform mat3 uNormalMatrix;
+                
+                varying vec3 vLighting;
+                
+                void main(void) {
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                    
+                    // 光照计算
+                    vec3 ambientLight = vec3(0.3, 0.3, 0.3);
+                    vec3 directionalLightColor = vec3(1.0, 1.0, 1.0);
+                    vec3 directionalVector = normalize(vec3(0.85, 0.8, 0.75));
+                    
+                    vec3 normal = normalize(uNormalMatrix * aVertexNormal);
+                    float directional = max(dot(normal, directionalVector), 0.0);
+                    vLighting = ambientLight + (directionalLightColor * directional);
+                }
+            `;
+
+            const mainFsSource = `
+                precision mediump float;
+                
+                varying vec3 vLighting;
+                uniform vec3 uColor;
+                
+                void main(void) {
+                    gl_FragColor = vec4(uColor * vLighting, 1.0);
+                }
+            `;
+
+            const vertexVsSource = `
+                attribute vec4 aVertexPosition;
+                
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                uniform float uPointSize;
+                
+                void main(void) {
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                    gl_PointSize = uPointSize;
+                }
+            `;
+
+            const vertexFsSource = `
+                precision mediump float;
+                
+                uniform vec3 uColor;
+                
+                void main(void) {
+                    gl_FragColor = vec4(uColor, 1.0);
+                }
+            `;
+
+            // 初始化着色器
+            function initShaderProgram(gl, vsSource, fsSource) {
+                const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+                const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+                if (!vertexShader || !fragmentShader) return null;
+                
+                const shaderProgram = gl.createProgram();
+                gl.attachShader(shaderProgram, vertexShader);
+                gl.attachShader(shaderProgram, fragmentShader);
+                gl.linkProgram(shaderProgram);
+                
+                if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                    log(`着色器链接失败: ${gl.getProgramInfoLog(shaderProgram)}`, 'error');
+                    return null;
+                }
+                return shaderProgram;
+            }
+
+            // 加载并编译着色器
+            function loadShader(gl, type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    log(`着色器编译失败: ${gl.getShaderInfoLog(shader)}`, 'error');
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            // 初始化着色器程序
+            const mainProgram = initShaderProgram(gl, mainVsSource, mainFsSource);
+            const vertexProgram = initShaderProgram(gl, vertexVsSource, vertexFsSource);
+            
+            if (!mainProgram || !vertexProgram) {
+                alert('着色器初始化失败');
+                return;
+            }
+            
+            // 程序信息
+            const mainProgramInfo = {
+                program: mainProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(mainProgram, 'aVertexPosition'),
+                    vertexNormal: gl.getAttribLocation(mainProgram, 'aVertexNormal'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(mainProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(mainProgram, 'uModelViewMatrix'),
+                    normalMatrix: gl.getUniformLocation(mainProgram, 'uNormalMatrix'),
+                    color: gl.getUniformLocation(mainProgram, 'uColor'),
+                },
+            };
+            
+            const vertexProgramInfo = {
+                program: vertexProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(vertexProgram, 'aVertexPosition'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(vertexProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(vertexProgram, 'uModelViewMatrix'),
+                    pointSize: gl.getUniformLocation(vertexProgram, 'uPointSize'),
+                    color: gl.getUniformLocation(vertexProgram, 'uColor'),
+                },
+            };
+
+            // 更新投影矩阵
+            function updateProjectionMatrix() {
+                const fieldOfView = 45 * Math.PI / 180;
+                const aspect = canvas.clientWidth / canvas.clientHeight;
+                mat4.perspective(projectionMatrix, fieldOfView, aspect, 0.1, 100.0);
+            }
+
+            // 更新模型视图矩阵
+            function updateModelViewMatrix() {
+                mat4.identity(modelViewMatrix);
+                
+                // 相机位置
+                mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -transform.cameraDistance]);
+                
+                // 应用模型变换
+                mat4.translate(modelViewMatrix, modelViewMatrix, transform.position);
+                mat4.rotateX(modelViewMatrix, modelViewMatrix, transform.rotation[0] * Math.PI / 180);
+                mat4.rotateY(modelViewMatrix, modelViewMatrix, transform.rotation[1] * Math.PI / 180);
+                mat4.rotateZ(modelViewMatrix, modelViewMatrix, transform.rotation[2] * Math.PI / 180);
+                mat4.scale(modelViewMatrix, modelViewMatrix, [transform.scale, transform.scale, transform.scale]);
+                
+                // 计算法向量矩阵
+                const normalMat = mat3.create();
+                mat3.fromMat4(normalMat, modelViewMatrix);
+                mat3.invert(normalMat, normalMat);
+                mat3.transpose(normalMatrix, normalMat);
+            }
+
+            // 创建缓冲区
+            function createBuffer(data, type) {
+                const buffer = gl.createBuffer();
+                gl.bindBuffer(type, buffer);
+                gl.bufferData(type, new Float32Array(data), gl.STATIC_DRAW);
+                return buffer;
+            }
+
+            // 创建索引缓冲区
+            function createIndexBuffer(data) {
+                const buffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data), gl.STATIC_DRAW);
+                return buffer;
+            }
+
+            // 解析OBJ文件
+            function parseOBJ(content) {
+                const lines = content.split('\n');
+                const vertices = [];
+                const normals = [];
+                const indices = [];
+                
+                log(`开始解析OBJ文件，共${lines.length}行`);
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    const parts = line.split(/\s+/);
+                    const type = parts[0];
+                    
+                    try {
+                        switch (type) {
+                            case 'v': // 顶点
+                                vertices.push(
+                                    parseFloat(parts[1]),
+                                    parseFloat(parts[2]),
+                                    parseFloat(parts[3])
+                                );
+                                break;
+                                
+                            case 'vn': // 法向量
+                                normals.push(
+                                    parseFloat(parts[1]),
+                                    parseFloat(parts[2]),
+                                    parseFloat(parts[3])
+                                );
+                                break;
+                                
+                            case 'f': // 面
+                                // 处理三角形面
+                                for (let j = 1; j < 4; j++) {
+                                    if (j >= parts.length) break;
+                                    
+                                    // 处理索引格式 v1/vt1/vn1
+                                    const indicesStr = parts[j].split('/')[0];
+                                    if (indicesStr) {
+                                        // OBJ索引从1开始，转换为0开始
+                                        indices.push(parseInt(indicesStr) - 1);
+                                    }
+                                }
+                                break;
+                        }
+                    } catch (e) {
+                        log(`解析行 ${i+1} 出错: ${e.message}`, 'warning');
+                    }
+                }
+                
+                log(`解析完成 - 顶点: ${vertices.length/3}, 法向量: ${normals.length/3}, 三角形: ${indices.length/3}`);
+                
+                // 如果没有法向量，生成简单的法向量
+                if (normals.length === 0 && vertices.length > 0 && indices.length > 0) {
+                    log('没有找到法向量，自动生成', 'info');
+                    for (let i = 0; i < indices.length; i += 3) {
+                        const i0 = indices[i] * 3;
+                        const i1 = indices[i+1] * 3;
+                        const i2 = indices[i+2] * 3;
+                        
+                        // 计算三角形边向量
+                        const v1x = vertices[i1] - vertices[i0];
+                        const v1y = vertices[i1+1] - vertices[i0+1];
+                        const v1z = vertices[i1+2] - vertices[i0+2];
+                        
+                        const v2x = vertices[i2] - vertices[i0];
+                        const v2y = vertices[i2+1] - vertices[i0+1];
+                        const v2z = vertices[i2+2] - vertices[i0+2];
+                        
+                        // 计算法向量（叉积）
+                        const nx = v1y * v2z - v1z * v2y;
+                        const ny = v1z * v2x - v1x * v2z;
+                        const nz = v1x * v2y - v1y * v2x;
+                        
+                        // 归一化
+                        const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+                        if (len > 0) {
+                            normals.push(nx/len, ny/len, nz/len);
+                            normals.push(nx/len, ny/len, nz/len);
+                            normals.push(nx/len, ny/len, nz/len);
+                        } else {
+                            normals.push(0, 0, 1);
+                            normals.push(0, 0, 1);
+                            normals.push(0, 0, 1);
+                        }
+                    }
+                }
+                
+                return { vertices, normals, indices };
+            }
+
+            // 加载模型
+            function loadModel(objData, fileName) {
+                try {
+                    loadingText.textContent = "处理模型数据...";
+                    
+                    model.vertices = objData.vertices;
+                    model.normals = objData.normals;
+                    model.indices = objData.indices;
+                    model.numVertices = objData.vertices.length / 3;
+                    model.numIndices = objData.indices.length;
+                    model.name = fileName || "未知模型";
+                    
+                    // 创建缓冲区
+                    model.vertexBuffer = createBuffer(model.vertices, gl.ARRAY_BUFFER);
+                    model.normalBuffer = createBuffer(model.normals, gl.ARRAY_BUFFER);
+                    model.indexBuffer = createIndexBuffer(model.indices);
+                    
+                    model.loaded = true;
+                    
+                    // 更新UI
+                    vertexCountEl.textContent = model.numVertices;
+                    triangleCountEl.textContent = model.numIndices / 3;
+                    modelNameEl.textContent = model.name;
+                    
+                    log(`模型加载成功: ${model.name}`);
+                    render();
+                } catch (error) {
+                    log(`模型加载失败: ${error.message}`, 'error');
+                    model.loaded = false;
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
+
+            // 渲染函数
+            function render() {
+                if (!gl || (!model.loaded && model.numVertices === 0)) return;
+                
+                // 清除画布
+                gl.clearColor(0.1, 0.1, 0.15, 1.0);
+                gl.clearDepth(1.0);
+                gl.enable(gl.DEPTH_TEST);
+                gl.depthFunc(gl.LEQUAL);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                
+                // 更新矩阵
+                updateModelViewMatrix();
+                
+                // 如果没有加载模型，渲染一个简单的立方体
+                if (!model.loaded) {
+                    renderDefaultCube();
+                    return;
+                }
+                
+                // 渲染面
+                if (display.showFaces) {
+                    gl.useProgram(mainProgramInfo.program);
+                    
+                    // 绑定顶点缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        mainProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 绑定法向量缓冲区
+                    if (model.normalBuffer) {
+                        gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+                        gl.vertexAttribPointer(
+                            mainProgramInfo.attribLocations.vertexNormal,
+                            3, gl.FLOAT, false, 0, 0
+                        );
+                        gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexNormal);
+                    }
+                    
+                    // 设置 uniforms
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniformMatrix3fv(
+                        mainProgramInfo.uniformLocations.normalMatrix,
+                        false, normalMatrix
+                    );
+                    gl.uniform3fv(
+                        mainProgramInfo.uniformLocations.color,
+                        colors.model
+                    );
+                    
+                    // 绑定索引缓冲区并绘制
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
+                    gl.drawElements(gl.TRIANGLES, model.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                // 渲染线框
+                if (display.showWireframe) {
+                    gl.useProgram(mainProgramInfo.program);
+                    
+                    // 绑定缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        mainProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 设置线框颜色为白色
+                    gl.uniform3fv(mainProgramInfo.uniformLocations.color, [1, 1, 1]);
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    
+                    // 绘制线框
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
+                    gl.drawElements(gl.LINES, model.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                // 渲染顶点
+                if (display.showVertices) {
+                    gl.useProgram(vertexProgramInfo.program);
+                    
+                    // 绑定顶点缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        vertexProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(vertexProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 设置 uniforms
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniform1f(
+                        vertexProgramInfo.uniformLocations.pointSize,
+                        display.vertexSize
+                    );
+                    gl.uniform3fv(
+                        vertexProgramInfo.uniformLocations.color,
+                        colors.vertices
+                    );
+                    
+                    // 绘制顶点
+                    gl.drawArrays(gl.POINTS, 0, model.numVertices);
+                }
+            }
+
+            // 渲染默认立方体
+            function renderDefaultCube() {
+                // 简单立方体数据
+                const vertices = [
+                    -1.0, -1.0,  1.0,
+                     1.0, -1.0,  1.0,
+                     1.0,  1.0,  1.0,
+                    -1.0,  1.0,  1.0,
+                    -1.0, -1.0, -1.0,
+                     1.0, -1.0, -1.0,
+                     1.0,  1.0, -1.0,
+                    -1.0,  1.0, -1.0
+                ];
+                
+                const indices = [
+                    0, 1, 2, 0, 2, 3, // 前面
+                    4, 5, 6, 4, 6, 7, // 后面
+                    1, 5, 6, 1, 6, 2, // 右面
+                    0, 4, 7, 0, 7, 3, // 左面
+                    3, 2, 6, 3, 6, 7, // 上面
+                    0, 1, 5, 0, 5, 4  // 下面
+                ];
+                
+                const normals = [
+                    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                    0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                    -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+                    0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                    0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0
+                ];
+                
+                // 创建临时缓冲区
+                const vertexBuffer = createBuffer(vertices, gl.ARRAY_BUFFER);
+                const normalBuffer = createBuffer(normals, gl.ARRAY_BUFFER);
+                const indexBuffer = createIndexBuffer(indices);
+                
+                // 使用主程序渲染
+                gl.useProgram(mainProgramInfo.program);
+                
+                // 绑定顶点缓冲区
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.vertexAttribPointer(
+                    mainProgramInfo.attribLocations.vertexPosition,
+                    3, gl.FLOAT, false, 0, 0
+                );
+                gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                
+                // 绑定法向量缓冲区
+                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+                gl.vertexAttribPointer(
+                    mainProgramInfo.attribLocations.vertexNormal,
+                    3, gl.FLOAT, false, 0, 0
+                );
+                gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexNormal);
+                
+                // 设置 uniforms
+                gl.uniformMatrix4fv(
+                    mainProgramInfo.uniformLocations.projectionMatrix,
+                    false, projectionMatrix
+                );
+                gl.uniformMatrix4fv(
+                    mainProgramInfo.uniformLocations.modelViewMatrix,
+                    false, modelViewMatrix
+                );
+                gl.uniformMatrix3fv(
+                    mainProgramInfo.uniformLocations.normalMatrix,
+                    false, normalMatrix
+                );
+                gl.uniform3fv(
+                    mainProgramInfo.uniformLocations.color,
+                    colors.model
+                );
+                
+                // 绘制立方体
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+                
+                // 渲染顶点（如果启用）
+                if (display.showVertices) {
+                    gl.useProgram(vertexProgramInfo.program);
+                    
+                    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                    gl.vertexAttribPointer(
+                        vertexProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(vertexProgramInfo.attribLocations.vertexPosition);
+                    
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniform1f(
+                        vertexProgramInfo.uniformLocations.pointSize,
+                        display.vertexSize
+                    );
+                    gl.uniform3fv(
+                        vertexProgramInfo.uniformLocations.color,
+                        colors.vertices
+                    );
+                    
+                    gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
+                }
+                
+                // 清理临时缓冲区
+                gl.deleteBuffer(vertexBuffer);
+                gl.deleteBuffer(normalBuffer);
+                gl.deleteBuffer(indexBuffer);
+            }
+
+            // 鼠标交互
+            let isDragging = false;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            let isPanning = false;
+
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                isPanning = e.shiftKey;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                if (isPanning) {
+                    // 平移
+                    transform.position[0] += deltaX * 0.01;
+                    transform.position[1] -= deltaY * 0.01;
+                } else {
+                    // 旋转
+                    transform.rotation[1] += deltaX;
+                    transform.rotation[0] += deltaY;
+                }
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                render();
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                transform.cameraDistance = Math.max(1, Math.min(20, transform.cameraDistance - e.deltaY * 0.01));
+                render();
+            });
+
+            // 文件输入处理
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (!file.name.endsWith('.obj')) {
+                    log('请选择OBJ格式的文件', 'error');
+                    return;
+                }
+                
+                loadingIndicator.classList.remove('hidden');
+                loadingText.textContent = "读取文件...";
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        loadingText.textContent = "解析OBJ文件...";
+                        const content = event.target.result;
+                        const objData = parseOBJ(content);
+                        loadModel(objData, file.name);
+                    } catch (error) {
+                        log(`文件处理错误: ${error.message}`, 'error');
+                        loadingIndicator.classList.add('hidden');
+                    }
+                };
+                reader.onerror = () => {
+                    log(`文件读取错误: ${reader.error.message}`, 'error');
+                    loadingIndicator.classList.add('hidden');
+                };
+                reader.readAsText(file);
+            });
+
+            // 控制面板事件
+            document.getElementById('showVertices').addEventListener('change', (e) => {
+                display.showVertices = e.target.checked;
+                render();
+            });
+
+            document.getElementById('showWireframe').addEventListener('change', (e) => {
+                display.showWireframe = e.target.checked;
+                render();
+            });
+
+            document.getElementById('showFaces').addEventListener('change', (e) => {
+                display.showFaces = e.target.checked;
+                render();
+            });
+
+            const vertexSizeSlider = document.getElementById('vertexSize');
+            const vertexSizeValue = document.getElementById('vertexSizeValue');
+            vertexSizeSlider.addEventListener('input', (e) => {
+                display.vertexSize = parseInt(e.target.value);
+                vertexSizeValue.textContent = display.vertexSize;
+                render();
+            });
+
+            // 重置按钮
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                transform = {
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: 1,
+                    cameraDistance: 5
+                };
+                
+                display = {
+                    showVertices: false,
+                    showWireframe: false,
+                    showFaces: true,
+                    vertexSize: 5
+                };
+                
+                // 更新UI
+                document.getElementById('showVertices').checked = false;
+                document.getElementById('showWireframe').checked = false;
+                document.getElementById('showFaces').checked = true;
+                vertexSizeSlider.value = 5;
+                vertexSizeValue.textContent = 5;
+                
+                render();
+                log('已重置所有设置');
+            });
+
+            // 初始化
+            resizeCanvas();
+            updateProjectionMatrix();
+            log('应用初始化完成，等待加载模型...');
+            render(); // 渲染默认立方体
+        });
+    </script>
+</body>
+</html><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OBJ Viewer with Vertices</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#10B981',
+                        accent: '#F97316',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body { overscroll-behavior: none; touch-action: manipulation; }
+        #glCanvas { display: block; width: 100%; height: 100%; cursor: grab; }
+        #glCanvas:active { cursor: grabbing; }
+        .control-panel { backdrop-filter: blur(8px); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        #logPanel { font-family: monospace; font-size: 0.75rem; max-height: 150px; overflow-y: auto; }
+        .log-entry { border-bottom: 1px solid rgba(255,255,255,0.1); padding: 2px 0; }
+        .log-info { color: #a5f3fc; }
+        .log-warning { color: #fde68a; }
+        .log-error { color: #fecaca; }
+    </style>
+</head>
+<body class="bg-slate-900 text-light overflow-hidden h-screen flex flex-col">
+    <!-- 头部 -->
+    <header class="bg-dark/80 border-b border-slate-700 px-4 py-3 flex justify-between items-center">
+        <div class="flex items-center gap-2">
+            <i class="fa fa-cube text-primary text-2xl"></i>
+            <h1 class="text-xl font-bold">OBJ Viewer</h1>
+        </div>
+        <label for="fileInput" class="cursor-pointer bg-primary/20 hover:bg-primary/30 text-primary px-3 py-1.5 rounded-md flex items-center gap-1">
+            <i class="fa fa-upload"></i>
+            <span>加载模型</span>
+        </label>
+        <input type="file" id="fileInput" accept=".obj" class="hidden">
+    </header>
+
+    <!-- 主内容区 -->
+    <main class="flex flex-1 overflow-hidden">
+        <!-- Canvas容器 -->
+        <div class="flex-1 relative">
+            <canvas id="glCanvas" class="w-full h-full"></canvas>
+            
+            <!-- 加载指示器 -->
+            <div id="loadingIndicator" class="absolute inset-0 bg-dark/50 flex items-center justify-center hidden">
+                <div class="text-center">
+                    <i class="fa fa-circle-o-notch loading-spinner text-4xl text-primary mb-3"></i>
+                    <p id="loadingText">加载中...</p>
+                </div>
+            </div>
+            
+            <!-- 操作说明 -->
+            <div class="absolute bottom-4 left-4 bg-dark/70 p-3 rounded-lg text-sm">
+                <p class="mb-1"><i class="fa fa-mouse-pointer mr-1"></i> 拖动旋转</p>
+                <p class="mb-1"><i class="fa fa-arrows mr-1"></i> Shift+拖动平移</p>
+                <p class="mb-1"><i class="fa fa-search mr-1"></i> 滚轮缩放</p>
+                <p><i class="fa fa-eye mr-1"></i> 勾选显示顶点</p>
+            </div>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="w-72 bg-dark/60 border-l border-slate-700 p-4 overflow-y-auto control-panel">
+            <h2 class="text-lg font-semibold mb-4 pb-2 border-b border-slate-700">控制选项</h2>
+            
+            <!-- 显示选项 -->
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-eye text-secondary mr-2"></i>显示选项
+                </h3>
+                <div class="space-y-2">
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showVertices" class="rounded text-primary">
+                        <span>显示顶点</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showWireframe" class="rounded text-primary">
+                        <span>显示线框</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" id="showFaces" checked class="rounded text-primary">
+                        <span>显示面</span>
+                    </label>
+                </div>
+                
+                <div class="mt-3">
+                    <label class="text-xs text-slate-400 block mb-1">顶点大小: <span id="vertexSizeValue">5</span></label>
+                    <input type="range" id="vertexSize" min="1" max="20" step="1" value="5" class="w-full h-1.5 bg-slate-700 rounded-lg">
+                </div>
+            </div>
+            
+            <!-- 模型信息 -->
+            <div class="mb-6 p-3 bg-slate-800/50 rounded-lg">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-info-circle text-secondary mr-2"></i>模型信息
+                </h3>
+                <div class="text-xs text-slate-400 space-y-1">
+                    <p>顶点数量: <span id="vertexCount">0</span></p>
+                    <p>三角形数量: <span id="triangleCount">0</span></p>
+                    <p>模型名称: <span id="modelName">无</span></p>
+                </div>
+            </div>
+            
+            <!-- 日志面板 -->
+            <div class="mb-6">
+                <h3 class="text-sm font-medium text-slate-300 mb-2 flex items-center">
+                    <i class="fa fa-list-alt text-secondary mr-2"></i>日志
+                </h3>
+                <div id="logPanel" class="bg-slate-800/50 p-2 rounded text-xs"></div>
+            </div>
+            
+            <!-- 重置按钮 -->
+            <button id="resetBtn" class="w-full bg-slate-700 hover:bg-slate-600 text-light py-2 rounded-md flex items-center justify-center gap-1">
+                <i class="fa fa-undo"></i>
+                <span>重置</span>
+            </button>
+        </div>
+    </main>
+
+    <script>
+        // 日志系统
+        const logPanel = document.getElementById('logPanel');
+        function log(message, type = 'info') {
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry log-${type}`;
+            logEntry.innerHTML = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logPanel.appendChild(logEntry);
+            logPanel.scrollTop = logPanel.scrollHeight;
+            console.log(`[${type}] ${message}`);
+        }
+
+        // 矩阵运算库 - 完整实现，包含rotateZ方法
+        const mat4 = {
+            create() { return new Float32Array(16); },
+            identity(out) {
+                out.set([1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1]);
+                return out;
+            },
+            perspective(out, fovy, aspect, near, far) {
+                const f = 1.0 / Math.tan(fovy / 2);
+                const nf = 1.0 / (near - far);
+                out.set([
+                    f / aspect, 0, 0, 0,
+                    0, f, 0, 0,
+                    0, 0, (far + near) * nf, -1,
+                    0, 0, 2 * far * near * nf, 0
+                ]);
+                return out;
+            },
+            translate(out, a, v) {
+                const x = v[0], y = v[1], z = v[2];
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                let a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+                if (a === out) {
+                    out[12] = a00*x + a10*y + a20*z + a30;
+                    out[13] = a01*x + a11*y + a21*z + a31;
+                    out[14] = a02*x + a12*y + a22*z + a32;
+                    out[15] = a03*x + a13*y + a23*z + a33;
+                } else {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a10, a11, a12, a13,
+                        a20, a21, a22, a23,
+                        a00*x + a10*y + a20*z + a30,
+                        a01*x + a11*y + a21*z + a31,
+                        a02*x + a12*y + a22*z + a32,
+                        a03*x + a13*y + a23*z + a33
+                    ]);
+                }
+                return out;
+            },
+            rotateX(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+
+                if (a !== out) {
+                    out.set([
+                        a[0], a[1], a[2], a[3],
+                        a10, a11, a12, a13,
+                        a20, a21, a22, a23,
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[4] = a10*cos + a20*sin;
+                out[5] = a11*cos + a21*sin;
+                out[6] = a12*cos + a22*sin;
+                out[7] = a13*cos + a23*sin;
+                out[8] = a10*(-sin) + a20*cos;
+                out[9] = a11*(-sin) + a21*cos;
+                out[10] = a12*(-sin) + a22*cos;
+                out[11] = a13*(-sin) + a23*cos;
+                return out;
+            },
+            rotateY(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+
+                if (a !== out) {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a[4], a[5], a[6], a[7],
+                        a20, a21, a22, a23,
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[0] = a00*cos + a20*(-sin);
+                out[1] = a01*cos + a21*(-sin);
+                out[2] = a02*cos + a22*(-sin);
+                out[3] = a03*cos + a23*(-sin);
+                out[8] = a00*sin + a20*cos;
+                out[9] = a01*sin + a21*cos;
+                out[10] = a02*sin + a22*cos;
+                out[11] = a03*sin + a23*cos;
+                return out;
+            },
+            // 完整实现Z轴旋转方法
+            rotateZ(out, a, rad) {
+                const cos = Math.cos(rad), sin = Math.sin(rad);
+                let a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                let a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+
+                if (a !== out) {
+                    out.set([
+                        a00, a01, a02, a03,
+                        a10, a11, a12, a13,
+                        a[8], a[9], a[10], a[11],
+                        a[12], a[13], a[14], a[15]
+                    ]);
+                }
+
+                out[0] = a00 * cos + a10 * sin;
+                out[1] = a01 * cos + a11 * sin;
+                out[2] = a02 * cos + a12 * sin;
+                out[3] = a03 * cos + a13 * sin;
+                out[4] = a00 * (-sin) + a10 * cos;
+                out[5] = a01 * (-sin) + a11 * cos;
+                out[6] = a02 * (-sin) + a12 * cos;
+                out[7] = a03 * (-sin) + a13 * cos;
+                return out;
+            },
+            scale(out, a, v) {
+                const x = v[0], y = v[1], z = v[2];
+                out.set([
+                    a[0]*x, a[1]*x, a[2]*x, a[3]*x,
+                    a[4]*y, a[5]*y, a[6]*y, a[7]*y,
+                    a[8]*z, a[9]*z, a[10]*z, a[11]*z,
+                    a[12], a[13], a[14], a[15]
+                ]);
+                return out;
+            },
+            multiply(out, a, b) {
+                const a00 = a[0], a01 = a[1], a02 = a[2], a03 = a[3];
+                const a10 = a[4], a11 = a[5], a12 = a[6], a13 = a[7];
+                const a20 = a[8], a21 = a[9], a22 = a[10], a23 = a[11];
+                const a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+                const b00 = b[0], b01 = b[1], b02 = b[2], b03 = b[3];
+                const b10 = b[4], b11 = b[5], b12 = b[6], b13 = b[7];
+                const b20 = b[8], b21 = b[9], b22 = b[10], b23 = b[11];
+                const b30 = b[12], b31 = b[13], b32 = b[14], b33 = b[15];
+
+                out.set([
+                    b00*a00 + b01*a10 + b02*a20 + b03*a30,
+                    b00*a01 + b01*a11 + b02*a21 + b03*a31,
+                    b00*a02 + b01*a12 + b02*a22 + b03*a32,
+                    b00*a03 + b01*a13 + b02*a23 + b03*a33,
+
+                    b10*a00 + b11*a10 + b12*a20 + b13*a30,
+                    b10*a01 + b11*a11 + b12*a21 + b13*a31,
+                    b10*a02 + b11*a12 + b12*a22 + b13*a32,
+                    b10*a03 + b11*a13 + b12*a23 + b13*a33,
+
+                    b20*a00 + b21*a10 + b22*a20 + b23*a30,
+                    b20*a01 + b21*a11 + b22*a21 + b23*a31,
+                    b20*a02 + b21*a12 + b22*a22 + b23*a32,
+                    b20*a03 + b21*a13 + b22*a23 + b23*a33,
+
+                    b30*a00 + b31*a10 + b32*a20 + b33*a30,
+                    b30*a01 + b31*a11 + b32*a21 + b33*a31,
+                    b30*a02 + b31*a12 + b32*a22 + b33*a32,
+                    b30*a03 + b31*a13 + b32*a23 + b33*a33
+                ]);
+                return out;
+            }
+        };
+
+        const mat3 = {
+            create() { return new Float32Array(9); },
+            fromMat4(out, m) {
+                out.set([m[0], m[1], m[2], m[4], m[5], m[6], m[8], m[9], m[10]]);
+                return out;
+            },
+            invert(out, a) {
+                const a00 = a[0], a01 = a[1], a02 = a[2];
+                const a10 = a[3], a11 = a[4], a12 = a[5];
+                const a20 = a[6], a21 = a[7], a22 = a[8];
+                
+                const b00 = a11*a22 - a12*a21;
+                const b01 = a02*a21 - a01*a22;
+                const b02 = a01*a12 - a02*a11;
+                const det = a00*b00 + a10*b01 + a20*b02;
+                
+                if (!det) return null;
+                const invDet = 1 / det;
+                
+                out.set([
+                    b00*invDet,
+                    b01*invDet,
+                    b02*invDet,
+                    (a12*a20 - a10*a22)*invDet,
+                    (a00*a22 - a02*a20)*invDet,
+                    (a02*a10 - a00*a12)*invDet,
+                    (a10*a21 - a11*a20)*invDet,
+                    (a01*a20 - a00*a21)*invDet,
+                    (a00*a11 - a01*a10)*invDet
+                ]);
+                return out;
+            },
+            transpose(out, a) {
+                if (out === a) {
+                    const a1 = a[1], a2 = a[2], a5 = a[5];
+                    out[1] = a[3];
+                    out[2] = a[6];
+                    out[3] = a1;
+                    out[5] = a[7];
+                    out[6] = a2;
+                    out[7] = a5;
+                } else {
+                    out.set([
+                        a[0], a[3], a[6],
+                        a[1], a[4], a[7],
+                        a[2], a[5], a[8]
+                    ]);
+                }
+                return out;
+            }
+        };
+
+        // 主程序
+        document.addEventListener('DOMContentLoaded', () => {
+            // 获取DOM元素
+            const canvas = document.getElementById('glCanvas');
+            const loadingIndicator = document.getElementById('loadingIndicator');
+            const loadingText = document.getElementById('loadingText');
+            const fileInput = document.getElementById('fileInput');
+            const vertexCountEl = document.getElementById('vertexCount');
+            const triangleCountEl = document.getElementById('triangleCount');
+            const modelNameEl = document.getElementById('modelName');
+            
+            // 初始化WebGL上下文
+            let gl;
+            try {
+                const contextTypes = ['webgl', 'experimental-webgl', 'webkit-3d', 'moz-webgl'];
+                for (const type of contextTypes) {
+                    gl = canvas.getContext(type);
+                    if (gl) {
+                        log(`WebGL初始化成功 (${type})`);
+                        break;
+                    }
+                }
+                if (!gl) throw new Error('浏览器不支持WebGL');
+            } catch (error) {
+                alert(`初始化失败: ${error.message}`);
+                return;
+            }
+
+            // 初始化变量
+            let projectionMatrix = mat4.create();
+            let modelViewMatrix = mat4.create();
+            let normalMatrix = mat3.create();
+            
+            // 模型状态
+            let model = {
+                vertices: [],
+                normals: [],
+                indices: [],
+                vertexBuffer: null,
+                normalBuffer: null,
+                indexBuffer: null,
+                numIndices: 0,
+                numVertices: 0,
+                loaded: false,
+                name: "无"
+            };
+
+            // 变换状态
+            let transform = {
+                position: [0, 0, 0],
+                rotation: [0, 0, 0], // 角度
+                scale: 1,
+                cameraDistance: 5
+            };
+
+            // 显示状态
+            let display = {
+                showVertices: false,
+                showWireframe: false,
+                showFaces: true,
+                vertexSize: 5
+            };
+
+            // 颜色设置
+            let colors = {
+                model: [0.235, 0.509, 1.0], // 蓝色
+                vertices: [0.976, 0.451, 0.094] // 橙色
+            };
+
+            // 设置canvas尺寸
+            function resizeCanvas() {
+                const displayWidth = canvas.clientWidth;
+                const displayHeight = canvas.clientHeight;
+                
+                if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                    canvas.width = displayWidth;
+                    canvas.height = displayHeight;
+                    gl.viewport(0, 0, displayWidth, displayHeight);
+                    updateProjectionMatrix();
+                    if (model.loaded) render();
+                }
+            }
+            
+            window.addEventListener('resize', resizeCanvas);
+
+            // 着色器源码 - 包含精度声明
+            const mainVsSource = `
+                attribute vec4 aVertexPosition;
+                attribute vec3 aVertexNormal;
+                
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                uniform mat3 uNormalMatrix;
+                
+                varying vec3 vLighting;
+                
+                void main(void) {
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                    
+                    // 光照计算
+                    vec3 ambientLight = vec3(0.3, 0.3, 0.3);
+                    vec3 directionalLightColor = vec3(1.0, 1.0, 1.0);
+                    vec3 directionalVector = normalize(vec3(0.85, 0.8, 0.75));
+                    
+                    vec3 normal = normalize(uNormalMatrix * aVertexNormal);
+                    float directional = max(dot(normal, directionalVector), 0.0);
+                    vLighting = ambientLight + (directionalLightColor * directional);
+                }
+            `;
+
+            const mainFsSource = `
+                precision mediump float;
+                
+                varying vec3 vLighting;
+                uniform vec3 uColor;
+                
+                void main(void) {
+                    gl_FragColor = vec4(uColor * vLighting, 1.0);
+                }
+            `;
+
+            const vertexVsSource = `
+                attribute vec4 aVertexPosition;
+                
+                uniform mat4 uModelViewMatrix;
+                uniform mat4 uProjectionMatrix;
+                uniform float uPointSize;
+                
+                void main(void) {
+                    gl_Position = uProjectionMatrix * uModelViewMatrix * aVertexPosition;
+                    gl_PointSize = uPointSize;
+                }
+            `;
+
+            const vertexFsSource = `
+                precision mediump float;
+                
+                uniform vec3 uColor;
+                
+                void main(void) {
+                    gl_FragColor = vec4(uColor, 1.0);
+                }
+            `;
+
+            // 初始化着色器
+            function initShaderProgram(gl, vsSource, fsSource) {
+                const vertexShader = loadShader(gl, gl.VERTEX_SHADER, vsSource);
+                const fragmentShader = loadShader(gl, gl.FRAGMENT_SHADER, fsSource);
+                if (!vertexShader || !fragmentShader) return null;
+                
+                const shaderProgram = gl.createProgram();
+                gl.attachShader(shaderProgram, vertexShader);
+                gl.attachShader(shaderProgram, fragmentShader);
+                gl.linkProgram(shaderProgram);
+                
+                if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
+                    log(`着色器链接失败: ${gl.getProgramInfoLog(shaderProgram)}`, 'error');
+                    return null;
+                }
+                return shaderProgram;
+            }
+
+            // 加载并编译着色器
+            function loadShader(gl, type, source) {
+                const shader = gl.createShader(type);
+                gl.shaderSource(shader, source);
+                gl.compileShader(shader);
+                
+                if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                    log(`着色器编译失败: ${gl.getShaderInfoLog(shader)}`, 'error');
+                    gl.deleteShader(shader);
+                    return null;
+                }
+                return shader;
+            }
+
+            // 初始化着色器程序
+            const mainProgram = initShaderProgram(gl, mainVsSource, mainFsSource);
+            const vertexProgram = initShaderProgram(gl, vertexVsSource, vertexFsSource);
+            
+            if (!mainProgram || !vertexProgram) {
+                alert('着色器初始化失败');
+                return;
+            }
+            
+            // 程序信息
+            const mainProgramInfo = {
+                program: mainProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(mainProgram, 'aVertexPosition'),
+                    vertexNormal: gl.getAttribLocation(mainProgram, 'aVertexNormal'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(mainProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(mainProgram, 'uModelViewMatrix'),
+                    normalMatrix: gl.getUniformLocation(mainProgram, 'uNormalMatrix'),
+                    color: gl.getUniformLocation(mainProgram, 'uColor'),
+                },
+            };
+            
+            const vertexProgramInfo = {
+                program: vertexProgram,
+                attribLocations: {
+                    vertexPosition: gl.getAttribLocation(vertexProgram, 'aVertexPosition'),
+                },
+                uniformLocations: {
+                    projectionMatrix: gl.getUniformLocation(vertexProgram, 'uProjectionMatrix'),
+                    modelViewMatrix: gl.getUniformLocation(vertexProgram, 'uModelViewMatrix'),
+                    pointSize: gl.getUniformLocation(vertexProgram, 'uPointSize'),
+                    color: gl.getUniformLocation(vertexProgram, 'uColor'),
+                },
+            };
+
+            // 更新投影矩阵
+            function updateProjectionMatrix() {
+                const fieldOfView = 45 * Math.PI / 180;
+                const aspect = canvas.clientWidth / canvas.clientHeight;
+                mat4.perspective(projectionMatrix, fieldOfView, aspect, 0.1, 100.0);
+            }
+
+            // 更新模型视图矩阵
+            function updateModelViewMatrix() {
+                mat4.identity(modelViewMatrix);
+                
+                // 相机位置
+                mat4.translate(modelViewMatrix, modelViewMatrix, [0.0, 0.0, -transform.cameraDistance]);
+                
+                // 应用模型变换
+                mat4.translate(modelViewMatrix, modelViewMatrix, transform.position);
+                mat4.rotateX(modelViewMatrix, modelViewMatrix, transform.rotation[0] * Math.PI / 180);
+                mat4.rotateY(modelViewMatrix, modelViewMatrix, transform.rotation[1] * Math.PI / 180);
+                mat4.rotateZ(modelViewMatrix, modelViewMatrix, transform.rotation[2] * Math.PI / 180);
+                mat4.scale(modelViewMatrix, modelViewMatrix, [transform.scale, transform.scale, transform.scale]);
+                
+                // 计算法向量矩阵
+                const normalMat = mat3.create();
+                mat3.fromMat4(normalMat, modelViewMatrix);
+                mat3.invert(normalMat, normalMat);
+                mat3.transpose(normalMatrix, normalMat);
+            }
+
+            // 创建缓冲区
+            function createBuffer(data, type) {
+                const buffer = gl.createBuffer();
+                gl.bindBuffer(type, buffer);
+                gl.bufferData(type, new Float32Array(data), gl.STATIC_DRAW);
+                return buffer;
+            }
+
+            // 创建索引缓冲区
+            function createIndexBuffer(data) {
+                const buffer = gl.createBuffer();
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffer);
+                gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(data), gl.STATIC_DRAW);
+                return buffer;
+            }
+
+            // 解析OBJ文件
+            function parseOBJ(content) {
+                const lines = content.split('\n');
+                const vertices = [];
+                const normals = [];
+                const indices = [];
+                
+                log(`开始解析OBJ文件，共${lines.length}行`);
+                
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line || line.startsWith('#')) continue;
+                    
+                    const parts = line.split(/\s+/);
+                    const type = parts[0];
+                    
+                    try {
+                        switch (type) {
+                            case 'v': // 顶点
+                                vertices.push(
+                                    parseFloat(parts[1]),
+                                    parseFloat(parts[2]),
+                                    parseFloat(parts[3])
+                                );
+                                break;
+                                
+                            case 'vn': // 法向量
+                                normals.push(
+                                    parseFloat(parts[1]),
+                                    parseFloat(parts[2]),
+                                    parseFloat(parts[3])
+                                );
+                                break;
+                                
+                            case 'f': // 面
+                                // 处理三角形面
+                                for (let j = 1; j < 4; j++) {
+                                    if (j >= parts.length) break;
+                                    
+                                    // 处理索引格式 v1/vt1/vn1
+                                    const indicesStr = parts[j].split('/')[0];
+                                    if (indicesStr) {
+                                        // OBJ索引从1开始，转换为0开始
+                                        indices.push(parseInt(indicesStr) - 1);
+                                    }
+                                }
+                                break;
+                        }
+                    } catch (e) {
+                        log(`解析行 ${i+1} 出错: ${e.message}`, 'warning');
+                    }
+                }
+                
+                log(`解析完成 - 顶点: ${vertices.length/3}, 法向量: ${normals.length/3}, 三角形: ${indices.length/3}`);
+                
+                // 如果没有法向量，生成简单的法向量
+                if (normals.length === 0 && vertices.length > 0 && indices.length > 0) {
+                    log('没有找到法向量，自动生成', 'info');
+                    for (let i = 0; i < indices.length; i += 3) {
+                        const i0 = indices[i] * 3;
+                        const i1 = indices[i+1] * 3;
+                        const i2 = indices[i+2] * 3;
+                        
+                        // 计算三角形边向量
+                        const v1x = vertices[i1] - vertices[i0];
+                        const v1y = vertices[i1+1] - vertices[i0+1];
+                        const v1z = vertices[i1+2] - vertices[i0+2];
+                        
+                        const v2x = vertices[i2] - vertices[i0];
+                        const v2y = vertices[i2+1] - vertices[i0+1];
+                        const v2z = vertices[i2+2] - vertices[i0+2];
+                        
+                        // 计算法向量（叉积）
+                        const nx = v1y * v2z - v1z * v2y;
+                        const ny = v1z * v2x - v1x * v2z;
+                        const nz = v1x * v2y - v1y * v2x;
+                        
+                        // 归一化
+                        const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+                        if (len > 0) {
+                            normals.push(nx/len, ny/len, nz/len);
+                            normals.push(nx/len, ny/len, nz/len);
+                            normals.push(nx/len, ny/len, nz/len);
+                        } else {
+                            normals.push(0, 0, 1);
+                            normals.push(0, 0, 1);
+                            normals.push(0, 0, 1);
+                        }
+                    }
+                }
+                
+                return { vertices, normals, indices };
+            }
+
+            // 加载模型
+            function loadModel(objData, fileName) {
+                try {
+                    loadingText.textContent = "处理模型数据...";
+                    
+                    model.vertices = objData.vertices;
+                    model.normals = objData.normals;
+                    model.indices = objData.indices;
+                    model.numVertices = objData.vertices.length / 3;
+                    model.numIndices = objData.indices.length;
+                    model.name = fileName || "未知模型";
+                    
+                    // 创建缓冲区
+                    model.vertexBuffer = createBuffer(model.vertices, gl.ARRAY_BUFFER);
+                    model.normalBuffer = createBuffer(model.normals, gl.ARRAY_BUFFER);
+                    model.indexBuffer = createIndexBuffer(model.indices);
+                    
+                    model.loaded = true;
+                    
+                    // 更新UI
+                    vertexCountEl.textContent = model.numVertices;
+                    triangleCountEl.textContent = model.numIndices / 3;
+                    modelNameEl.textContent = model.name;
+                    
+                    log(`模型加载成功: ${model.name}`);
+                    render();
+                } catch (error) {
+                    log(`模型加载失败: ${error.message}`, 'error');
+                    model.loaded = false;
+                } finally {
+                    loadingIndicator.classList.add('hidden');
+                }
+            }
+
+            // 渲染函数
+            function render() {
+                if (!gl || (!model.loaded && model.numVertices === 0)) return;
+                
+                // 清除画布
+                gl.clearColor(0.1, 0.1, 0.15, 1.0);
+                gl.clearDepth(1.0);
+                gl.enable(gl.DEPTH_TEST);
+                gl.depthFunc(gl.LEQUAL);
+                gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+                
+                // 更新矩阵
+                updateModelViewMatrix();
+                
+                // 如果没有加载模型，渲染一个简单的立方体
+                if (!model.loaded) {
+                    renderDefaultCube();
+                    return;
+                }
+                
+                // 渲染面
+                if (display.showFaces) {
+                    gl.useProgram(mainProgramInfo.program);
+                    
+                    // 绑定顶点缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        mainProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 绑定法向量缓冲区
+                    if (model.normalBuffer) {
+                        gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+                        gl.vertexAttribPointer(
+                            mainProgramInfo.attribLocations.vertexNormal,
+                            3, gl.FLOAT, false, 0, 0
+                        );
+                        gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexNormal);
+                    }
+                    
+                    // 设置 uniforms
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniformMatrix3fv(
+                        mainProgramInfo.uniformLocations.normalMatrix,
+                        false, normalMatrix
+                    );
+                    gl.uniform3fv(
+                        mainProgramInfo.uniformLocations.color,
+                        colors.model
+                    );
+                    
+                    // 绑定索引缓冲区并绘制
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
+                    gl.drawElements(gl.TRIANGLES, model.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                // 渲染线框
+                if (display.showWireframe) {
+                    gl.useProgram(mainProgramInfo.program);
+                    
+                    // 绑定缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        mainProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 设置线框颜色为白色
+                    gl.uniform3fv(mainProgramInfo.uniformLocations.color, [1, 1, 1]);
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        mainProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    
+                    // 绘制线框
+                    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, model.indexBuffer);
+                    gl.drawElements(gl.LINES, model.numIndices, gl.UNSIGNED_SHORT, 0);
+                }
+                
+                // 渲染顶点
+                if (display.showVertices) {
+                    gl.useProgram(vertexProgramInfo.program);
+                    
+                    // 绑定顶点缓冲区
+                    gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+                    gl.vertexAttribPointer(
+                        vertexProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(vertexProgramInfo.attribLocations.vertexPosition);
+                    
+                    // 设置 uniforms
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniform1f(
+                        vertexProgramInfo.uniformLocations.pointSize,
+                        display.vertexSize
+                    );
+                    gl.uniform3fv(
+                        vertexProgramInfo.uniformLocations.color,
+                        colors.vertices
+                    );
+                    
+                    // 绘制顶点
+                    gl.drawArrays(gl.POINTS, 0, model.numVertices);
+                }
+            }
+
+            // 渲染默认立方体
+            function renderDefaultCube() {
+                // 简单立方体数据
+                const vertices = [
+                    -1.0, -1.0,  1.0,
+                     1.0, -1.0,  1.0,
+                     1.0,  1.0,  1.0,
+                    -1.0,  1.0,  1.0,
+                    -1.0, -1.0, -1.0,
+                     1.0, -1.0, -1.0,
+                     1.0,  1.0, -1.0,
+                    -1.0,  1.0, -1.0
+                ];
+                
+                const indices = [
+                    0, 1, 2, 0, 2, 3, // 前面
+                    4, 5, 6, 4, 6, 7, // 后面
+                    1, 5, 6, 1, 6, 2, // 右面
+                    0, 4, 7, 0, 7, 3, // 左面
+                    3, 2, 6, 3, 6, 7, // 上面
+                    0, 1, 5, 0, 5, 4  // 下面
+                ];
+                
+                const normals = [
+                    0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+                    0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+                    1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+                    -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+                    0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+                    0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0
+                ];
+                
+                // 创建临时缓冲区
+                const vertexBuffer = createBuffer(vertices, gl.ARRAY_BUFFER);
+                const normalBuffer = createBuffer(normals, gl.ARRAY_BUFFER);
+                const indexBuffer = createIndexBuffer(indices);
+                
+                // 使用主程序渲染
+                gl.useProgram(mainProgramInfo.program);
+                
+                // 绑定顶点缓冲区
+                gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                gl.vertexAttribPointer(
+                    mainProgramInfo.attribLocations.vertexPosition,
+                    3, gl.FLOAT, false, 0, 0
+                );
+                gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexPosition);
+                
+                // 绑定法向量缓冲区
+                gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+                gl.vertexAttribPointer(
+                    mainProgramInfo.attribLocations.vertexNormal,
+                    3, gl.FLOAT, false, 0, 0
+                );
+                gl.enableVertexAttribArray(mainProgramInfo.attribLocations.vertexNormal);
+                
+                // 设置 uniforms
+                gl.uniformMatrix4fv(
+                    mainProgramInfo.uniformLocations.projectionMatrix,
+                    false, projectionMatrix
+                );
+                gl.uniformMatrix4fv(
+                    mainProgramInfo.uniformLocations.modelViewMatrix,
+                    false, modelViewMatrix
+                );
+                gl.uniformMatrix3fv(
+                    mainProgramInfo.uniformLocations.normalMatrix,
+                    false, normalMatrix
+                );
+                gl.uniform3fv(
+                    mainProgramInfo.uniformLocations.color,
+                    colors.model
+                );
+                
+                // 绘制立方体
+                gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+                gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+                
+                // 渲染顶点（如果启用）
+                if (display.showVertices) {
+                    gl.useProgram(vertexProgramInfo.program);
+                    
+                    gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
+                    gl.vertexAttribPointer(
+                        vertexProgramInfo.attribLocations.vertexPosition,
+                        3, gl.FLOAT, false, 0, 0
+                    );
+                    gl.enableVertexAttribArray(vertexProgramInfo.attribLocations.vertexPosition);
+                    
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.projectionMatrix,
+                        false, projectionMatrix
+                    );
+                    gl.uniformMatrix4fv(
+                        vertexProgramInfo.uniformLocations.modelViewMatrix,
+                        false, modelViewMatrix
+                    );
+                    gl.uniform1f(
+                        vertexProgramInfo.uniformLocations.pointSize,
+                        display.vertexSize
+                    );
+                    gl.uniform3fv(
+                        vertexProgramInfo.uniformLocations.color,
+                        colors.vertices
+                    );
+                    
+                    gl.drawArrays(gl.POINTS, 0, vertices.length / 3);
+                }
+                
+                // 清理临时缓冲区
+                gl.deleteBuffer(vertexBuffer);
+                gl.deleteBuffer(normalBuffer);
+                gl.deleteBuffer(indexBuffer);
+            }
+
+            // 鼠标交互
+            let isDragging = false;
+            let lastMouseX = 0;
+            let lastMouseY = 0;
+            let isPanning = false;
+
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                isPanning = e.shiftKey;
+            });
+
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                
+                if (isPanning) {
+                    // 平移
+                    transform.position[0] += deltaX * 0.01;
+                    transform.position[1] -= deltaY * 0.01;
+                } else {
+                    // 旋转
+                    transform.rotation[1] += deltaX;
+                    transform.rotation[0] += deltaY;
+                }
+                
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                render();
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                transform.cameraDistance = Math.max(1, Math.min(20, transform.cameraDistance - e.deltaY * 0.01));
+                render();
+            });
+
+            // 文件输入处理
+            fileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                
+                if (!file.name.endsWith('.obj')) {
+                    log('请选择OBJ格式的文件', 'error');
+                    return;
+                }
+                
+                loadingIndicator.classList.remove('hidden');
+                loadingText.textContent = "读取文件...";
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        loadingText.textContent = "解析OBJ文件...";
+                        const content = event.target.result;
+                        const objData = parseOBJ(content);
+                        loadModel(objData, file.name);
+                    } catch (error) {
+                        log(`文件处理错误: ${error.message}`, 'error');
+                        loadingIndicator.classList.add('hidden');
+                    }
+                };
+                reader.onerror = () => {
+                    log(`文件读取错误: ${reader.error.message}`, 'error');
+                    loadingIndicator.classList.add('hidden');
+                };
+                reader.readAsText(file);
+            });
+
+            // 控制面板事件
+            document.getElementById('showVertices').addEventListener('change', (e) => {
+                display.showVertices = e.target.checked;
+                render();
+            });
+
+            document.getElementById('showWireframe').addEventListener('change', (e) => {
+                display.showWireframe = e.target.checked;
+                render();
+            });
+
+            document.getElementById('showFaces').addEventListener('change', (e) => {
+                display.showFaces = e.target.checked;
+                render();
+            });
+
+            const vertexSizeSlider = document.getElementById('vertexSize');
+            const vertexSizeValue = document.getElementById('vertexSizeValue');
+            vertexSizeSlider.addEventListener('input', (e) => {
+                display.vertexSize = parseInt(e.target.value);
+                vertexSizeValue.textContent = display.vertexSize;
+                render();
+            });
+
+            // 重置按钮
+            document.getElementById('resetBtn').addEventListener('click', () => {
+                transform = {
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: 1,
+                    cameraDistance: 5
+                };
+                
+                display = {
+                    showVertices: false,
+                    showWireframe: false,
+                    showFaces: true,
+                    vertexSize: 5
+                };
+                
+                // 更新UI
+                document.getElementById('showVertices').checked = false;
+                document.getElementById('showWireframe').checked = false;
+                document.getElementById('showFaces').checked = true;
+                vertexSizeSlider.value = 5;
+                vertexSizeValue.textContent = 5;
+                
+                render();
+                log('已重置所有设置');
+            });
+
+            // 初始化
+            resizeCanvas();
+            updateProjectionMatrix();
+            log('应用初始化完成，等待加载模型...');
+            render(); // 渲染默认立方体
+        });
+    </script>
+</body>
+</html>

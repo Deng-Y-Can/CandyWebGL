@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Animated 3D Function Plotter V2</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            font-family: Arial, sans-serif;
+            background-color: #222;
+            color: white;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100; /* Ensure it's on top */
+            background-color: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        #function-input {
+            width: 300px;
+            padding: 8px;
+            font-size: 16px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        #plot-button {
+            padding: 8px 15px;
+            margin-left: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #007BFF;
+            color: white;
+        }
+
+            #plot-button:hover {
+                background-color: #0056b3;
+            }
+
+        #status {
+            margin-top: 10px;
+            font-style: italic;
+            color: #aaa;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <label for="function-input">Enter z = f(x, y): </label>
+        <input type="text" id="function-input" value="sin(sqrt(x^2 + y^2))" placeholder="e.g., x^2 + y^2, sin(x)*cos(y)">
+        <button id="plot-button">Plot</button>
+        <div id="status">Ready.</div>
+    </div>
+
+    <!-- Import required libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.1/math.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x111111);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 8, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x606060, 2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // --- Axes Helper ---
+        const axesHelper = new THREE.AxesHelper(5);
+        scene.add(axesHelper);
+
+        // --- UI Elements ---
+        const functionInput = document.getElementById('function-input');
+        const plotButton = document.getElementById('plot-button');
+        const statusDiv = document.getElementById('status');
+
+        // --- Plotting Variables ---
+        let compiledFunction = null; // Will hold the compiled math.js function
+        let group = null;           // Group holding the animated lines
+        let lines = [];             // Array of line objects
+        let currentIndex = 0;       // Current drawing index
+        let totalLines = 0;         // Total lines for current plot
+        let animationId = null;     // ID for requestAnimationFrame
+
+        const GRID_SIZE = 30;       // Increased resolution for better detail
+        const GRID_RANGE = 6;       // Range [-GRID_RANGE, GRID_RANGE]
+        const material = new THREE.LineBasicMaterial({ color: 0x00ffff });
+
+        // --- Function to Compile User Input ---
+        function compileUserFunction(expressionString) {
+            try {
+                // math.compile expects an expression like 'z = ...' or just '...'
+                // We'll assume the user types the right-hand side, e.g., 'sin(x)*cos(y)'
+                // math.js uses 'x' and 'y' as variables directly.
+                const node = math.parse(expressionString); // Parse the expression string
+                const code = node.compile(math);          // Compile it into executable code
+                statusDiv.textContent = `Compiled function: z = ${expressionString}`;
+                statusDiv.style.color = "#0f0"; // Green for success
+                return code; // Return the compiled function object
+            } catch (err) {
+                console.error("Compilation error:", err);
+                statusDiv.textContent = `Error compiling function: ${err.message}`;
+                statusDiv.style.color = "#f00"; // Red for error
+                return null; // Indicate failure
+            }
+        }
+
+        // --- Main Plotting Function ---
+        function plotFunction() {
+            // Stop any existing animation
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+
+            // Clear previous plot if exists
+            if (group) {
+                scene.remove(group);
+                group = null;
+            }
+            lines = [];
+            currentIndex = 0;
+
+            const exprStr = functionInput.value.trim();
+            if (!exprStr) {
+                statusDiv.textContent = "Please enter a function.";
+                statusDiv.style.color = "#f00";
+                return;
+            }
+
+            // 1. Compile the function
+            compiledFunction = compileUserFunction(exprStr);
+            if (!compiledFunction) {
+                // Error message already set by compileUserFunction
+                return;
+            }
+
+            // 2. Generate Vertices
+            statusDiv.textContent = "Calculating vertices...";
+            statusDiv.style.color = "#ff0"; // Yellow for processing
+
+            // Use setTimeout to allow UI update before heavy calculation
+            setTimeout(() => {
+                try {
+                    const startTime = performance.now();
+                    const vertices = [];
+                    const scope = { x: 0, y: 0 }; // Scope object for math.js evaluation
+
+                    for (let i = 0; i <= GRID_SIZE; i++) {
+                        const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                        for (let j = 0; j <= GRID_SIZE; j++) {
+                            const y = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                            scope.x = x;
+                            scope.y = y;
+                            // Evaluate the compiled function with the given x, y
+                            let z;
+                            try {
+                                z = compiledFunction.evaluate(scope);
+                                // Handle cases where the result might not be a finite number
+                                if (!isFinite(z)) {
+                                    z = NaN; // Or some large number to indicate undefined/out of range
+                                }
+                            } catch (evalErr) {
+                                console.warn(`Evaluation error at (${x}, ${y}):`, evalErr);
+                                z = NaN;
+                            }
+                            vertices.push(new THREE.Vector3(x, y, z));
+                        }
+                    }
+                    const endTime = performance.now();
+                    console.log(`Vertex calculation took ${endTime - startTime} milliseconds.`);
+
+                    // 3. Setup for Animation
+                    totalLines = GRID_SIZE * (GRID_SIZE + 1) * 2;
+                    group = new THREE.Group();
+                    scene.add(group);
+
+                    // Pre-create line objects
+                    for (let k = 0; k < totalLines; k++) {
+                        const geometry = new THREE.BufferGeometry();
+                        const line = new THREE.Line(geometry, material.clone());
+                        line.visible = false;
+                        lines.push(line);
+                        group.add(line);
+                    }
+
+                    // 4. Start Animation Loop
+                    currentIndex = 0; // Reset index for new plot
+                    animateDrawing(vertices);
+                    statusDiv.textContent = `Plotting: z = ${exprStr}`;
+                    statusDiv.style.color = "#0f0";
+
+                } catch (genErr) {
+                    console.error("Error during plotting setup:", genErr);
+                    statusDiv.textContent = `Unexpected error during plotting: ${genErr.message}`;
+                    statusDiv.style.color = "#f00";
+                }
+            }, 50); // Small delay
+        }
+
+        // --- Animation Loop for Drawing ---
+        function animateDrawing(vertices) {
+            // --- Incremental Drawing Logic ---
+            if (currentIndex < totalLines && compiledFunction) {
+                const lineObject = lines[currentIndex];
+                lineObject.visible = true;
+
+                let baseVertexIndex;
+
+                if (currentIndex < GRID_SIZE * (GRID_SIZE + 1)) {
+                    // Horizontal lines (constant j)
+                    const lineInSet = currentIndex;
+                    const j = Math.floor(lineInSet / GRID_SIZE);
+                    const i = lineInSet % GRID_SIZE;
+                    baseVertexIndex = j * (GRID_SIZE + 1) + i;
+                    const nextIndex = baseVertexIndex + 1;
+
+                    // Check for NaN values to avoid drawing lines to/from undefined points
+                    if (!isNaN(vertices[baseVertexIndex].z) && !isNaN(vertices[nextIndex].z)) {
+                        lineObject.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                            vertices[baseVertexIndex].x, vertices[baseVertexIndex].y, vertices[baseVertexIndex].z,
+                            vertices[nextIndex].x, vertices[nextIndex].y, vertices[nextIndex].z
+                        ], 3));
+                    } else {
+                        // Hide line segment if either point is invalid
+                        lineObject.visible = false;
+                    }
+
+                } else {
+                    // Vertical lines (constant i)
+                    const lineInSet = currentIndex - GRID_SIZE * (GRID_SIZE + 1);
+                    const i = Math.floor(lineInSet / GRID_SIZE);
+                    const j = lineInSet % GRID_SIZE;
+                    baseVertexIndex = j * (GRID_SIZE + 1) + i;
+                    const nextBaseVertexIndex = baseVertexIndex + (GRID_SIZE + 1);
+
+                    if (!isNaN(vertices[baseVertexIndex].z) && !isNaN(vertices[nextBaseVertexIndex].z)) {
+                        lineObject.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                            vertices[baseVertexIndex].x, vertices[baseVertexIndex].y, vertices[baseVertexIndex].z,
+                            vertices[nextBaseVertexIndex].x, vertices[nextBaseVertexIndex].y, vertices[nextBaseVertexIndex].z
+                        ], 3));
+                    } else {
+                        lineObject.visible = false;
+                    }
+                }
+                currentIndex++;
+            }
+
+            // Render the scene
+            controls.update();
+            renderer.render(scene, camera);
+
+            // Continue animation if not finished
+            if (currentIndex < totalLines) {
+                animationId = requestAnimationFrame(() => animateDrawing(vertices));
+            } else {
+                animationId = null; // Finished
+                statusDiv.textContent += " (Complete)";
+            }
+        }
+
+        // --- Event Listeners ---
+        plotButton.addEventListener('click', plotFunction);
+
+        // Optional: Allow Enter key to trigger plot
+        functionInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                plotFunction();
+            }
+        });
+
+        // Initial plot
+        plotFunction();
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Optimized Multi-Function Interactive 3D/2D Plotter v5</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background-color: rgba(30, 30, 30, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            max-width: 95vw;
+            backdrop-filter: blur(5px);
+            max-height: 90vh;
+            overflow-y: auto;
+            transition: transform 0.3s ease-in-out, opacity 0.3s ease-in-out;
+        }
+
+            #ui-container.collapsed {
+                transform: translateX(calc(-100% + 40px));
+                opacity: 0.8;
+            }
+
+                #ui-container.collapsed #ui-content {
+                    display: none;
+                }
+
+        #ui-toggle-btn {
+            position: absolute;
+            top: 10px;
+            right: -35px;
+            width: 30px;
+            height: 30px;
+            background-color: rgba(30, 30, 30, 0.9);
+            border: 1px solid #555;
+            border-radius: 0 5px 5px 0;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+            z-index: 101;
+        }
+
+            #ui-toggle-btn:hover {
+                background-color: rgba(50, 50, 50, 0.9);
+            }
+
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .function-item {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #222;
+            margin-bottom: 8px;
+        }
+
+            .function-item input[type="text"] {
+                flex-grow: 1;
+                min-width: 150px;
+            }
+
+        label {
+            white-space: nowrap;
+        }
+
+        input[type="text"], select {
+            padding: 6px 10px;
+            font-size: 15px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        input[type="number"] {
+            padding: 6px;
+            width: 60px;
+            font-size: 15px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        button {
+            padding: 7px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #bb86fc;
+            color: #121212;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+            button:hover {
+                background-color: #9a67ea;
+            }
+
+            button.small {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+        #help-toggle {
+            background: none;
+            border: 1px solid #666;
+            color: #ccc;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+            #help-toggle:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+
+        #help-content {
+            margin-top: 10px;
+            font-size: 0.9em;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out;
+        }
+
+            #help-content.show {
+                max-height: 500px;
+            }
+
+            #help-content ul {
+                margin-top: 5px;
+                margin-bottom: 10px;
+                padding-left: 20px;
+            }
+
+            #help-content code {
+                background-color: #444;
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-size: 0.95em;
+            }
+
+        #status, #camera-info {
+            margin-top: 8px;
+            font-style: italic;
+            color: #aaa;
+            word-break: break-all;
+            font-size: 0.9em;
+        }
+
+        #camera-info {
+            font-style: normal;
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        #view-controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+            margin-top: 10px;
+        }
+
+            #view-controls button {
+                padding: 5px 8px;
+                font-size: 12px;
+                background-color: #333;
+            }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div id="ui-toggle-btn">◀</div>
+        <div id="ui-content">
+            <div class="input-group">
+                <label for="mode-select">Mode:</label>
+                <select id="mode-select">
+                    <option value="3d">3D Surface</option>
+                    <option value="2d">2D Curve (on XoY plane)</option>
+                </select>
+
+                <label for="projection-select">Proj:</label>
+                <select id="projection-select">
+                    <option value="perspective">Perspective</option>
+                    <option value="orthographic">Orthographic</option>
+                </select>
+
+                <label for="grid-size">Grid:</label>
+                <input type="number" id="grid-size" value="30" min="5" max="100">
+
+                <label for="axis-range">Range:</label>
+                <input type="number" id="axis-range" value="6" step="0.5" min="1" max="50">
+
+                <label for="tick-spacing">Ticks:</label>
+                <input type="number" id="tick-spacing" value="2" step="0.5" min="0.1" max="20">
+
+                <button id="add-function-btn">+ Add Function</button>
+                <button id="plot-all-btn">Plot All</button>
+                <button id="help-toggle">?</button>
+            </div>
+
+            <div id="functions-container">
+                <!-- Function items will be added here dynamically -->
+            </div>
+
+            <div id="help-content">
+                <p><strong>Instructions:</strong></p>
+                <ul>
+                    <li>Add functions using the "+ Add Function" button.</li>
+                    <li>For <strong>3D</strong>: Use expressions like <code>sin(x)*cos(y)</code>. Variables are <code>x</code> and <code>y</code>.</li>
+                    <li>For <strong>2D</strong>: Use expressions like <code>sin(x)</code>. Variable is <code>x</code>. Curve is drawn on the XoY plane.</li>
+                    <li>Customize color and visibility for each function.</li>
+                    <li>Click "Plot All" to draw all enabled functions.</li>
+                    <li>Use View buttons for standard perspectives.</li>
+                </ul>
+                <p><strong>3D Examples:</strong></p>
+                <ul>
+                    <li>Paraboloid: <code>x^2 + y^2</code></li>
+                    <li>Saddle: <code>x^2 - y^2</code></li>
+                    <li>Ripple: <code>sin(sqrt(x^2 + y^2)) / (sqrt(x^2 + y^2) + 0.1)</code></li>
+                </ul>
+                <p><strong>2D Examples:</strong></p>
+                <ul>
+                    <li>Sine: <code>sin(x)</code></li>
+                    <li>Cosine: <code>cos(x)</code></li>
+                    <li>Parabola: <code>x^2</code></li>
+                    <li>Absolute Value: <code>abs(x)</code></li>
+                </ul>
+                <p><strong>Functions:</strong> <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>log</code> (ln), <code>log10</code>, <code>sqrt</code>, <code>exp</code>, <code>abs</code>.</p>
+                <p><strong>Operators:</strong> <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>^</code> (power).</p>
+            </div>
+            <div id="status">Ready. Add a function and click 'Plot All'.</div>
+            <div id="camera-info">Camera: Pos(0,0,0) Rot(0°,0°,0°)</div>
+
+            <div id="view-controls">
+                <span style="margin-right: 5px;">Views:</span>
+                <button id="view-top">Top</button>
+                <button id="view-bottom">Bottom</button>
+                <button id="view-front">Front</button>
+                <button id="view-back">Back</button>
+                <button id="view-left">Left</button>
+                <button id="view-right">Right</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.1/math.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Configuration & Constants (Moved for clarity) ---
+        const CONFIG = {
+            DEFAULT_GRID_SIZE: 30,
+            DEFAULT_AXIS_RANGE: 6,
+            DEFAULT_TICK_SPACING: 2,
+            DEFAULT_MODE: '3d',
+            DEFAULT_PROJECTION: 'perspective',
+            AXIS_RADIUS: 0.02,
+            TICK_RADIUS: 0.015,
+            FONT_SIZE: 0.3,
+            COLORS: {
+                X_AXIS: new THREE.Color(0xff3333),
+                Y_AXIS: new THREE.Color(0x33ff33),
+                Z_AXIS: new THREE.Color(0x5555ff),
+                BACKGROUND: new THREE.Color(0x121212)
+            },
+            CAMERA_DISTANCE_FACTOR: 2.5
+        };
+
+        // --- Global State Variables ---
+        let GRID_SIZE = CONFIG.DEFAULT_GRID_SIZE;
+        let GRID_RANGE = CONFIG.DEFAULT_AXIS_RANGE;
+        let TICK_SPACING = CONFIG.DEFAULT_TICK_SPACING;
+        let PLOT_MODE = CONFIG.DEFAULT_MODE;
+        let PROJECTION_TYPE = CONFIG.DEFAULT_PROJECTION;
+
+        let animationId = null;
+        let scenePlots = []; // Store references to plotted Line objects for easy removal
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = CONFIG.COLORS.BACKGROUND;
+
+        // --- Camera Setup ---
+        let perspectiveCamera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        let orthographicCamera;
+        let activeCamera = perspectiveCamera;
+        updateOrthographicCamera(); // Safe to call now as CONFIG is defined
+
+        perspectiveCamera.position.set(CONFIG.DEFAULT_AXIS_RANGE * CONFIG.CAMERA_DISTANCE_FACTOR,
+            CONFIG.DEFAULT_AXIS_RANGE * CONFIG.CAMERA_DISTANCE_FACTOR,
+            CONFIG.DEFAULT_AXIS_RANGE * CONFIG.CAMERA_DISTANCE_FACTOR);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // --- Controls ---
+        let controls = new OrbitControls(activeCamera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x606060, 2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // --- Axes, Labels, Ticks Group ---
+        let axesAndLabelsGroup = new THREE.Group();
+        scene.add(axesAndLabelsGroup);
+
+        // --- UI Elements Accessors ---
+        const uiContainer = document.getElementById('ui-container');
+        const uiToggleBtn = document.getElementById('ui-toggle-btn');
+        const modeSelect = document.getElementById('mode-select');
+        const projectionSelect = document.getElementById('projection-select');
+        const gridSizeInput = document.getElementById('grid-size');
+        const axisRangeInput = document.getElementById('axis-range');
+        const tickSpacingInput = document.getElementById('tick-spacing');
+        const addFunctionBtn = document.getElementById('add-function-btn');
+        const plotAllBtn = document.getElementById('plot-all-btn');
+        const helpToggle = document.getElementById('help-toggle');
+        const helpContent = document.getElementById('help-content');
+        const functionsContainer = document.getElementById('functions-container');
+        const statusDiv = document.getElementById('status');
+        const cameraInfoDiv = document.getElementById('camera-info');
+        const viewButtons = {
+            top: document.getElementById('view-top'),
+            bottom: document.getElementById('view-bottom'),
+            front: document.getElementById('view-front'),
+            back: document.getElementById('view-back'),
+            left: document.getElementById('view-left'),
+            right: document.getElementById('view-right')
+        };
+
+        // --- Helper Functions ---
+
+        // Toggle UI Panel
+        let isUiCollapsed = false;
+        uiToggleBtn.addEventListener('click', () => {
+            isUiCollapsed = !isUiCollapsed;
+            uiContainer.classList.toggle('collapsed', isUiCollapsed);
+            uiToggleBtn.textContent = isUiCollapsed ? '▶' : '◀';
+        });
+
+        // Toggle Help Content
+        helpToggle.addEventListener('click', () => {
+            helpContent.classList.toggle('show');
+        });
+
+        // --- Function to Create Axes, Labels, and Ticks ---
+        function createAxesAndLabels(range, tickSpacing) {
+            scene.remove(axesAndLabelsGroup);
+            axesAndLabelsGroup = new THREE.Group();
+            scene.add(axesAndLabelsGroup);
+
+            const makeTextSprite = (message, textColor) => {
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const fontsize = CONFIG.FONT_SIZE * 35;
+                context.font = `Bold ${fontsize}px Arial`;
+                const metrics = context.measureText(message);
+                const textWidth = metrics.width;
+                canvas.width = textWidth + 10;
+                canvas.height = fontsize + 10;
+
+                context.fillStyle = `rgba(0,0,0,0)`; // Transparent background
+                context.fillRect(0, 0, canvas.width, canvas.height);
+                context.fillStyle = `rgba(${textColor.r},${textColor.g},${textColor.b},${textColor.a})`;
+                context.fillText(message, 5, fontsize + 3);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(canvas.width / 50, canvas.height / 50, 1.0);
+                return sprite;
+            };
+
+            // Draw Axes
+            const xAxisGeo = new THREE.CylinderGeometry(CONFIG.AXIS_RADIUS, CONFIG.AXIS_RADIUS, range * 2, 16);
+            const xAxisMesh = new THREE.Mesh(xAxisGeo, new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.X_AXIS }));
+            xAxisMesh.rotation.z = Math.PI / 2;
+            xAxisMesh.position.x = range;
+            axesAndLabelsGroup.add(xAxisMesh);
+
+            const yAxisGeo = new THREE.CylinderGeometry(CONFIG.AXIS_RADIUS, CONFIG.AXIS_RADIUS, range * 2, 16);
+            const yAxisMesh = new THREE.Mesh(yAxisGeo, new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.Y_AXIS }));
+            yAxisMesh.position.y = range;
+            axesAndLabelsGroup.add(yAxisMesh);
+
+            if (PLOT_MODE === '3d') {
+                const zAxisGeo = new THREE.CylinderGeometry(CONFIG.AXIS_RADIUS, CONFIG.AXIS_RADIUS, range * 2, 16);
+                const zAxisMesh = new THREE.Mesh(zAxisGeo, new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.Z_AXIS }));
+                zAxisMesh.rotation.x = Math.PI / 2;
+                zAxisMesh.position.z = range;
+                axesAndLabelsGroup.add(zAxisMesh);
+            }
+
+            // Draw Ticks and Labels
+            for (let val = -range; val <= range; val += tickSpacing) {
+                if (Math.abs(val) < 0.001) continue;
+
+                const xTick = new THREE.Mesh(new THREE.SphereGeometry(CONFIG.TICK_RADIUS, 8, 8), new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.X_AXIS }));
+                xTick.position.set(val, 0, (PLOT_MODE === '3d') ? 0 : -0.05);
+                axesAndLabelsGroup.add(xTick);
+                const xLabel = makeTextSprite(val.toString(), { r: 255, g: 150, b: 150, a: 1.0 });
+                xLabel.position.set(val, -0.4, (PLOT_MODE === '3d') ? 0 : -0.1);
+                axesAndLabelsGroup.add(xLabel);
+
+                const yTick = new THREE.Mesh(new THREE.SphereGeometry(CONFIG.TICK_RADIUS, 8, 8), new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.Y_AXIS }));
+                yTick.position.set(0, val, (PLOT_MODE === '3d') ? 0 : -0.05);
+                axesAndLabelsGroup.add(yTick);
+                const yLabel = makeTextSprite(val.toString(), { r: 150, g: 255, b: 150, a: 1.0 });
+                yLabel.position.set(-0.5, val, (PLOT_MODE === '3d') ? 0 : -0.1);
+                axesAndLabelsGroup.add(yLabel);
+
+                if (PLOT_MODE === '3d') {
+                    const zTick = new THREE.Mesh(new THREE.SphereGeometry(CONFIG.TICK_RADIUS, 8, 8), new THREE.MeshBasicMaterial({ color: CONFIG.COLORS.Z_AXIS }));
+                    zTick.position.set(0, -0.05, val);
+                    axesAndLabelsGroup.add(zTick);
+                    const zLabel = makeTextSprite(val.toString(), { r: 150, g: 150, b: 255, a: 1.0 });
+                    zLabel.position.set(0, -0.6, val);
+                    axesAndLabelsGroup.add(zLabel);
+                }
+            }
+
+            // Draw Axis Labels
+            const xLabelSprite = makeTextSprite("X", { r: 255, g: 50, b: 50, a: 1.0 });
+            xLabelSprite.scale.multiplyScalar(1.2);
+            xLabelSprite.position.set(range + 0.7, -0.7, (PLOT_MODE === '3d') ? 0 : -0.1);
+            axesAndLabelsGroup.add(xLabelSprite);
+
+            const yLabelSprite = makeTextSprite("Y", { r: 50, g: 255, b: 50, a: 1.0 });
+            yLabelSprite.scale.multiplyScalar(1.2);
+            yLabelSprite.position.set(-0.7, range + 0.7, (PLOT_MODE === '3d') ? 0 : -0.1);
+            axesAndLabelsGroup.add(yLabelSprite);
+
+            if (PLOT_MODE === '3d') {
+                const zLabelSprite = makeTextSprite("Z", { r: 100, g: 150, b: 255, a: 1.0 });
+                zLabelSprite.scale.multiplyScalar(1.2);
+                zLabelSprite.position.set(0, -0.9, range + 0.7);
+                axesAndLabelsGroup.add(zLabelSprite);
+            }
+        }
+
+        // --- Function to Compile User Input ---
+        function compileUserFunction(expressionString) {
+            try {
+                const node = math.parse(expressionString);
+                const code = node.compile(math);
+                return code;
+            } catch (err) {
+                console.error("Compilation error:", err);
+                statusDiv.textContent = `Error compiling function: ${err.message}`;
+                statusDiv.style.color = "#f44336";
+                return null;
+            }
+        }
+
+        // --- Function Item Management ---
+        function addFunctionItem(expr = "", color = "#00FFFF") {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'function-item';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = (PLOT_MODE === '3d') ? "e.g., x^2 + y^2" : "e.g., sin(x)";
+            input.value = expr;
+
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.value = color;
+
+            const visibleCheckbox = document.createElement('input');
+            visibleCheckbox.type = 'checkbox';
+            visibleCheckbox.checked = true;
+            visibleCheckbox.title = "Visible";
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '×';
+            deleteBtn.className = 'small';
+            deleteBtn.onclick = () => itemDiv.remove();
+
+            itemDiv.appendChild(input);
+            itemDiv.appendChild(colorPicker);
+            itemDiv.appendChild(visibleCheckbox);
+            itemDiv.appendChild(deleteBtn);
+            functionsContainer.appendChild(itemDiv);
+        }
+
+        addFunctionBtn.addEventListener('click', () => addFunctionItem());
+
+        // --- Optimized Main Plotting Logic ---
+        async function plotAllFunctions() {
+            cancelAnimationFrame(animationId); // Stop any ongoing animation/render loop
+
+            // Clear previous plots efficiently
+            scenePlots.forEach(plot => scene.remove(plot));
+            scenePlots = [];
+
+            // Get current settings
+            GRID_SIZE = parseInt(gridSizeInput.value) || CONFIG.DEFAULT_GRID_SIZE;
+            GRID_RANGE = parseFloat(axisRangeInput.value) || CONFIG.DEFAULT_AXIS_RANGE;
+            TICK_SPACING = parseFloat(tickSpacingInput.value) || CONFIG.DEFAULT_TICK_SPACING;
+            PLOT_MODE = modeSelect.value;
+            PROJECTION_TYPE = projectionSelect.value;
+            switchCameraType(PROJECTION_TYPE); // Switch camera if needed
+            updateOrthographicCamera(); // Ensure ortho cam matches new range
+
+            createAxesAndLabels(GRID_RANGE, TICK_SPACING);
+
+            const functionItems = functionsContainer.querySelectorAll('.function-item');
+            if (functionItems.length === 0) {
+                statusDiv.textContent = "No functions to plot.";
+                statusDiv.style.color = "#f44336";
+                renderLoop(); // Continue rendering
+                return;
+            }
+
+            statusDiv.textContent = "Calculating and plotting functions...";
+            statusDiv.style.color = "#FFC107";
+
+            try {
+                let allSuccessful = true;
+                for (const item of functionItems) {
+                    const input = item.querySelector('input[type="text"]');
+                    const colorPicker = item.querySelector('input[type="color"]');
+                    const visibleCheckbox = item.querySelector('input[type="checkbox"]');
+
+                    if (!visibleCheckbox.checked) continue;
+
+                    const exprStr = input.value.trim();
+                    if (!exprStr) continue;
+
+                    const compiledFunc = compileUserFunction(exprStr);
+                    if (!compiledFunc) {
+                        allSuccessful = false;
+                        continue;
+                    }
+
+                    const scope = { x: 0, y: 0 };
+                    const positions = [];
+
+                    if (PLOT_MODE === '3d') {
+                        // --- 3D Surface Plotting ---
+                        const material = new THREE.LineBasicMaterial({ color: new THREE.Color(colorPicker.value) });
+                        const group = new THREE.Group();
+                        scene.add(group);
+
+                        // Horizontal Lines
+                        for (let j = 0; j <= GRID_SIZE; j++) {
+                            const yPos = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                            const linePositions = [];
+                            for (let i = 0; i <= GRID_SIZE; i++) {
+                                const xPos = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                scope.x = xPos;
+                                scope.y = yPos;
+                                let zVal;
+                                try {
+                                    zVal = compiledFunc.evaluate(scope);
+                                    if (!isFinite(zVal)) zVal = NaN;
+                                } catch (e) { zVal = NaN; }
+                                if (!isNaN(zVal)) {
+                                    linePositions.push(xPos, yPos, zVal);
+                                } else if (linePositions.length > 0) {
+                                    // Break line if NaN encountered
+                                    if (linePositions.length >= 6) { // Need at least 2 points
+                                        const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                                        group.add(new THREE.Line(geom, material));
+                                    }
+                                    linePositions.length = 0; // Reset for next segment
+                                }
+                            }
+                            // Add final segment of the row
+                            if (linePositions.length >= 6) {
+                                const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                                group.add(new THREE.Line(geom, material));
+                            }
+                        }
+
+                        // Vertical Lines
+                        for (let i = 0; i <= GRID_SIZE; i++) {
+                            const xPos = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                            const linePositions = [];
+                            for (let j = 0; j <= GRID_SIZE; j++) {
+                                const yPos = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                scope.x = xPos;
+                                scope.y = yPos;
+                                let zVal;
+                                try {
+                                    zVal = compiledFunc.evaluate(scope);
+                                    if (!isFinite(zVal)) zVal = NaN;
+                                } catch (e) { zVal = NaN; }
+                                if (!isNaN(zVal)) {
+                                    linePositions.push(xPos, yPos, zVal);
+                                } else if (linePositions.length > 0) {
+                                    if (linePositions.length >= 6) {
+                                        const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                                        group.add(new THREE.Line(geom, material));
+                                    }
+                                    linePositions.length = 0;
+                                }
+                            }
+                            if (linePositions.length >= 6) {
+                                const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                                group.add(new THREE.Line(geom, material));
+                            }
+                        }
+                        scenePlots.push(group);
+
+                    } else if (PLOT_MODE === '2d') {
+                        // --- 2D Curve Plotting ---
+                        const material = new THREE.LineBasicMaterial({ color: new THREE.Color(colorPicker.value) });
+                        const linePositions = [];
+
+                        for (let i = 0; i <= GRID_SIZE; i++) {
+                            const xVal = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                            scope.x = xVal;
+                            scope.y = undefined; // Ensure y is not used
+                            let yVal;
+                            try {
+                                yVal = compiledFunc.evaluate(scope);
+                                if (!isFinite(yVal)) yVal = NaN;
+                            } catch (e) { yVal = NaN; }
+
+                            if (!isNaN(yVal)) {
+                                linePositions.push(xVal, yVal, 0);
+                            } else if (linePositions.length > 0) {
+                                // Break line on NaN
+                                if (linePositions.length >= 6) {
+                                    const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                                    const line = new THREE.Line(geom, material);
+                                    scene.add(line);
+                                    scenePlots.push(line);
+                                }
+                                linePositions.length = 0;
+                            }
+                        }
+                        // Add final segment
+                        if (linePositions.length >= 6) {
+                            const geom = new THREE.BufferGeometry().setAttribute('position', new THREE.Float32BufferAttribute(linePositions, 3));
+                            const line = new THREE.Line(geom, material);
+                            scene.add(line);
+                            scenePlots.push(line);
+                        }
+                    }
+                } // End for loop over function items
+
+                statusDiv.textContent = allSuccessful ? "Plotting complete." : "Plotting complete (some functions had errors).";
+                statusDiv.style.color = "#4CAF50";
+
+            } catch (genErr) {
+                console.error("Error during plotting:", genErr);
+                statusDiv.textContent = `Unexpected error: ${genErr.message}`;
+                statusDiv.style.color = "#f44336";
+            } finally {
+                renderLoop(); // Resume continuous rendering
+            }
+        }
+
+        // --- Continuous Rendering Loop ---
+        function renderLoop() {
+            controls.update();
+            renderer.render(scene, activeCamera);
+
+            const pos = activeCamera.position;
+            const rot = activeCamera.rotation;
+            const rx = THREE.MathUtils.radToDeg(rot.x).toFixed(1);
+            const ry = THREE.MathUtils.radToDeg(rot.y).toFixed(1);
+            const rz = THREE.MathUtils.radToDeg(rot.z).toFixed(1);
+            cameraInfoDiv.textContent = `Camera: Pos(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) | Rot(${rx}°, ${ry}°, ${rz}°)`;
+
+            animationId = requestAnimationFrame(renderLoop);
+        }
+
+        // --- Camera Type Switching (Improved) ---
+        function switchCameraType(type) {
+            const oldCamera = activeCamera;
+            if (type === 'orthographic') {
+                activeCamera = orthographicCamera;
+            } else {
+                activeCamera = perspectiveCamera;
+            }
+
+            if (activeCamera !== oldCamera) {
+                // Update controls' reference to the camera
+                controls.object = activeCamera;
+                controls.update();
+                // Copy properties from old camera to new one for smooth transition
+                activeCamera.position.copy(oldCamera.position);
+                activeCamera.rotation.copy(oldCamera.rotation);
+                if (activeCamera.isPerspectiveCamera) {
+                    activeCamera.fov = oldCamera.fov;
+                    activeCamera.updateProjectionMatrix();
+                }
+                // Note: Ortho camera's projection matrix is updated elsewhere (resize/updateOrtho)
+            }
+        }
+
+        // --- Orthographic Camera Update ---
+        function updateOrthographicCamera() {
+            const frustumSize = GRID_RANGE * 2;
+            const aspect = window.innerWidth / window.innerHeight;
+            if (!orthographicCamera) {
+                orthographicCamera = new THREE.OrthographicCamera(
+                    -frustumSize * aspect / 2, frustumSize * aspect / 2,
+                    frustumSize / 2, -frustumSize / 2,
+                    0.1, 1000
+                );
+                // Set initial ortho position (will be overridden by view/setView)
+                orthographicCamera.position.copy(perspectiveCamera.position);
+                orthographicCamera.lookAt(0, 0, 0);
+            } else {
+                orthographicCamera.left = -frustumSize * aspect / 2;
+                orthographicCamera.right = frustumSize * aspect / 2;
+                orthographicCamera.top = frustumSize / 2;
+                orthographicCamera.bottom = -frustumSize / 2;
+                orthographicCamera.updateProjectionMatrix();
+            }
+        }
+
+        // --- Six View Functions ---
+        function setView(direction) {
+            const distance = GRID_RANGE * CONFIG.CAMERA_DISTANCE_FACTOR;
+            let targetPosition, targetUp;
+
+            switch (direction) {
+                case 'top': targetPosition = new THREE.Vector3(0, distance, 0); targetUp = new THREE.Vector3(0, 0, -1); break;
+                case 'bottom': targetPosition = new THREE.Vector3(0, -distance, 0); targetUp = new THREE.Vector3(0, 0, 1); break;
+                case 'front': targetPosition = new THREE.Vector3(0, 0, distance); targetUp = new THREE.Vector3(0, 1, 0); break;
+                case 'back': targetPosition = new THREE.Vector3(0, 0, -distance); targetUp = new THREE.Vector3(0, 1, 0); break;
+                case 'left': targetPosition = new THREE.Vector3(-distance, 0, 0); targetUp = new THREE.Vector3(0, 1, 0); break;
+                case 'right': targetPosition = new THREE.Vector3(distance, 0, 0); targetUp = new THREE.Vector3(0, 1, 0); break;
+                default: return;
+            }
+
+            // Force orthographic for clean views
+            if (PROJECTION_TYPE !== 'orthographic') {
+                projectionSelect.value = 'orthographic';
+                switchCameraType('orthographic');
+            }
+
+            // Set camera position and orientation
+            activeCamera.position.copy(targetPosition);
+            activeCamera.up.copy(targetUp);
+            activeCamera.lookAt(0, 0, 0);
+            controls.target.set(0, 0, 0);
+            controls.update();
+        }
+
+        // Attach event listeners to view buttons
+        Object.keys(viewButtons).forEach(key => {
+            viewButtons[key].addEventListener('click', () => setView(key));
+        });
+
+        // --- Event Listeners ---
+        plotAllBtn.addEventListener('click', plotAllFunctions);
+
+        [modeSelect, gridSizeInput, axisRangeInput, tickSpacingInput].forEach(el => {
+            el.addEventListener('change', () => {
+                if (el === modeSelect) {
+                    const placeholders = functionsContainer.querySelectorAll('input[type="text"]');
+                    placeholders.forEach(p => p.placeholder = (modeSelect.value === '3d') ? "e.g., x^2 + y^2" : "e.g., sin(x)");
+                }
+                plotAllFunctions(); // Re-plot on setting change
+            });
+        });
+
+        projectionSelect.addEventListener('change', () => {
+            switchCameraType(projectionSelect.value);
+        });
+
+        window.addEventListener('resize', () => {
+            perspectiveCamera.aspect = window.innerWidth / window.innerHeight;
+            perspectiveCamera.updateProjectionMatrix();
+            updateOrthographicCamera();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Initial Setup ---
+        addFunctionItem("sin(sqrt(x^2 + y^2))", "#00FFFF");
+        addFunctionItem("x^2 + y^2", "#FF4081");
+        addFunctionItem("sin(x)", "#7CFC00");
+
+        // Start continuous rendering loop
+        renderLoop();
+
+    </script>
+</body>
+</html>

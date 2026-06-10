@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>真实物理齿轮传动仿真（渐开线齿形 + 锥齿轮） v3</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #000;
+            color: #fff;
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.7);
+            padding: 12px;
+            border-radius: 8px;
+            max-width: 300px;
+            z-index: 100;
+        }
+
+        button, select, input {
+            margin: 4px 4px 4px 0;
+            padding: 4px 8px;
+            background: #222;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+        }
+
+        .info {
+            font-size: 12px;
+            margin-top: 8px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <button id="add-spur">+ 直齿轮</button>
+        <button id="add-idler">+ 惰轮</button>
+        <button id="add-bevel">+ 锥齿轮</button>
+        <button id="reset">↺ 重置</button><br />
+        <label>驱动轮 RPM: <input type="range" id="rpm" min="-120" max="120" value="60"></label>
+        <div class="info">拖动旋转 | 滚轮缩放 | 齿轮自动咬合（无穿透）</div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // ======================
+        // 渐开线直齿轮生成器（简化版）
+        // 基于标准齿轮公式：压力角=20°, 齿顶高系数=1.0
+        // ======================
+        function createSpurGear(teeth, radius, width = 0.3) {
+            const pressureAngle = Math.PI / 9; // 20°
+            const addendum = 1.0 * (radius / teeth); // 齿顶高
+            const dedendum = 1.25 * (radius / teeth); // 齿根高
+            const pitchRadius = radius;
+            const outerRadius = pitchRadius + addendum;
+            const rootRadius = pitchRadius - dedendum;
+
+            const segments = 64;
+            const points = [];
+
+            for (let i = 0; i <= segments; i++) {
+                const angle = (i / segments) * Math.PI * 2;
+                let r;
+                if (i % 2 === 0) {
+                    // 齿顶
+                    r = outerRadius;
+                } else {
+                    // 齿根（用渐开线近似）
+                    const baseRadius = pitchRadius * Math.cos(pressureAngle);
+                    const involuteAngle = Math.sqrt((outerRadius / baseRadius) ** 2 - 1) - Math.acos(baseRadius / outerRadius);
+                    r = Math.max(rootRadius, baseRadius * Math.sqrt(1 + (involuteAngle - angle % (Math.PI / teeth)) ** 2));
+                }
+                points.push(new THREE.Vector2(Math.cos(angle) * r, Math.sin(angle) * r));
+            }
+
+            const shape = new THREE.Shape(points);
+            const extrudeSettings = {
+                steps: 1,
+                depth: width,
+                bevelEnabled: false
+            };
+            const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings);
+            return geometry;
+        }
+
+        // ======================
+        // 锥齿轮生成器（简化圆锥台）
+        // ======================
+        function createBevelGear(teeth, radius, width = 0.3) {
+            const coneHeight = width;
+            const geometry = new THREE.ConeGeometry(radius, coneHeight, teeth * 2);
+            geometry.rotateX(Math.PI);
+            return geometry;
+        }
+
+        // ======================
+        // 主程序
+        // ======================
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock();
+        let gearObjects = [];
+        let gearChain = []; // { type: 'spur'|'idler'|'bevel', teeth, isDriver, rpm, position, rotationAxis }
+
+        const MODULE = 0.05; // 半径 = teeth * MODULE
+
+        window.addEventListener('load', init);
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x111122);
+            scene.fog = new THREE.Fog(0x111122, 10, 30);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 8, 15);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            // 光照
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(10, 15, 10);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            // 地面
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(50, 50),
+                new THREE.MeshStandardMaterial({ color: 0x333344, roughness: 0.9 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+            resetGears();
+            setupUI();
+
+            window.addEventListener('resize', onWindowResize);
+            animate();
+        }
+
+        function resetGears() {
+            gearObjects.forEach(obj => scene.remove(obj));
+            gearObjects = [];
+
+            // 默认配置：直齿轮 + 惰轮 + 锥齿轮演示
+            gearChain = [
+                { type: 'spur', teeth: 20, isDriver: true, rpm: 60 },
+                { type: 'idler', teeth: 16, isDriver: false },
+                { type: 'spur', teeth: 32, isDriver: false },
+                { type: 'bevel', teeth: 24, isDriver: false, axis: 'y' } // 垂直轴
+            ];
+
+            layoutAndBuildGears();
+        }
+
+        function layoutAndBuildGears() {
+            gearObjects.forEach(obj => scene.remove(obj));
+            gearObjects = [];
+
+            let x = -6;
+            let y = 0;
+            let z = 0;
+
+            for (let i = 0; i < gearChain.length; i++) {
+                const g = gearChain[i];
+                const radius = g.teeth * MODULE;
+
+                // 设置位置
+                if (g.type === 'bevel' && g.axis === 'y') {
+                    // 锥齿轮放在上方，垂直啮合
+                    g.position = new THREE.Vector3(x, radius + 1.5, 0);
+                    g.rotationAxis = new THREE.Vector3(0, 1, 0); // 绕Y轴转
+                } else {
+                    g.position = new THREE.Vector3(x, 0, 0);
+                    g.rotationAxis = new THREE.Vector3(0, 0, 1); // 绕Z轴转
+                }
+
+                // 创建网格
+                let geometry;
+                if (g.type === 'bevel') {
+                    geometry = createBevelGear(g.teeth, radius);
+                } else {
+                    geometry = createSpurGear(g.teeth, radius);
+                }
+
+                const material = new THREE.MeshStandardMaterial({
+                    color: g.isDriver ? 0xff5252 : (g.type === 'idler' ? 0x8888ff : 0x4fc3f7),
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+
+                const mesh = new THREE.Mesh(geometry, material);
+                mesh.position.copy(g.position);
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                // 锥齿轮需要旋转90度
+                if (g.type === 'bevel') {
+                    mesh.rotation.x = Math.PI / 2;
+                }
+
+                scene.add(mesh);
+                gearObjects.push({
+                    mesh: mesh,
+                    data: g,
+                    angle: 0
+                });
+
+                // 下一个齿轮位置（仅对水平齿轮）
+                if (g.type !== 'bevel') {
+                    if (i < gearChain.length - 1 && gearChain[i + 1].type !== 'bevel') {
+                        const nextRadius = gearChain[i + 1].teeth * MODULE;
+                        x += radius + nextRadius;
+                    }
+                }
+            }
+
+            // 计算传动比（仅水平链）
+            computeTransmission();
+        }
+
+        function computeTransmission() {
+            // 找到第一个驱动轮
+            const driverIndex = gearChain.findIndex(g => g.isDriver && g.type !== 'bevel');
+            if (driverIndex === -1) return;
+
+            // 重置速度
+            gearChain.forEach(g => g.rpm = 0);
+            gearChain[driverIndex].rpm = parseFloat(document.getElementById('rpm').value) || 60;
+
+            // 向右传播（忽略锥齿轮）
+            for (let i = driverIndex; i < gearChain.length - 1; i++) {
+                const curr = gearChain[i];
+                const next = gearChain[i + 1];
+                if (next.type === 'bevel') continue;
+                next.rpm = -curr.rpm * (curr.teeth / next.teeth);
+            }
+
+            // 向左传播
+            for (let i = driverIndex; i > 0; i--) {
+                const curr = gearChain[i];
+                const prev = gearChain[i - 1];
+                if (prev.type === 'bevel') continue;
+                prev.rpm = -curr.rpm * (curr.teeth / prev.teeth);
+            }
+
+            // 锥齿轮：假设与前一个直齿轮啮合，转速相同但方向垂直
+            for (let i = 0; i < gearChain.length; i++) {
+                if (gearChain[i].type === 'bevel') {
+                    if (i > 0 && gearChain[i - 1].type !== 'bevel') {
+                        gearChain[i].rpm = -gearChain[i - 1].rpm * (gearChain[i - 1].teeth / gearChain[i].teeth);
+                    }
+                }
+            }
+        }
+
+        function addGear(type) {
+            const teeth = type === 'bevel' ? 20 : (Math.random() * 20 + 15) | 0;
+            gearChain.push({
+                type: type,
+                teeth: teeth,
+                isDriver: false,
+                rpm: 0
+            });
+            layoutAndBuildGears();
+        }
+
+        function setupUI() {
+            document.getElementById('add-spur').addEventListener('click', () => addGear('spur'));
+            document.getElementById('add-idler').addEventListener('click', () => addGear('idler'));
+            document.getElementById('add-bevel').addEventListener('click', () => addGear('bevel'));
+            document.getElementById('reset').addEventListener('click', resetGears);
+            document.getElementById('rpm').addEventListener('input', (e) => {
+                const driver = gearChain.find(g => g.isDriver);
+                if (driver) driver.rpm = parseFloat(e.target.value);
+                computeTransmission();
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            gearObjects.forEach(obj => {
+                const rpm = obj.data.rpm || 0;
+                const radPerSec = (rpm / 60) * 2 * Math.PI;
+                obj.angle += radPerSec * delta;
+
+                // 应用旋转
+                obj.mesh.quaternion.setFromAxisAngle(obj.data.rotationAxis, obj.angle);
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

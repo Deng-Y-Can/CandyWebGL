@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Multi-Function Interactive 3D/2D Plotter v4</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            background-color: rgba(30, 30, 30, 0.9);
+            padding: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            max-width: 95vw;
+            backdrop-filter: blur(5px);
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .input-group {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .function-item {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border: 1px solid #444;
+            border-radius: 5px;
+            background-color: #222;
+            margin-bottom: 8px;
+        }
+
+            .function-item input[type="text"] {
+                flex-grow: 1;
+                min-width: 150px;
+            }
+
+        label {
+            white-space: nowrap;
+        }
+
+        input[type="text"], select {
+            padding: 6px 10px;
+            font-size: 15px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        input[type="color"] {
+            width: 40px;
+            height: 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        input[type="number"] {
+            padding: 6px;
+            width: 60px;
+            font-size: 15px;
+            border: 1px solid #555;
+            border-radius: 4px;
+            background-color: #333;
+            color: white;
+        }
+
+        button {
+            padding: 7px 12px;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #bb86fc;
+            color: #121212;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+            button:hover {
+                background-color: #9a67ea;
+            }
+
+            button.small {
+                padding: 5px 8px;
+                font-size: 12px;
+            }
+
+        #help-toggle {
+            background: none;
+            border: 1px solid #666;
+            color: #ccc;
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+            #help-toggle:hover {
+                background-color: rgba(255, 255, 255, 0.1);
+            }
+
+        #help-content {
+            margin-top: 10px;
+            font-size: 0.9em;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease-in-out;
+        }
+
+            #help-content.show {
+                max-height: 500px;
+            }
+
+            #help-content ul {
+                margin-top: 5px;
+                margin-bottom: 10px;
+                padding-left: 20px;
+            }
+
+            #help-content code {
+                background-color: #444;
+                padding: 2px 4px;
+                border-radius: 3px;
+                font-size: 0.95em;
+            }
+
+        #status, #camera-info {
+            margin-top: 8px;
+            font-style: italic;
+            color: #aaa;
+            word-break: break-all;
+            font-size: 0.9em;
+        }
+
+        #camera-info {
+            font-style: normal;
+            font-size: 0.85em;
+            color: #888;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui-container">
+        <div class="input-group">
+            <label for="mode-select">Mode:</label>
+            <select id="mode-select">
+                <option value="3d">3D Surface</option>
+                <option value="2d">2D Curve (on XoY plane)</option>
+            </select>
+
+            <label for="grid-size">Grid:</label>
+            <input type="number" id="grid-size" value="30" min="5" max="100">
+
+            <label for="axis-range">Range:</label>
+            <input type="number" id="axis-range" value="6" step="0.5" min="1" max="50">
+
+            <label for="tick-spacing">Ticks:</label>
+            <input type="number" id="tick-spacing" value="2" step="0.5" min="0.1" max="20">
+
+            <button id="add-function-btn">+ Add Function</button>
+            <button id="plot-all-btn">Plot All</button>
+            <button id="help-toggle">?</button>
+        </div>
+
+        <div id="functions-container">
+            <!-- Function items will be added here dynamically -->
+        </div>
+
+        <div id="help-content">
+            <p><strong>Instructions:</strong></p>
+            <ul>
+                <li>Add functions using the "+ Add Function" button.</li>
+                <li>For <strong>3D</strong>: Use expressions like <code>sin(x)*cos(y)</code>. Variables are <code>x</code> and <code>y</code>.</li>
+                <li>For <strong>2D</strong>: Use expressions like <code>sin(x)</code>. Variable is <code>x</code>. Curve is drawn on the XoY plane.</li>
+                <li>Customize color and visibility for each function.</li>
+                <li>Click "Plot All" to draw all enabled functions.</li>
+            </ul>
+            <p><strong>3D Examples:</strong></p>
+            <ul>
+                <li>Paraboloid: <code>x^2 + y^2</code></li>
+                <li>Saddle: <code>x^2 - y^2</code></li>
+                <li>Ripple: <code>sin(sqrt(x^2 + y^2)) / (sqrt(x^2 + y^2) + 0.1)</code></li>
+            </ul>
+            <p><strong>2D Examples:</strong></p>
+            <ul>
+                <li>Sine: <code>sin(x)</code></li>
+                <li>Cosine: <code>cos(x)</code></li>
+                <li>Parabola: <code>x^2</code></li>
+                <li>Absolute Value: <code>abs(x)</code></li>
+            </ul>
+            <p><strong>Functions:</strong> <code>sin</code>, <code>cos</code>, <code>tan</code>, <code>asin</code>, <code>acos</code>, <code>atan</code>, <code>log</code> (ln), <code>log10</code>, <code>sqrt</code>, <code>exp</code>, <code>abs</code>.</p>
+            <p><strong>Operators:</strong> <code>+</code>, <code>-</code>, <code>*</code>, <code>/</code>, <code>^</code> (power).</p>
+        </div>
+        <div id="status">Ready. Add a function and click 'Plot All'.</div>
+        <div id="camera-info">Camera: Pos(0,0,0) Rot(0°,0°,0°)</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.1/math.min.js"></script>
+    <script type="importmap">
+        {
+          "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+            "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+          }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // --- Scene Setup ---
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x121212);
+
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(8, 8, 8);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+
+        // --- Lighting ---
+        const ambientLight = new THREE.AmbientLight(0x606060, 2);
+        scene.add(ambientLight);
+        const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+        directionalLight.position.set(5, 10, 7);
+        scene.add(directionalLight);
+
+        // --- Axes, Labels, Ticks Group ---
+        let axesAndLabelsGroup = new THREE.Group();
+        scene.add(axesAndLabelsGroup);
+
+        // --- UI Elements ---
+        const modeSelect = document.getElementById('mode-select');
+        const gridSizeInput = document.getElementById('grid-size');
+        const axisRangeInput = document.getElementById('axis-range');
+        const tickSpacingInput = document.getElementById('tick-spacing');
+        const addFunctionBtn = document.getElementById('add-function-btn');
+        const plotAllBtn = document.getElementById('plot-all-btn');
+        const helpToggle = document.getElementById('help-toggle');
+        const helpContent = document.getElementById('help-content');
+        const functionsContainer = document.getElementById('functions-container');
+        const statusDiv = document.getElementById('status');
+        const cameraInfoDiv = document.getElementById('camera-info');
+
+        // Toggle Help Content
+        helpToggle.addEventListener('click', () => {
+            helpContent.classList.toggle('show');
+        });
+
+        // --- Plotting Variables ---
+        let animationId = null;
+        let isAnimating = false;
+        let plotQueue = []; // Queue of {lineObjects, vertices, index} to animate
+        let globalCurrentIndex = 0; // Index across the entire queue
+
+        // Default settings
+        let GRID_SIZE = parseInt(gridSizeInput.value) || 30;
+        let GRID_RANGE = parseFloat(axisRangeInput.value) || 6;
+        let TICK_SPACING = parseFloat(tickSpacingInput.value) || 2;
+        let PLOT_MODE = modeSelect.value; // '3d' or '2d'
+
+        // --- Function to Create Axes, Labels, and Ticks ---
+        function createAxesAndLabels(range, tickSpacing) {
+            scene.remove(axesAndLabelsGroup);
+            axesAndLabelsGroup = new THREE.Group();
+            scene.add(axesAndLabelsGroup);
+
+            const axisRadius = 0.02;
+            const tickRadius = 0.015;
+            const fontSize = 0.3;
+
+            const red = new THREE.Color(0xff3333);
+            const green = new THREE.Color(0x33ff33);
+            const blue = new THREE.Color(0x5555ff);
+
+            const makeTextSprite = (message, parameters = {}) => {
+                const fontface = parameters.fontface || "Arial";
+                const fontsize = parameters.fontsize || fontSize;
+                const backgroundColor = parameters.backgroundColor || { r: 0, g: 0, b: 0, a: 0 };
+                const borderColor = parameters.borderColor || { r: 0, g: 0, b: 0, a: 0 };
+                const textColor = parameters.textColor || { r: 255, g: 255, b: 255, a: 1.0 };
+
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                context.font = `Bold ${fontsize}px ${fontface}`;
+
+                const metrics = context.measureText(message);
+                const textWidth = metrics.width;
+
+                canvas.width = textWidth + 10;
+                canvas.height = fontsize + 10;
+
+                context.fillStyle = `rgba(${backgroundColor.r},${backgroundColor.g},${backgroundColor.b},${backgroundColor.a})`;
+                context.fillRect(0, 0, canvas.width, canvas.height);
+
+                context.strokeStyle = `rgba(${borderColor.r},${borderColor.g},${borderColor.b},${borderColor.a})`;
+                context.strokeRect(0, 0, canvas.width, canvas.height);
+
+                context.fillStyle = `rgba(${textColor.r},${textColor.g},${textColor.b},${textColor.a})`;
+                context.fillText(message, 5, fontsize + 3);
+
+                const texture = new THREE.CanvasTexture(canvas);
+                texture.minFilter = THREE.LinearFilter;
+
+                const spriteMaterial = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+                const sprite = new THREE.Sprite(spriteMaterial);
+                sprite.scale.set(canvas.width / 50, canvas.height / 50, 1.0);
+                return sprite;
+            };
+
+            // Draw Axes
+            const xAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+            const xAxisMat = new THREE.MeshBasicMaterial({ color: red });
+            const xAxisMesh = new THREE.Mesh(xAxisGeo, xAxisMat);
+            xAxisMesh.rotation.z = Math.PI / 2;
+            xAxisMesh.position.x = range;
+            axesAndLabelsGroup.add(xAxisMesh);
+
+            const yAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+            const yAxisMat = new THREE.MeshBasicMaterial({ color: green });
+            const yAxisMesh = new THREE.Mesh(yAxisGeo, yAxisMat);
+            yAxisMesh.position.y = range;
+            axesAndLabelsGroup.add(yAxisMesh);
+
+            if (PLOT_MODE === '3d') {
+                const zAxisGeo = new THREE.CylinderGeometry(axisRadius, axisRadius, range * 2, 16);
+                const zAxisMat = new THREE.MeshBasicMaterial({ color: blue });
+                const zAxisMesh = new THREE.Mesh(zAxisGeo, zAxisMat);
+                zAxisMesh.rotation.x = Math.PI / 2;
+                zAxisMesh.position.z = range;
+                axesAndLabelsGroup.add(zAxisMesh);
+            }
+
+            // Draw Ticks and Labels
+            for (let val = -range; val <= range; val += tickSpacing) {
+                if (Math.abs(val) < 0.001) continue;
+
+                const xTickGeo = new THREE.SphereGeometry(tickRadius, 8, 8);
+                const xTickMat = new THREE.MeshBasicMaterial({ color: red });
+                const xTick = new THREE.Mesh(xTickGeo, xTickMat);
+                xTick.position.set(val, 0, (PLOT_MODE === '3d') ? 0 : -0.05);
+                axesAndLabelsGroup.add(xTick);
+
+                const xLabel = makeTextSprite(val.toString(), { textColor: { r: 255, g: 150, b: 150, a: 1.0 }, fontsize: fontSize * 35 });
+                xLabel.position.set(val, -0.4, (PLOT_MODE === '3d') ? 0 : -0.1);
+                axesAndLabelsGroup.add(xLabel);
+
+                const yTickGeo = new THREE.SphereGeometry(tickRadius, 8, 8);
+                const yTickMat = new THREE.MeshBasicMaterial({ color: green });
+                const yTick = new THREE.Mesh(yTickGeo, yTickMat);
+                yTick.position.set(0, val, (PLOT_MODE === '3d') ? 0 : -0.05);
+                axesAndLabelsGroup.add(yTick);
+
+                const yLabel = makeTextSprite(val.toString(), { textColor: { r: 150, g: 255, b: 150, a: 1.0 }, fontsize: fontSize * 35 });
+                yLabel.position.set(-0.5, val, (PLOT_MODE === '3d') ? 0 : -0.1);
+                axesAndLabelsGroup.add(yLabel);
+
+                if (PLOT_MODE === '3d') {
+                    const zTickGeo = new THREE.SphereGeometry(tickRadius, 8, 8);
+                    const zTickMat = new THREE.MeshBasicMaterial({ color: blue });
+                    const zTick = new THREE.Mesh(zTickGeo, zTickMat);
+                    zTick.position.set(0, -0.05, val);
+                    axesAndLabelsGroup.add(zTick);
+
+                    const zLabel = makeTextSprite(val.toString(), { textColor: { r: 150, g: 150, b: 255, a: 1.0 }, fontsize: fontSize * 35 });
+                    zLabel.position.set(0, -0.6, val);
+                    axesAndLabelsGroup.add(zLabel);
+                }
+            }
+
+            // Draw Axis Labels
+            const xLabelSprite = makeTextSprite("X", { textColor: { r: 255, g: 50, b: 50, a: 1.0 }, fontsize: fontSize * 60 });
+            xLabelSprite.position.set(range + 0.7, -0.7, (PLOT_MODE === '3d') ? 0 : -0.1);
+            axesAndLabelsGroup.add(xLabelSprite);
+
+            const yLabelSprite = makeTextSprite("Y", { textColor: { r: 50, g: 255, b: 50, a: 1.0 }, fontsize: fontSize * 60 });
+            yLabelSprite.position.set(-0.7, range + 0.7, (PLOT_MODE === '3d') ? 0 : -0.1);
+            axesAndLabelsGroup.add(yLabelSprite);
+
+            if (PLOT_MODE === '3d') {
+                const zLabelSprite = makeTextSprite("Z", { textColor: { r: 100, g: 150, b: 255, a: 1.0 }, fontsize: fontSize * 60 });
+                zLabelSprite.position.set(0, -0.9, range + 0.7);
+                axesAndLabelsGroup.add(zLabelSprite);
+            }
+        }
+
+        // --- Function to Compile User Input ---
+        function compileUserFunction(expressionString) {
+            try {
+                const node = math.parse(expressionString);
+                const code = node.compile(math);
+                return code;
+            } catch (err) {
+                console.error("Compilation error:", err);
+                statusDiv.textContent = `Error compiling function: ${err.message}`;
+                statusDiv.style.color = "#f44336";
+                return null;
+            }
+        }
+
+        // --- Function Item Management ---
+        function addFunctionItem(expr = "", color = "#00FFFF") {
+            const itemDiv = document.createElement('div');
+            itemDiv.className = 'function-item';
+
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.placeholder = (PLOT_MODE === '3d') ? "e.g., x^2 + y^2" : "e.g., sin(x)";
+            input.value = expr;
+
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.value = color;
+
+            const visibleCheckbox = document.createElement('input');
+            visibleCheckbox.type = 'checkbox';
+            visibleCheckbox.checked = true;
+            visibleCheckbox.title = "Visible";
+
+            const deleteBtn = document.createElement('button');
+            deleteBtn.textContent = '×';
+            deleteBtn.className = 'small';
+            deleteBtn.onclick = () => itemDiv.remove();
+
+            itemDiv.appendChild(input);
+            itemDiv.appendChild(colorPicker);
+            itemDiv.appendChild(visibleCheckbox);
+            itemDiv.appendChild(deleteBtn);
+            functionsContainer.appendChild(itemDiv);
+        }
+
+        addFunctionBtn.addEventListener('click', () => addFunctionItem());
+
+        // --- Main Plotting Logic ---
+        function plotAllFunctions() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+                isAnimating = false;
+            }
+
+            // Clear previous plots
+            scene.children.forEach(child => {
+                if (child.userData && child.userData.isFunctionPlot) {
+                    scene.remove(child);
+                }
+            });
+
+            plotQueue = [];
+            globalCurrentIndex = 0;
+
+            // Get current settings
+            GRID_SIZE = parseInt(gridSizeInput.value) || 30;
+            GRID_RANGE = parseFloat(axisRangeInput.value) || 6;
+            TICK_SPACING = parseFloat(tickSpacingInput.value) || 2;
+            PLOT_MODE = modeSelect.value;
+
+            createAxesAndLabels(GRID_RANGE, TICK_SPACING);
+
+            const functionItems = functionsContainer.querySelectorAll('.function-item');
+            if (functionItems.length === 0) {
+                statusDiv.textContent = "No functions to plot.";
+                statusDiv.style.color = "#f44336";
+                animate(); // Still need to keep rendering loop alive
+                return;
+            }
+
+            statusDiv.textContent = "Calculating vertices...";
+            statusDiv.style.color = "#FFC107";
+
+            setTimeout(async () => {
+                try {
+                    let allVerticesCalculated = true;
+                    for (const item of functionItems) {
+                        const input = item.querySelector('input[type="text"]');
+                        const colorPicker = item.querySelector('input[type="color"]');
+                        const visibleCheckbox = item.querySelector('input[type="checkbox"]');
+
+                        if (!visibleCheckbox.checked) continue;
+
+                        const exprStr = input.value.trim();
+                        if (!exprStr) continue;
+
+                        const compiledFunc = compileUserFunction(exprStr);
+                        if (!compiledFunc) {
+                            allVerticesCalculated = false;
+                            continue; // Try next function
+                        }
+
+                        const scope = { x: 0, y: 0 };
+                        const vertices = [];
+                        let totalLinesLocal = 0;
+
+                        if (PLOT_MODE === '3d') {
+                            for (let i = 0; i <= GRID_SIZE; i++) {
+                                const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                for (let j = 0; j <= GRID_SIZE; j++) {
+                                    const y = (j / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                    scope.x = x;
+                                    scope.y = y;
+                                    let z;
+                                    try {
+                                        z = compiledFunc.evaluate(scope);
+                                        if (!isFinite(z)) z = NaN;
+                                    } catch (evalErr) {
+                                        console.warn(`Eval error at (${x}, ${y}):`, evalErr);
+                                        z = NaN;
+                                    }
+                                    vertices.push(new THREE.Vector3(x, y, z));
+                                }
+                            }
+                            totalLinesLocal = GRID_SIZE * (GRID_SIZE + 1) * 2;
+
+                        } else if (PLOT_MODE === '2d') {
+                            for (let i = 0; i <= GRID_SIZE; i++) {
+                                const x = (i / GRID_SIZE) * 2 * GRID_RANGE - GRID_RANGE;
+                                scope.x = x;
+                                scope.y = undefined;
+                                let y;
+                                try {
+                                    y = compiledFunc.evaluate(scope);
+                                    if (!isFinite(y)) y = NaN;
+                                } catch (evalErr) {
+                                    console.warn(`Eval error at x=${x}:`, evalErr);
+                                    y = NaN;
+                                }
+                                vertices.push(new THREE.Vector3(x, y, 0));
+                            }
+                            totalLinesLocal = GRID_SIZE;
+                        }
+
+                        // Create group and lines for this specific function
+                        const funcGroup = new THREE.Group();
+                        funcGroup.userData.isFunctionPlot = true; // Mark for cleanup
+                        scene.add(funcGroup);
+
+                        const material = new THREE.LineBasicMaterial({ color: new THREE.Color(colorPicker.value) });
+                        const linesForThisFunction = [];
+                        for (let k = 0; k < totalLinesLocal; k++) {
+                            const geometry = new THREE.BufferGeometry();
+                            const line = new THREE.Line(geometry, material.clone());
+                            line.visible = false;
+                            linesForThisFunction.push({ line, vertices, index: k, totalLines: totalLinesLocal, mode: PLOT_MODE, gridSize: GRID_SIZE });
+                            funcGroup.add(line);
+                        }
+
+                        // Add to the global queue for animation
+                        plotQueue.push(...linesForThisFunction.map(l => ({ ...l, currentIndex: 0 })));
+
+                    } // End for loop over function items
+
+                    if (allVerticesCalculated) {
+                        statusDiv.textContent = `Plotting ${plotQueue.length} line segments...`;
+                        statusDiv.style.color = "#4CAF50";
+                    } else {
+                        statusDiv.textContent += " (with errors)";
+                    }
+
+                    // Start animation loop
+                    isAnimating = plotQueue.length > 0;
+                    globalCurrentIndex = 0;
+                    animate();
+
+                } catch (genErr) {
+                    console.error("Error during plotting setup:", genErr);
+                    statusDiv.textContent = `Unexpected error: ${genErr.message}`;
+                    statusDiv.style.color = "#f44336";
+                    animate(); // Keep rendering loop alive even on error
+                }
+            }, 50);
+        }
+
+        // --- Animation Loop for Drawing AND Continuous Rendering ---
+        function animate() {
+            if (isAnimating && globalCurrentIndex < plotQueue.length) {
+                const itemData = plotQueue[globalCurrentIndex];
+
+                if (itemData.currentIndex < itemData.totalLines) {
+                    const lineObj = itemData.line;
+                    lineObj.visible = true;
+
+                    if (itemData.mode === '3d') {
+                        let baseVertexIndex;
+                        const gridSizePlusOne = itemData.gridSize + 1;
+                        if (itemData.index < itemData.gridSize * gridSizePlusOne) {
+                            // Horizontal lines
+                            const lineInSet = itemData.index;
+                            const j = Math.floor(lineInSet / itemData.gridSize);
+                            const i = lineInSet % itemData.gridSize;
+                            baseVertexIndex = j * gridSizePlusOne + i;
+                            const nextIndex = baseVertexIndex + 1;
+                            if (!isNaN(itemData.vertices[baseVertexIndex].z) && !isNaN(itemData.vertices[nextIndex].z)) {
+                                lineObj.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                    itemData.vertices[baseVertexIndex].x, itemData.vertices[baseVertexIndex].y, itemData.vertices[baseVertexIndex].z,
+                                    itemData.vertices[nextIndex].x, itemData.vertices[nextIndex].y, itemData.vertices[nextIndex].z
+                                ], 3));
+                            } else {
+                                lineObj.visible = false;
+                            }
+                        } else {
+                            // Vertical lines
+                            const lineInSet = itemData.index - itemData.gridSize * gridSizePlusOne;
+                            const i = Math.floor(lineInSet / itemData.gridSize);
+                            const j = lineInSet % itemData.gridSize;
+                            baseVertexIndex = j * gridSizePlusOne + i;
+                            const nextBaseVertexIndex = baseVertexIndex + gridSizePlusOne;
+                            if (!isNaN(itemData.vertices[baseVertexIndex].z) && !isNaN(itemData.vertices[nextBaseVertexIndex].z)) {
+                                lineObj.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                    itemData.vertices[baseVertexIndex].x, itemData.vertices[baseVertexIndex].y, itemData.vertices[baseVertexIndex].z,
+                                    itemData.vertices[nextBaseVertexIndex].x, itemData.vertices[nextBaseVertexIndex].y, itemData.vertices[nextBaseVertexIndex].z
+                                ], 3));
+                            } else {
+                                lineObj.visible = false;
+                            }
+                        }
+                    } else if (itemData.mode === '2d') {
+                        const currentIdx = itemData.index;
+                        const nextIdx = itemData.index + 1;
+                        if (nextIdx < itemData.vertices.length &&
+                            !isNaN(itemData.vertices[currentIdx].y) && !isNaN(itemData.vertices[nextIdx].y)) {
+                            lineObj.geometry.setAttribute('position', new THREE.Float32BufferAttribute([
+                                itemData.vertices[currentIdx].x, itemData.vertices[currentIdx].y, itemData.vertices[currentIdx].z,
+                                itemData.vertices[nextIdx].x, itemData.vertices[nextIdx].y, itemData.vertices[nextIdx].z
+                            ], 3));
+                        } else {
+                            lineObj.visible = false;
+                        }
+                    }
+
+                    itemData.currentIndex++; // Increment local index for this item
+                    globalCurrentIndex++; // Move to next item in queue
+
+                    // If we've finished drawing all lines for one function, move to the next
+                    // This logic can be adjusted for smoother interleaving if needed
+                    // For now, it draws one function completely before starting the next
+                } else {
+                    // This item is done, move to next one in queue
+                    globalCurrentIndex++;
+                }
+
+                // Check if overall animation is complete
+                if (globalCurrentIndex >= plotQueue.length) {
+                    isAnimating = false;
+                    statusDiv.textContent += " (Complete)";
+                }
+            }
+
+            // --- Continuous Updates ---
+            controls.update();
+            renderer.render(scene, camera);
+
+            const pos = camera.position;
+            const rot = camera.rotation;
+            const rx = THREE.MathUtils.radToDeg(rot.x).toFixed(1);
+            const ry = THREE.MathUtils.radToDeg(rot.y).toFixed(1);
+            const rz = THREE.MathUtils.radToDeg(rot.z).toFixed(1);
+            cameraInfoDiv.textContent = `Camera: Pos(${pos.x.toFixed(1)}, ${pos.y.toFixed(1)}, ${pos.z.toFixed(1)}) | Rot(${rx}°, ${ry}°, ${rz}°)`;
+
+            animationId = requestAnimationFrame(animate);
+        }
+
+        // --- Event Listeners ---
+        plotAllBtn.addEventListener('click', plotAllFunctions);
+
+        // Re-plot if global settings change
+        [modeSelect, gridSizeInput, axisRangeInput, tickSpacingInput].forEach(el => {
+            el.addEventListener('change', () => {
+                // Update placeholder text when mode changes
+                if (el === modeSelect) {
+                    const placeholders = functionsContainer.querySelectorAll('input[type="text"]');
+                    placeholders.forEach(p => p.placeholder = (modeSelect.value === '3d') ? "e.g., x^2 + y^2" : "e.g., sin(x)");
+                }
+                plotAllFunctions();
+            });
+        });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // --- Initial Setup ---
+        // Add some default functions
+        addFunctionItem("sin(sqrt(x^2 + y^2))", "#00FFFF"); // Cyan
+        addFunctionItem("x^2 + y^2", "#FF4081");           // Pink
+        addFunctionItem("", "#7CFC00");                     // Lawn Green
+
+        // Start continuous rendering loop
+        animate();
+
+    </script>
+</body>
+</html>

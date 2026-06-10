@@ -1,0 +1,2287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional CAD Tool v1</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0a0a0f;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            width: 100vw;
+        }
+
+        /* 工具栏 */
+        #toolbar {
+            background: #1a1a25;
+            border-bottom: 1px solid #2a2a35;
+            padding: 10px 15px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            min-height: 60px;
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 5px;
+            padding: 0 10px;
+            border-right: 1px solid #2a2a35;
+        }
+
+            .tool-group:last-child {
+                border-right: none;
+            }
+
+        .tool-btn {
+            background: #2a2a35;
+            color: #e0e0e0;
+            border: 1px solid #3a3a45;
+            border-radius: 4px;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 14px;
+            min-width: 90px;
+            transition: all 0.2s;
+        }
+
+            .tool-btn:hover {
+                background: #3a3a45;
+                border-color: #4a4a55;
+            }
+
+            .tool-btn.active {
+                background: #007acc;
+                border-color: #0088ee;
+                box-shadow: 0 0 10px rgba(0, 122, 204, 0.5);
+            }
+
+        /* 主区域 */
+        #main-area {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            background: #0f0f15;
+        }
+
+        /* 侧边栏 */
+        #sidebar {
+            width: 320px;
+            background: #1a1a25;
+            border-right: 1px solid #2a2a35;
+            padding: 20px;
+            overflow-y: auto;
+            transition: all 0.3s;
+        }
+
+        .section-title {
+            color: #4a9eff;
+            font-size: 16px;
+            margin-bottom: 15px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #2a2a35;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .property-panel {
+            background: #2a2a35;
+            border: 1px solid #3a3a45;
+            border-radius: 6px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+
+        .property-group {
+            margin-bottom: 15px;
+        }
+
+            .property-group:last-child {
+                margin-bottom: 0;
+            }
+
+        .property-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .property-label {
+            color: #b0b8c8;
+            font-size: 14px;
+            min-width: 100px;
+        }
+
+        .property-value {
+            color: #ffffff;
+            font-weight: 600;
+            font-family: 'Consolas', monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 8px;
+            border-radius: 4px;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        .property-input {
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #3a3a45;
+            border-radius: 4px;
+            color: #ffffff;
+            padding: 6px 8px;
+            width: 120px;
+            text-align: center;
+            font-family: 'Consolas', monospace;
+        }
+
+            .property-input:focus {
+                outline: none;
+                border-color: #4a9eff;
+                box-shadow: 0 0 5px rgba(74, 158, 255, 0.5);
+            }
+
+        .property-slider {
+            width: 120px;
+            margin: 0 5px;
+        }
+
+        .control-btn {
+            background: #2a2a35;
+            border: 1px solid #3a3a45;
+            border-radius: 4px;
+            color: #e0e0e0;
+            padding: 8px 12px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.2s;
+            width: 100%;
+            margin-top: 10px;
+        }
+
+            .control-btn:hover {
+                background: #3a3a45;
+            }
+
+            .control-btn.delete {
+                background: rgba(220, 53, 69, 0.2);
+                border-color: #dc3545;
+            }
+
+                .control-btn.delete:hover {
+                    background: rgba(220, 53, 69, 0.3);
+                }
+
+        /* 视口 */
+        #viewport-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #viewport {
+            width: 100%;
+            height: 100%;
+            display: block;
+            cursor: crosshair;
+        }
+
+        /* 坐标显示 */
+        .coordinate-display {
+            position: absolute;
+            bottom: 70px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #3a3a45;
+            border-radius: 6px;
+            padding: 10px 15px;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+            z-index: 100;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* 控制点样式 */
+        .control-point {
+            position: absolute;
+            width: 12px;
+            height: 12px;
+            background: #4a9eff;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            cursor: move;
+            z-index: 1000;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+        }
+
+            .control-point.rotation {
+                background: #ff9800;
+                cursor: pointer;
+            }
+
+        /* 状态栏 */
+        #status-bar {
+            background: #1a1a25;
+            border-top: 1px solid #2a2a35;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 50px;
+        }
+
+        #status-message {
+            color: #b0b8c8;
+            font-size: 14px;
+        }
+
+        .snap-indicator {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #ff9800;
+        }
+
+        /* 编辑手柄 */
+        .edit-handle {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background: #ff9800;
+            border: 2px solid #ffffff;
+            border-radius: 2px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+
+        /* 旋转角度显示 */
+        .angle-display {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: #ff9800;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-family: 'Consolas', monospace;
+            z-index: 1000;
+        }
+
+        /* 快捷键提示 */
+        .shortcut-hint {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid #3a3a45;
+            border-radius: 6px;
+            padding: 10px 15px;
+            font-size: 12px;
+            color: #b0b8c8;
+            z-index: 100;
+            max-width: 300px;
+        }
+
+        .shortcut-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+        }
+
+            .shortcut-row:last-child {
+                margin-bottom: 0;
+            }
+
+        .shortcut-key {
+            background: #2a2a35;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', monospace;
+            min-width: 80px;
+        }
+
+        /* 网格线 */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <div id="toolbar">
+            <div class="tool-group">
+                <button class="tool-btn active" data-tool="select" title="Select objects (V)">
+                    Select
+                </button>
+                <button class="tool-btn" data-tool="pan" title="Pan view (Space)">
+                    Pan
+                </button>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" data-tool="line" title="Draw line (L)">
+                    Line
+                </button>
+                <button class="tool-btn" data-tool="rectangle" title="Draw rectangle (R)">
+                    Rectangle
+                </button>
+                <button class="tool-btn" data-tool="circle" title="Draw circle (C)">
+                    Circle
+                </button>
+            </div>
+
+            <div class="tool-group">
+                <button class="tool-btn" data-tool="arc" title="Draw arc (A)">
+                    Arc
+                </button>
+                <button class="tool-btn" data-tool="polygon" title="Draw polygon (P)">
+                    Polygon
+                </button>
+            </div>
+
+            <div style="margin-left: auto; display: flex; align-items: center; gap: 10px;">
+                <button class="control-btn" id="toggle-snap" style="width: auto;">Snap: ON</button>
+                <button class="control-btn" id="toggle-grid" style="width: auto;">Grid: ON</button>
+                <button class="control-btn" id="clear-all" style="width: auto;">Clear All</button>
+            </div>
+        </div>
+
+        <div id="main-area">
+            <div id="sidebar">
+                <h3 class="section-title">
+                    Properties
+                    <span style="font-size: 12px; color: #ff9800;" id="selected-count">0 selected</span>
+                </h3>
+                <div class="property-panel">
+                    <div class="property-group">
+                        <div class="property-row">
+                            <span class="property-label">Active Tool:</span>
+                            <span class="property-value" id="current-tool">Select</span>
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Objects:</span>
+                            <span class="property-value" id="object-count">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="object-properties" style="display: none;">
+                    <h3 class="section-title">Edit Object</h3>
+                    <div class="property-panel" id="dynamic-properties">
+                        <!-- 动态属性会根据选择的对象类型变化 -->
+                        <div class="property-row">
+                            <span class="property-label">Type:</span>
+                            <span class="property-value" id="obj-type">-</span>
+                        </div>
+                    </div>
+
+                    <div class="property-panel">
+                        <h4 style="color: #b0b8c8; margin-bottom: 10px;">Transform</h4>
+                        <div class="property-row">
+                            <span class="property-label">Position X:</span>
+                            <input type="number" id="pos-x" class="property-input" step="0.1">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Position Y:</span>
+                            <input type="number" id="pos-y" class="property-input" step="0.1">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Rotation:</span>
+                            <input type="number" id="rotation" class="property-input" step="1" min="0" max="360">
+                        </div>
+                        <div class="property-row">
+                            <span class="property-label">Scale:</span>
+                            <input type="number" id="scale" class="property-input" value="1.0" step="0.1" min="0.1">
+                        </div>
+                        <button class="control-btn" id="apply-transform">Apply Transform</button>
+                    </div>
+
+                    <div class="property-panel" id="type-specific-props">
+                        <!-- 类型特定属性 -->
+                    </div>
+
+                    <button class="control-btn delete" id="delete-object">Delete Selected</button>
+                    <button class="control-btn" id="duplicate-object">Duplicate</button>
+                </div>
+            </div>
+
+            <div id="viewport-container">
+                <canvas id="viewport"></canvas>
+                <canvas id="grid-overlay" class="grid-overlay"></canvas>
+                <div id="coordinate-display" class="coordinate-display">
+                    <div>World: X: <span id="world-x">0.00</span> Y: <span id="world-y">0.00</span></div>
+                    <div>Screen: X: <span id="screen-x">0</span> Y: <span id="screen-y">0</span></div>
+                </div>
+                <div id="shortcut-hint" class="shortcut-hint">
+                    <div class="shortcut-row"><span>V</span><span class="shortcut-key">Select</span></div>
+                    <div class="shortcut-row"><span>Space</span><span class="shortcut-key">Pan</span></div>
+                    <div class="shortcut-row"><span>L/R/C</span><span class="shortcut-key">Line/Rect/Circle</span></div>
+                    <div class="shortcut-row"><span>Delete</span><span class="shortcut-key">Delete</span></div>
+                    <div class="shortcut-row"><span>ESC</span><span class="shortcut-key">Cancel</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="status-bar">
+            <span id="status-message">Ready - Select objects or start drawing</span>
+            <div class="snap-indicator">
+                Grid: 10 | Snap: 5
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 专业CAD应用 ====================
+        class ProfessionalCAD {
+            constructor() {
+                this.canvas = document.getElementById('viewport');
+                this.ctx = this.canvas.getContext('2d');
+                this.gridCanvas = document.getElementById('grid-overlay');
+                this.gridCtx = this.gridCanvas.getContext('2d');
+
+                // 对象管理
+                this.objects = [];
+                this.selectedObjects = new Set();
+                this.currentTool = 'select';
+                this.isDrawing = false;
+                this.drawingData = null;
+
+                // 视图控制
+                this.camera = {
+                    offset: { x: 0, y: 0 },
+                    zoom: 1,
+                    minZoom: 0.1,
+                    maxZoom: 20
+                };
+
+                // 编辑状态
+                this.editing = {
+                    isEditing: false,
+                    selectedHandle: null,
+                    originalPos: null,
+                    originalObject: null,
+                    isRotating: false,
+                    rotationStart: null
+                };
+
+                // 控制点
+                this.controlPoints = [];
+                this.rotationHandle = null;
+
+                // 设置
+                this.settings = {
+                    gridSize: 50,
+                    snapSize: 25,
+                    showGrid: true,
+                    snapToGrid: true,
+                    showControls: true
+                };
+
+                this.init();
+            }
+
+            init() {
+                this.resize();
+                this.initEvents();
+                this.initUI();
+                this.drawGrid();
+                this.render();
+
+                // 添加示例对象
+                setTimeout(() => this.addSampleObjects(), 500);
+            }
+
+            resize() {
+                const container = this.canvas.parentElement;
+                this.canvas.width = container.clientWidth;
+                this.canvas.height = container.clientHeight;
+                this.gridCanvas.width = container.clientWidth;
+                this.gridCanvas.height = container.clientHeight;
+            }
+
+            initEvents() {
+                // 窗口大小调整
+                window.addEventListener('resize', () => {
+                    this.resize();
+                    this.drawGrid();
+                    this.render();
+                });
+
+                // 鼠标事件
+                this.canvas.addEventListener('mousedown', (e) => this.onMouseDown(e));
+                this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
+                this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
+                this.canvas.addEventListener('wheel', (e) => this.onMouseWheel(e));
+
+                // 键盘事件
+                document.addEventListener('keydown', (e) => this.onKeyDown(e));
+                document.addEventListener('keyup', (e) => this.onKeyUp(e));
+
+                // 阻止右键菜单
+                this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+            }
+
+            initUI() {
+                // 工具按钮
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const tool = e.currentTarget.dataset.tool;
+                        this.setCurrentTool(tool);
+                    });
+                });
+
+                // 开关按钮
+                document.getElementById('toggle-grid').addEventListener('click', () => {
+                    this.settings.showGrid = !this.settings.showGrid;
+                    document.getElementById('toggle-grid').textContent =
+                        `Grid: ${this.settings.showGrid ? 'ON' : 'OFF'}`;
+                    this.drawGrid();
+                    this.render();
+                });
+
+                document.getElementById('toggle-snap').addEventListener('click', () => {
+                    this.settings.snapToGrid = !this.settings.snapToGrid;
+                    document.getElementById('toggle-snap').textContent =
+                        `Snap: ${this.settings.snapToGrid ? 'ON' : 'OFF'}`;
+                    this.updateStatus(`Snap ${this.settings.snapToGrid ? 'enabled' : 'disabled'}`);
+                });
+
+                // 清除所有
+                document.getElementById('clear-all').addEventListener('click', () => {
+                    if (confirm('Clear all objects?')) {
+                        this.objects = [];
+                        this.selectedObjects.clear();
+                        this.updateUI();
+                        this.render();
+                    }
+                });
+
+                // 删除对象
+                document.getElementById('delete-object').addEventListener('click', () => {
+                    this.deleteSelectedObjects();
+                });
+
+                // 复制对象
+                document.getElementById('duplicate-object').addEventListener('click', () => {
+                    this.duplicateSelectedObjects();
+                });
+
+                // 应用变换
+                document.getElementById('apply-transform').addEventListener('click', () => {
+                    this.applyTransform();
+                });
+
+                // 属性输入
+                ['pos-x', 'pos-y', 'rotation', 'scale'].forEach(id => {
+                    document.getElementById(id).addEventListener('change', (e) => {
+                        this.updateSelectedFromUI();
+                    });
+                });
+            }
+
+            // ==================== 对象管理 ====================
+
+            addSampleObjects() {
+                // 添加示例线
+                const line = this.createLine({ x: -200, y: -100 }, { x: 200, y: 100 });
+                line.color = '#007acc';
+                line.lineWidth = 3;
+                this.objects.push(line);
+
+                // 添加示例矩形
+                const rect = this.createRectangle({ x: 0, y: -150 }, 120, 80);
+                rect.color = '#4CAF50';
+                rect.lineWidth = 2;
+                rect.fillColor = 'rgba(76, 175, 80, 0.2)';
+                rect.rotation = 15;
+                this.objects.push(rect);
+
+                // 添加示例圆形
+                const circle = this.createCircle({ x: -250, y: 150 }, 60);
+                circle.color = '#FF9800';
+                circle.lineWidth = 2;
+                circle.fillColor = 'rgba(255, 152, 0, 0.2)';
+                this.objects.push(circle);
+
+                // 添加示例多边形
+                const polygon = this.createPolygon({ x: 200, y: 150 }, 50, 6);
+                polygon.color = '#9C27B0';
+                polygon.lineWidth = 2;
+                polygon.fillColor = 'rgba(156, 39, 176, 0.2)';
+                polygon.rotation = 30;
+                this.objects.push(polygon);
+
+                this.updateUI();
+                this.render();
+                this.updateStatus('Sample objects loaded');
+            }
+
+            createLine(start, end) {
+                return {
+                    type: 'line',
+                    start: { ...start },
+                    end: { ...end },
+                    color: '#007acc',
+                    lineWidth: 2,
+                    selected: false,
+                    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+            }
+
+            createRectangle(center, width, height) {
+                return {
+                    type: 'rectangle',
+                    center: { ...center },
+                    width: width,
+                    height: height,
+                    color: '#4CAF50',
+                    lineWidth: 2,
+                    rotation: 0,
+                    selected: false,
+                    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+            }
+
+            createCircle(center, radius) {
+                return {
+                    type: 'circle',
+                    center: { ...center },
+                    radius: radius,
+                    color: '#FF9800',
+                    lineWidth: 2,
+                    selected: false,
+                    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+            }
+
+            createPolygon(center, radius, sides) {
+                const points = [];
+                for (let i = 0; i < sides; i++) {
+                    const angle = (i * 2 * Math.PI) / sides;
+                    points.push({
+                        x: center.x + radius * Math.cos(angle),
+                        y: center.y + radius * Math.sin(angle)
+                    });
+                }
+
+                return {
+                    type: 'polygon',
+                    center: { ...center },
+                    radius: radius,
+                    sides: sides,
+                    points: points,
+                    color: '#9C27B0',
+                    lineWidth: 2,
+                    rotation: 0,
+                    selected: false,
+                    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+            }
+
+            createArc(center, radius, startAngle, endAngle) {
+                return {
+                    type: 'arc',
+                    center: { ...center },
+                    radius: radius,
+                    startAngle: startAngle,
+                    endAngle: endAngle,
+                    color: '#00BCD4',
+                    lineWidth: 2,
+                    selected: false,
+                    id: 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9)
+                };
+            }
+
+            // ==================== 编辑功能 ====================
+
+            updateControlPoints() {
+                this.controlPoints = [];
+                this.rotationHandle = null;
+
+                if (this.selectedObjects.size !== 1) return;
+
+                const obj = this.getSelectedObject();
+                if (!obj) return;
+
+                const screenPos = this.worldToScreen(obj.center || obj.start);
+                const bounds = this.getObjectBounds(obj);
+
+                switch (obj.type) {
+                    case 'line':
+                        // 线段的两个端点
+                        this.controlPoints.push({
+                            type: 'endpoint',
+                            index: 0,
+                            x: this.worldToScreen(obj.start).x,
+                            y: this.worldToScreen(obj.start).y,
+                            object: obj,
+                            property: 'start'
+                        });
+                        this.controlPoints.push({
+                            type: 'endpoint',
+                            index: 1,
+                            x: this.worldToScreen(obj.end).x,
+                            y: this.worldToScreen(obj.end).y,
+                            object: obj,
+                            property: 'end'
+                        });
+                        break;
+
+                    case 'rectangle':
+                        // 矩形的四个角
+                        const corners = this.getRectangleCorners(obj);
+                        corners.forEach((corner, index) => {
+                            const screenCorner = this.worldToScreen(corner);
+                            this.controlPoints.push({
+                                type: 'corner',
+                                index: index,
+                                x: screenCorner.x,
+                                y: screenCorner.y,
+                                object: obj
+                            });
+                        });
+
+                        // 四个边的中点
+                        const edges = this.getRectangleEdges(obj);
+                        edges.forEach((edge, index) => {
+                            const screenEdge = this.worldToScreen(edge);
+                            this.controlPoints.push({
+                                type: 'edge',
+                                index: index + 4,
+                                x: screenEdge.x,
+                                y: screenEdge.y,
+                                object: obj
+                            });
+                        });
+
+                        // 旋转手柄
+                        this.rotationHandle = {
+                            x: screenPos.x,
+                            y: screenPos.y - 60,
+                            object: obj
+                        };
+                        break;
+
+                    case 'circle':
+                        // 半径控制点
+                        const radiusPoint = {
+                            x: obj.center.x + obj.radius,
+                            y: obj.center.y
+                        };
+                        const screenRadius = this.worldToScreen(radiusPoint);
+                        this.controlPoints.push({
+                            type: 'radius',
+                            x: screenRadius.x,
+                            y: screenRadius.y,
+                            object: obj
+                        });
+
+                        // 旋转手柄
+                        this.rotationHandle = {
+                            x: screenPos.x,
+                            y: screenPos.y - obj.radius * this.camera.zoom - 30,
+                            object: obj
+                        };
+                        break;
+
+                    case 'polygon':
+                        // 多边形的每个顶点
+                        obj.points.forEach((point, index) => {
+                            const screenPoint = this.worldToScreen(point);
+                            this.controlPoints.push({
+                                type: 'vertex',
+                                index: index,
+                                x: screenPoint.x,
+                                y: screenPoint.y,
+                                object: obj
+                            });
+                        });
+
+                        // 旋转手柄
+                        this.rotationHandle = {
+                            x: screenPos.x,
+                            y: screenPos.y - obj.radius * this.camera.zoom - 30,
+                            object: obj
+                        };
+                        break;
+
+                    case 'arc':
+                        // 弧的半径和角度控制点
+                        const startPoint = {
+                            x: obj.center.x + obj.radius * Math.cos(obj.startAngle),
+                            y: obj.center.y + obj.radius * Math.sin(obj.startAngle)
+                        };
+                        const endPoint = {
+                            x: obj.center.x + obj.radius * Math.cos(obj.endAngle),
+                            y: obj.center.y + obj.radius * Math.sin(obj.endAngle)
+                        };
+
+                        this.controlPoints.push({
+                            type: 'start',
+                            x: this.worldToScreen(startPoint).x,
+                            y: this.worldToScreen(startPoint).y,
+                            object: obj
+                        });
+                        this.controlPoints.push({
+                            type: 'end',
+                            x: this.worldToScreen(endPoint).x,
+                            y: this.worldToScreen(endPoint).y,
+                            object: obj
+                        });
+                        this.controlPoints.push({
+                            type: 'radius',
+                            x: this.worldToScreen({
+                                x: obj.center.x + obj.radius,
+                                y: obj.center.y
+                            }).x,
+                            y: this.worldToScreen({
+                                x: obj.center.x + obj.radius,
+                                y: obj.center.y
+                            }).y,
+                            object: obj
+                        });
+                        break;
+                }
+            }
+
+            getRectangleCorners(rect) {
+                const corners = [];
+                const angle = rect.rotation * Math.PI / 180;
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+
+                const halfW = rect.width / 2;
+                const halfH = rect.height / 2;
+
+                // 四个角点（相对于中心）
+                const localCorners = [
+                    { x: -halfW, y: -halfH },
+                    { x: halfW, y: -halfH },
+                    { x: halfW, y: halfH },
+                    { x: -halfW, y: halfH }
+                ];
+
+                // 旋转并平移
+                localCorners.forEach(corner => {
+                    corners.push({
+                        x: rect.center.x + (corner.x * cos - corner.y * sin),
+                        y: rect.center.y + (corner.x * sin + corner.y * cos)
+                    });
+                });
+
+                return corners;
+            }
+
+            getRectangleEdges(rect) {
+                const edges = [];
+                const corners = this.getRectangleCorners(rect);
+
+                // 四条边的中点
+                for (let i = 0; i < 4; i++) {
+                    const next = (i + 1) % 4;
+                    edges.push({
+                        x: (corners[i].x + corners[next].x) / 2,
+                        y: (corners[i].y + corners[next].y) / 2
+                    });
+                }
+
+                return edges;
+            }
+
+            getObjectBounds(obj) {
+                const bounds = {
+                    minX: Infinity,
+                    minY: Infinity,
+                    maxX: -Infinity,
+                    maxY: -Infinity
+                };
+
+                switch (obj.type) {
+                    case 'line':
+                        bounds.minX = Math.min(obj.start.x, obj.end.x);
+                        bounds.minY = Math.min(obj.start.y, obj.end.y);
+                        bounds.maxX = Math.max(obj.start.x, obj.end.x);
+                        bounds.maxY = Math.max(obj.start.y, obj.end.y);
+                        break;
+
+                    case 'rectangle':
+                        const corners = this.getRectangleCorners(obj);
+                        corners.forEach(corner => {
+                            bounds.minX = Math.min(bounds.minX, corner.x);
+                            bounds.minY = Math.min(bounds.minY, corner.y);
+                            bounds.maxX = Math.max(bounds.maxX, corner.x);
+                            bounds.maxY = Math.max(bounds.maxY, corner.y);
+                        });
+                        break;
+
+                    case 'circle':
+                        bounds.minX = obj.center.x - obj.radius;
+                        bounds.minY = obj.center.y - obj.radius;
+                        bounds.maxX = obj.center.x + obj.radius;
+                        bounds.maxY = obj.center.y + obj.radius;
+                        break;
+
+                    case 'polygon':
+                        obj.points.forEach(point => {
+                            bounds.minX = Math.min(bounds.minX, point.x);
+                            bounds.minY = Math.min(bounds.minY, point.y);
+                            bounds.maxX = Math.max(bounds.maxX, point.x);
+                            bounds.maxY = Math.max(bounds.maxY, point.y);
+                        });
+                        break;
+                }
+
+                return bounds;
+            }
+
+            // ==================== 坐标转换 ====================
+
+            worldToScreen(worldPos) {
+                return {
+                    x: (worldPos.x - this.camera.offset.x) * this.camera.zoom + this.canvas.width / 2,
+                    y: (worldPos.y - this.camera.offset.y) * this.camera.zoom + this.canvas.height / 2
+                };
+            }
+
+            screenToWorld(screenPos) {
+                return {
+                    x: (screenPos.x - this.canvas.width / 2) / this.camera.zoom + this.camera.offset.x,
+                    y: (screenPos.y - this.canvas.height / 2) / this.camera.zoom + this.camera.offset.y
+                };
+            }
+
+            getMousePos(event) {
+                const rect = this.canvas.getBoundingClientRect();
+                return {
+                    x: event.clientX - rect.left,
+                    y: event.clientY - rect.top
+                };
+            }
+
+            snapToGrid(pos) {
+                if (!this.settings.snapToGrid) return pos;
+
+                const grid = this.settings.snapSize;
+                return {
+                    x: Math.round(pos.x / grid) * grid,
+                    y: Math.round(pos.y / grid) * grid
+                };
+            }
+
+            // ==================== 事件处理 ====================
+
+            onMouseDown(e) {
+                const mousePos = this.getMousePos(e);
+                const worldPos = this.screenToWorld(mousePos);
+                const snappedPos = this.snapToGrid(worldPos);
+
+                this.updateMouseCoordinates(worldPos, mousePos);
+
+                switch (this.currentTool) {
+                    case 'select':
+                        this.handleSelect(mousePos, e.shiftKey);
+                        break;
+
+                    case 'pan':
+                        this.startPanning(mousePos);
+                        break;
+
+                    case 'line':
+                    case 'rectangle':
+                    case 'circle':
+                    case 'arc':
+                    case 'polygon':
+                        this.startDrawing(snappedPos);
+                        break;
+                }
+            }
+
+            onMouseMove(e) {
+                const mousePos = this.getMousePos(e);
+                const worldPos = this.screenToWorld(mousePos);
+                const snappedPos = this.snapToGrid(worldPos);
+
+                this.updateMouseCoordinates(worldPos, mousePos);
+
+                if (this.editing.isEditing) {
+                    this.handleEditing(mousePos);
+                } else if (this.drawingData) {
+                    this.updateDrawing(snappedPos);
+                } else if (this.panning) {
+                    this.handlePanning(mousePos);
+                }
+
+                this.render();
+            }
+
+            onMouseUp(e) {
+                if (this.editing.isEditing) {
+                    this.finishEditing();
+                } else if (this.drawingData) {
+                    this.finishDrawing(this.screenToWorld(this.getMousePos(e)));
+                } else if (this.panning) {
+                    this.finishPanning();
+                }
+
+                this.render();
+            }
+
+            onMouseWheel(e) {
+                e.preventDefault();
+
+                const mousePos = this.getMousePos(e);
+                const zoomDelta = e.deltaY > 0 ? 0.9 : 1.1;
+                const newZoom = this.camera.zoom * zoomDelta;
+
+                // 限制缩放范围
+                if (newZoom >= this.camera.minZoom && newZoom <= this.camera.maxZoom) {
+                    const worldPosBefore = this.screenToWorld(mousePos);
+                    this.camera.zoom = newZoom;
+                    const worldPosAfter = this.screenToWorld(mousePos);
+
+                    // 调整相机偏移以保持鼠标位置
+                    this.camera.offset.x += (worldPosAfter.x - worldPosBefore.x);
+                    this.camera.offset.y += (worldPosAfter.y - worldPosBefore.y);
+
+                    this.drawGrid();
+                    this.updateControlPoints();
+                    this.render();
+                }
+            }
+
+            onKeyDown(e) {
+                // 工具快捷键
+                switch (e.key.toLowerCase()) {
+                    case 'v':
+                        e.preventDefault();
+                        this.setCurrentTool('select');
+                        break;
+                    case ' ':
+                        e.preventDefault();
+                        this.setCurrentTool('pan');
+                        break;
+                    case 'l':
+                        e.preventDefault();
+                        this.setCurrentTool('line');
+                        break;
+                    case 'r':
+                        e.preventDefault();
+                        this.setCurrentTool('rectangle');
+                        break;
+                    case 'c':
+                        e.preventDefault();
+                        this.setCurrentTool('circle');
+                        break;
+                    case 'a':
+                        e.preventDefault();
+                        this.setCurrentTool('arc');
+                        break;
+                    case 'p':
+                        e.preventDefault();
+                        this.setCurrentTool('polygon');
+                        break;
+                }
+
+                // 编辑快捷键
+                if (e.key === 'Delete' && this.selectedObjects.size > 0) {
+                    e.preventDefault();
+                    this.deleteSelectedObjects();
+                }
+
+                if (e.key === 'Escape') {
+                    e.preventDefault();
+                    this.cancelDrawing();
+                    this.deselectAll();
+                }
+
+                // 移动选中的对象（方向键）
+                if (this.selectedObjects.size > 0) {
+                    const step = e.shiftKey ? 10 : 1;
+                    let dx = 0, dy = 0;
+
+                    switch (e.key) {
+                        case 'ArrowUp':
+                            dy = -step;
+                            break;
+                        case 'ArrowDown':
+                            dy = step;
+                            break;
+                        case 'ArrowLeft':
+                            dx = -step;
+                            break;
+                        case 'ArrowRight':
+                            dx = step;
+                            break;
+                    }
+
+                    if (dx !== 0 || dy !== 0) {
+                        e.preventDefault();
+                        this.moveSelectedObjects(dx, dy);
+                    }
+                }
+            }
+
+            onKeyUp(e) {
+                // 释放空格键时返回选择工具
+                if (e.key === ' ' && this.currentTool === 'pan') {
+                    this.setCurrentTool('select');
+                }
+            }
+
+            // ==================== 选择功能 ====================
+
+            handleSelect(mousePos, multiSelect) {
+                // 检查是否点击了控制点
+                for (const point of this.controlPoints) {
+                    const dist = Math.sqrt(
+                        Math.pow(mousePos.x - point.x, 2) +
+                        Math.pow(mousePos.y - point.y, 2)
+                    );
+
+                    if (dist < 10) {
+                        this.startEditing(point);
+                        return;
+                    }
+                }
+
+                // 检查旋转手柄
+                if (this.rotationHandle) {
+                    const dist = Math.sqrt(
+                        Math.pow(mousePos.x - this.rotationHandle.x, 2) +
+                        Math.pow(mousePos.y - this.rotationHandle.y, 2)
+                    );
+
+                    if (dist < 10) {
+                        this.startRotation(mousePos);
+                        return;
+                    }
+                }
+
+                // 检查是否点击了对象
+                let clickedObj = null;
+                let minDist = Infinity;
+
+                // 反向遍历以选择最上层的对象
+                for (let i = this.objects.length - 1; i >= 0; i--) {
+                    const obj = this.objects[i];
+                    if (this.isPointInObject(mousePos, obj)) {
+                        const bounds = this.getObjectBounds(obj);
+                        const center = {
+                            x: (bounds.minX + bounds.maxX) / 2,
+                            y: (bounds.minY + bounds.maxY) / 2
+                        };
+                        const screenCenter = this.worldToScreen(center);
+                        const dist = Math.sqrt(
+                            Math.pow(mousePos.x - screenCenter.x, 2) +
+                            Math.pow(mousePos.y - screenCenter.y, 2)
+                        );
+
+                        if (dist < minDist) {
+                            minDist = dist;
+                            clickedObj = obj;
+                        }
+                    }
+                }
+
+                if (clickedObj) {
+                    if (!multiSelect) {
+                        this.selectedObjects.clear();
+                    }
+                    this.selectObject(clickedObj);
+                } else {
+                    if (!multiSelect) {
+                        this.deselectAll();
+                    }
+                    this.startAreaSelection(mousePos);
+                }
+            }
+
+            isPointInObject(mousePos, obj) {
+                const worldPos = this.screenToWorld(mousePos);
+
+                switch (obj.type) {
+                    case 'line':
+                        const start = this.worldToScreen(obj.start);
+                        const end = this.worldToScreen(obj.end);
+                        const dist = this.distanceToLine(mousePos.x, mousePos.y, start.x, start.y, end.x, end.y);
+                        return dist < 10;
+
+                    case 'rectangle':
+                        const corners = this.getRectangleCorners(obj);
+                        // 使用多边形点包含检测
+                        return this.isPointInPolygon(worldPos, corners);
+
+                    case 'circle':
+                        const center = this.worldToScreen(obj.center);
+                        const radius = obj.radius * this.camera.zoom;
+                        const distToCenter = Math.sqrt(
+                            Math.pow(mousePos.x - center.x, 2) +
+                            Math.pow(mousePos.y - center.y, 2)
+                        );
+                        return distToCenter <= radius + 5;
+
+                    case 'polygon':
+                        return this.isPointInPolygon(worldPos, obj.points);
+
+                    case 'arc':
+                        const arcCenter = this.worldToScreen(obj.center);
+                        const arcRadius = obj.radius * this.camera.zoom;
+                        const distToArcCenter = Math.sqrt(
+                            Math.pow(mousePos.x - arcCenter.x, 2) +
+                            Math.pow(mousePos.y - arcCenter.y, 2)
+                        );
+
+                        if (Math.abs(distToArcCenter - arcRadius) < 5) {
+                            const angle = Math.atan2(
+                                mousePos.y - arcCenter.y,
+                                mousePos.x - arcCenter.x
+                            );
+                            return angle >= obj.startAngle && angle <= obj.endAngle;
+                        }
+                        return false;
+                }
+
+                return false;
+            }
+
+            distanceToLine(px, py, x1, y1, x2, y2) {
+                const A = px - x1;
+                const B = py - y1;
+                const C = x2 - x1;
+                const D = y2 - y1;
+
+                const dot = A * C + B * D;
+                const lenSq = C * C + D * D;
+                let param = -1;
+
+                if (lenSq !== 0) {
+                    param = dot / lenSq;
+                }
+
+                let xx, yy;
+
+                if (param < 0) {
+                    xx = x1;
+                    yy = y1;
+                } else if (param > 1) {
+                    xx = x2;
+                    yy = y2;
+                } else {
+                    xx = x1 + param * C;
+                    yy = y1 + param * D;
+                }
+
+                const dx = px - xx;
+                const dy = py - yy;
+
+                return Math.sqrt(dx * dx + dy * dy);
+            }
+
+            isPointInPolygon(point, polygon) {
+                let inside = false;
+                for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+                    const xi = polygon[i].x, yi = polygon[i].y;
+                    const xj = polygon[j].x, yj = polygon[j].y;
+
+                    const intersect = ((yi > point.y) !== (yj > point.y))
+                        && (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi);
+                    if (intersect) inside = !inside;
+                }
+                return inside;
+            }
+
+            selectObject(obj) {
+                if (!this.selectedObjects.has(obj)) {
+                    this.selectedObjects.add(obj);
+                    obj.selected = true;
+                    this.updateControlPoints();
+                    this.updateObjectProperties();
+                }
+            }
+
+            deselectObject(obj) {
+                if (this.selectedObjects.has(obj)) {
+                    this.selectedObjects.delete(obj);
+                    obj.selected = false;
+                    this.updateControlPoints();
+                    this.updateObjectProperties();
+                }
+            }
+
+            deselectAll() {
+                this.selectedObjects.forEach(obj => {
+                    obj.selected = false;
+                });
+                this.selectedObjects.clear();
+                this.updateControlPoints();
+                this.updateObjectProperties();
+            }
+
+            getSelectedObject() {
+                if (this.selectedObjects.size === 1) {
+                    return Array.from(this.selectedObjects)[0];
+                }
+                return null;
+            }
+
+            // ==================== 编辑功能 ====================
+
+            startEditing(controlPoint) {
+                this.editing.isEditing = true;
+                this.editing.selectedHandle = controlPoint;
+                this.editing.originalObject = JSON.parse(JSON.stringify(controlPoint.object));
+                this.editing.originalPos = this.screenToWorld({ x: controlPoint.x, y: controlPoint.y });
+            }
+
+            handleEditing(mousePos) {
+                if (!this.editing.isEditing || !this.editing.selectedHandle) return;
+
+                const worldPos = this.screenToWorld(mousePos);
+                const snappedPos = this.snapToGrid(worldPos);
+                const obj = this.editing.selectedHandle.object;
+
+                switch (this.editing.selectedHandle.type) {
+                    case 'endpoint':
+                        obj[this.editing.selectedHandle.property] = snappedPos;
+                        break;
+
+                    case 'corner':
+                        if (obj.type === 'rectangle') {
+                            this.resizeRectangleFromCorner(obj, this.editing.selectedHandle.index, snappedPos);
+                        }
+                        break;
+
+                    case 'edge':
+                        if (obj.type === 'rectangle') {
+                            this.resizeRectangleFromEdge(obj, this.editing.selectedHandle.index - 4, snappedPos);
+                        }
+                        break;
+
+                    case 'radius':
+                        if (obj.type === 'circle') {
+                            const dx = snappedPos.x - obj.center.x;
+                            const dy = snappedPos.y - obj.center.y;
+                            obj.radius = Math.sqrt(dx * dx + dy * dy);
+                        } else if (obj.type === 'arc') {
+                            const dx = snappedPos.x - obj.center.x;
+                            const dy = snappedPos.y - obj.center.y;
+                            obj.radius = Math.sqrt(dx * dx + dy * dy);
+                        }
+                        break;
+
+                    case 'vertex':
+                        if (obj.type === 'polygon') {
+                            obj.points[this.editing.selectedHandle.index] = snappedPos;
+                            // 更新中心点
+                            let sumX = 0, sumY = 0;
+                            obj.points.forEach(p => {
+                                sumX += p.x;
+                                sumY += p.y;
+                            });
+                            obj.center = { x: sumX / obj.points.length, y: sumY / obj.points.length };
+                        }
+                        break;
+                }
+
+                this.updateControlPoints();
+                this.updateObjectProperties();
+            }
+
+            resizeRectangleFromCorner(rect, cornerIndex, newCornerPos) {
+                const corners = this.getRectangleCorners(rect);
+                const oppositeIndex = (cornerIndex + 2) % 4;
+                const oppositeCorner = corners[oppositeIndex];
+
+                // 计算新的中心点和尺寸
+                rect.center.x = (newCornerPos.x + oppositeCorner.x) / 2;
+                rect.center.y = (newCornerPos.y + oppositeCorner.y) / 2;
+                rect.width = Math.abs(newCornerPos.x - oppositeCorner.x);
+                rect.height = Math.abs(newCornerPos.y - oppositeCorner.y);
+
+                // 保持旋转
+                const dx = newCornerPos.x - oppositeCorner.x;
+                const dy = newCornerPos.y - oppositeCorner.y;
+                rect.rotation = Math.atan2(dy, dx) * 180 / Math.PI - 45;
+            }
+
+            resizeRectangleFromEdge(rect, edgeIndex, newEdgePos) {
+                const corners = this.getRectangleCorners(rect);
+                const nextIndex = (edgeIndex + 1) % 4;
+
+                // 计算新的中心点和尺寸
+                rect.center.x = (newEdgePos.x + corners[nextIndex].x) / 2;
+                rect.center.y = (newEdgePos.y + corners[nextIndex].y) / 2;
+
+                // 根据边调整尺寸
+                switch (edgeIndex) {
+                    case 0: // 上边
+                    case 2: // 下边
+                        rect.height = Math.abs(newEdgePos.y - corners[nextIndex].y);
+                        break;
+                    case 1: // 右边
+                    case 3: // 左边
+                        rect.width = Math.abs(newEdgePos.x - corners[nextIndex].x);
+                        break;
+                }
+            }
+
+            startRotation(mousePos) {
+                this.editing.isEditing = true;
+                this.editing.isRotating = true;
+                this.editing.rotationStart = mousePos;
+                this.editing.originalObject = JSON.parse(JSON.stringify(this.rotationHandle.object));
+            }
+
+            handleRotation(mousePos) {
+                if (!this.editing.isRotating || !this.rotationHandle) return;
+
+                const obj = this.rotationHandle.object;
+                const center = this.worldToScreen(obj.center);
+
+                const startAngle = Math.atan2(
+                    this.editing.rotationStart.y - center.y,
+                    this.editing.rotationStart.x - center.x
+                );
+                const currentAngle = Math.atan2(
+                    mousePos.y - center.y,
+                    mousePos.x - center.x
+                );
+
+                const angleDelta = (currentAngle - startAngle) * 180 / Math.PI;
+                obj.rotation = (this.editing.originalObject.rotation + angleDelta + 360) % 360;
+
+                this.updateControlPoints();
+                this.updateObjectProperties();
+            }
+
+            finishEditing() {
+                this.editing.isEditing = false;
+                this.editing.isRotating = false;
+                this.editing.selectedHandle = null;
+                this.editing.originalObject = null;
+                this.editing.rotationStart = null;
+            }
+
+            // ==================== 绘制功能 ====================
+
+            startDrawing(startPos) {
+                this.isDrawing = true;
+
+                switch (this.currentTool) {
+                    case 'line':
+                        this.drawingData = {
+                            type: 'line',
+                            start: startPos,
+                            end: startPos
+                        };
+                        break;
+
+                    case 'rectangle':
+                        this.drawingData = {
+                            type: 'rectangle',
+                            start: startPos,
+                            end: startPos
+                        };
+                        break;
+
+                    case 'circle':
+                        this.drawingData = {
+                            type: 'circle',
+                            center: startPos,
+                            radius: 0
+                        };
+                        break;
+
+                    case 'arc':
+                        this.drawingData = {
+                            type: 'arc',
+                            center: startPos,
+                            radius: 0,
+                            startAngle: 0,
+                            endAngle: 0
+                        };
+                        break;
+
+                    case 'polygon':
+                        this.drawingData = {
+                            type: 'polygon',
+                            center: startPos,
+                            radius: 0,
+                            sides: 6,
+                            points: []
+                        };
+                        break;
+                }
+
+                this.updateStatus(`Drawing ${this.currentTool}...`);
+            }
+
+            updateDrawing(currentPos) {
+                if (!this.drawingData) return;
+
+                switch (this.drawingData.type) {
+                    case 'line':
+                        this.drawingData.end = currentPos;
+                        break;
+
+                    case 'rectangle':
+                        this.drawingData.end = currentPos;
+                        break;
+
+                    case 'circle':
+                        const dx = currentPos.x - this.drawingData.center.x;
+                        const dy = currentPos.y - this.drawingData.center.y;
+                        this.drawingData.radius = Math.sqrt(dx * dx + dy * dy);
+                        break;
+
+                    case 'arc':
+                        const arcDx = currentPos.x - this.drawingData.center.x;
+                        const arcDy = currentPos.y - this.drawingData.center.y;
+                        this.drawingData.radius = Math.sqrt(arcDx * arcDx + arcDy * arcDy);
+                        this.drawingData.endAngle = Math.atan2(arcDy, arcDx);
+                        break;
+                }
+            }
+
+            finishDrawing(endPos) {
+                if (!this.drawingData) return;
+
+                let newObj = null;
+
+                switch (this.drawingData.type) {
+                    case 'line':
+                        newObj = this.createLine(this.drawingData.start, endPos);
+                        break;
+
+                    case 'rectangle':
+                        const width = Math.abs(endPos.x - this.drawingData.start.x);
+                        const height = Math.abs(endPos.y - this.drawingData.start.y);
+                        const center = {
+                            x: (this.drawingData.start.x + endPos.x) / 2,
+                            y: (this.drawingData.start.y + endPos.y) / 2
+                        };
+                        newObj = this.createRectangle(center, width, height);
+                        break;
+
+                    case 'circle':
+                        const radius = this.drawingData.radius;
+                        newObj = this.createCircle(this.drawingData.center, radius);
+                        break;
+
+                    case 'arc':
+                        const arcRadius = this.drawingData.radius;
+                        const startAngle = 0;
+                        const endAngle = this.drawingData.endAngle;
+                        newObj = this.createArc(this.drawingData.center, arcRadius, startAngle, endAngle);
+                        break;
+
+                    case 'polygon':
+                        const polyRadius = Math.sqrt(
+                            Math.pow(endPos.x - this.drawingData.center.x, 2) +
+                            Math.pow(endPos.y - this.drawingData.center.y, 2)
+                        );
+                        newObj = this.createPolygon(this.drawingData.center, polyRadius, 6);
+                        break;
+                }
+
+                if (newObj) {
+                    this.objects.push(newObj);
+                    this.deselectAll();
+                    this.selectObject(newObj);
+                    this.updateStatus(`${this.currentTool} created`);
+                }
+
+                this.isDrawing = false;
+                this.drawingData = null;
+                this.updateUI();
+            }
+
+            cancelDrawing() {
+                if (this.isDrawing) {
+                    this.isDrawing = false;
+                    this.drawingData = null;
+                    this.updateStatus('Drawing cancelled');
+                }
+            }
+
+            // ==================== 其他功能 ====================
+
+            moveSelectedObjects(dx, dy) {
+                this.selectedObjects.forEach(obj => {
+                    if (obj.center) {
+                        obj.center.x += dx;
+                        obj.center.y += dy;
+                    }
+                    if (obj.start) {
+                        obj.start.x += dx;
+                        obj.start.y += dy;
+                    }
+                    if (obj.end) {
+                        obj.end.x += dx;
+                        obj.end.y += dy;
+                    }
+                    if (obj.points) {
+                        obj.points.forEach(point => {
+                            point.x += dx;
+                            point.y += dy;
+                        });
+                    }
+                });
+                this.updateControlPoints();
+                this.updateObjectProperties();
+                this.render();
+            }
+
+            deleteSelectedObjects() {
+                const toDelete = Array.from(this.selectedObjects);
+                toDelete.forEach(obj => {
+                    const index = this.objects.indexOf(obj);
+                    if (index > -1) {
+                        this.objects.splice(index, 1);
+                    }
+                });
+                this.selectedObjects.clear();
+                this.updateUI();
+                this.render();
+                this.updateStatus(`${toDelete.length} object(s) deleted`);
+            }
+
+            duplicateSelectedObjects() {
+                const duplicates = [];
+                this.selectedObjects.forEach(original => {
+                    const duplicate = JSON.parse(JSON.stringify(original));
+                    duplicate.id = 'obj_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                    duplicate.selected = false;
+
+                    // 偏移复制品的位置
+                    if (duplicate.center) {
+                        duplicate.center.x += 20;
+                        duplicate.center.y += 20;
+                    }
+                    if (duplicate.start) {
+                        duplicate.start.x += 20;
+                        duplicate.start.y += 20;
+                    }
+                    if (duplicate.end) {
+                        duplicate.end.x += 20;
+                        duplicate.end.y += 20;
+                    }
+                    if (duplicate.points) {
+                        duplicate.points.forEach(point => {
+                            point.x += 20;
+                            point.y += 20;
+                        });
+                    }
+
+                    duplicates.push(duplicate);
+                });
+
+                duplicates.forEach(dup => this.objects.push(dup));
+                this.deselectAll();
+                duplicates.forEach(dup => this.selectObject(dup));
+                this.updateUI();
+                this.render();
+                this.updateStatus(`${duplicates.length} object(s) duplicated`);
+            }
+
+            applyTransform() {
+                const x = parseFloat(document.getElementById('pos-x').value);
+                const y = parseFloat(document.getElementById('pos-y').value);
+                const rotation = parseFloat(document.getElementById('rotation').value);
+                const scale = parseFloat(document.getElementById('scale').value);
+
+                if (isNaN(x) || isNaN(y) || isNaN(rotation) || isNaN(scale)) {
+                    return;
+                }
+
+                this.selectedObjects.forEach(obj => {
+                    if (obj.center) {
+                        obj.center.x = x;
+                        obj.center.y = y;
+                    }
+                    if (obj.start) {
+                        obj.start.x = x;
+                        obj.start.y = y;
+                    }
+                    obj.rotation = rotation;
+
+                    // 应用缩放
+                    if (obj.width) obj.width *= scale;
+                    if (obj.height) obj.height *= scale;
+                    if (obj.radius) obj.radius *= scale;
+                });
+
+                this.updateControlPoints();
+                this.render();
+                this.updateStatus('Transform applied');
+            }
+
+            updateSelectedFromUI() {
+                const obj = this.getSelectedObject();
+                if (!obj) return;
+
+                obj.center = {
+                    x: parseFloat(document.getElementById('pos-x').value) || obj.center.x,
+                    y: parseFloat(document.getElementById('pos-y').value) || obj.center.y
+                };
+                obj.rotation = parseFloat(document.getElementById('rotation').value) || obj.rotation;
+
+                this.updateControlPoints();
+                this.render();
+            }
+
+            // ==================== 视图控制 ====================
+
+            startPanning(mousePos) {
+                this.panning = true;
+                this.panStart = mousePos;
+                this.canvas.style.cursor = 'grabbing';
+            }
+
+            handlePanning(mousePos) {
+                if (!this.panning) return;
+
+                const dx = (mousePos.x - this.panStart.x) / this.camera.zoom;
+                const dy = (mousePos.y - this.panStart.y) / this.camera.zoom;
+
+                this.camera.offset.x -= dx;
+                this.camera.offset.y -= dy;
+
+                this.panStart = mousePos;
+                this.drawGrid();
+            }
+
+            finishPanning() {
+                this.panning = false;
+                this.panStart = null;
+                this.canvas.style.cursor = 'grab';
+            }
+
+            setCurrentTool(tool) {
+                if (this.currentTool === tool) return;
+
+                this.cancelDrawing();
+                this.finishEditing();
+
+                this.currentTool = tool;
+
+                // 更新UI按钮状态
+                document.querySelectorAll('.tool-btn').forEach(btn => {
+                    btn.classList.remove('active');
+                    if (btn.dataset.tool === tool) {
+                        btn.classList.add('active');
+                    }
+                });
+
+                document.getElementById('current-tool').textContent =
+                    tool.charAt(0).toUpperCase() + tool.slice(1);
+
+                // 更新光标
+                this.canvas.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+
+                this.updateStatus(`${tool} tool activated`);
+            }
+
+            // ==================== 渲染 ====================
+
+            drawGrid() {
+                if (!this.settings.showGrid) {
+                    this.gridCtx.clearRect(0, 0, this.gridCanvas.width, this.gridCanvas.height);
+                    return;
+                }
+
+                const ctx = this.gridCtx;
+                const width = this.gridCanvas.width;
+                const height = this.gridCanvas.height;
+
+                ctx.clearRect(0, 0, width, height);
+
+                // 计算网格线间隔
+                const gridSpacing = this.settings.gridSize * this.camera.zoom;
+
+                if (gridSpacing < 5) return;
+
+                // 计算起始位置
+                const offsetX = this.camera.offset.x * this.camera.zoom;
+                const offsetY = this.camera.offset.y * this.camera.zoom;
+
+                const startX = ((width / 2 - offsetX) % gridSpacing + gridSpacing) % gridSpacing;
+                const startY = ((height / 2 - offsetY) % gridSpacing + gridSpacing) % gridSpacing;
+
+                // 画网格线
+                ctx.strokeStyle = 'rgba(100, 100, 120, 0.3)';
+                ctx.lineWidth = 1;
+
+                // 垂直线
+                for (let x = startX; x < width; x += gridSpacing) {
+                    ctx.beginPath();
+                    ctx.moveTo(x, 0);
+                    ctx.lineTo(x, height);
+                    ctx.stroke();
+                }
+
+                // 水平线
+                for (let y = startY; y < height; y += gridSpacing) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, y);
+                    ctx.lineTo(width, y);
+                    ctx.stroke();
+                }
+
+                // 坐标轴
+                const centerX = width / 2 - offsetX;
+                const centerY = height / 2 - offsetY;
+
+                // X轴
+                ctx.strokeStyle = 'rgba(255, 100, 100, 0.6)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(0, centerY);
+                ctx.lineTo(width, centerY);
+                ctx.stroke();
+
+                // Y轴
+                ctx.strokeStyle = 'rgba(100, 255, 100, 0.6)';
+                ctx.beginPath();
+                ctx.moveTo(centerX, 0);
+                ctx.lineTo(centerX, height);
+                ctx.stroke();
+            }
+
+            render() {
+                const ctx = this.ctx;
+                const width = this.canvas.width;
+                const height = this.canvas.height;
+
+                // 清除画布
+                ctx.clearRect(0, 0, width, height);
+
+                // 保存当前状态
+                ctx.save();
+
+                // 应用相机变换
+                ctx.translate(width / 2, height / 2);
+                ctx.scale(this.camera.zoom, this.camera.zoom);
+                ctx.translate(-this.camera.offset.x, -this.camera.offset.y);
+
+                // 渲染所有对象
+                this.objects.forEach(obj => {
+                    this.renderObject(obj);
+                });
+
+                // 渲染选中的对象（高亮）
+                this.selectedObjects.forEach(obj => {
+                    this.renderObjectHighlight(obj);
+                });
+
+                // 渲染临时绘图对象
+                if (this.drawingData) {
+                    this.renderDrawingPreview();
+                }
+
+                // 恢复状态
+                ctx.restore();
+
+                // 渲染控制点和手柄（在屏幕坐标中）
+                this.renderControlPoints();
+            }
+
+            renderObject(obj) {
+                const ctx = this.ctx;
+
+                ctx.save();
+
+                ctx.strokeStyle = obj.color;
+                ctx.lineWidth = obj.lineWidth;
+                ctx.fillStyle = obj.fillColor || 'transparent';
+
+                if (obj.rotation) {
+                    const center = obj.center || obj.start;
+                    ctx.translate(center.x, center.y);
+                    ctx.rotate(obj.rotation * Math.PI / 180);
+                    ctx.translate(-center.x, -center.y);
+                }
+
+                switch (obj.type) {
+                    case 'line':
+                        ctx.beginPath();
+                        ctx.moveTo(obj.start.x, obj.start.y);
+                        ctx.lineTo(obj.end.x, obj.end.y);
+                        ctx.stroke();
+                        break;
+
+                    case 'rectangle':
+                        ctx.beginPath();
+                        ctx.rect(
+                            obj.center.x - obj.width / 2,
+                            obj.center.y - obj.height / 2,
+                            obj.width,
+                            obj.height
+                        );
+                        if (obj.fillColor) {
+                            ctx.fill();
+                        }
+                        ctx.stroke();
+                        break;
+
+                    case 'circle':
+                        ctx.beginPath();
+                        ctx.arc(obj.center.x, obj.center.y, obj.radius, 0, Math.PI * 2);
+                        if (obj.fillColor) {
+                            ctx.fill();
+                        }
+                        ctx.stroke();
+                        break;
+
+                    case 'polygon':
+                        ctx.beginPath();
+                        ctx.moveTo(obj.points[0].x, obj.points[0].y);
+                        for (let i = 1; i < obj.points.length; i++) {
+                            ctx.lineTo(obj.points[i].x, obj.points[i].y);
+                        }
+                        ctx.closePath();
+                        if (obj.fillColor) {
+                            ctx.fill();
+                        }
+                        ctx.stroke();
+                        break;
+
+                    case 'arc':
+                        ctx.beginPath();
+                        ctx.arc(obj.center.x, obj.center.y, obj.radius, obj.startAngle, obj.endAngle);
+                        ctx.stroke();
+                        break;
+                }
+
+                ctx.restore();
+            }
+
+            renderObjectHighlight(obj) {
+                const ctx = this.ctx;
+
+                ctx.save();
+                ctx.strokeStyle = '#ffa500';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+
+                const bounds = this.getObjectBounds(obj);
+
+                ctx.beginPath();
+                ctx.rect(
+                    bounds.minX - 5,
+                    bounds.minY - 5,
+                    bounds.maxX - bounds.minX + 10,
+                    bounds.maxY - bounds.minY + 10
+                );
+                ctx.stroke();
+
+                ctx.restore();
+            }
+
+            renderDrawingPreview() {
+                const ctx = this.ctx;
+
+                ctx.save();
+                ctx.strokeStyle = '#00aaff';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.fillStyle = 'rgba(0, 170, 255, 0.1)';
+
+                switch (this.drawingData.type) {
+                    case 'line':
+                        ctx.beginPath();
+                        ctx.moveTo(this.drawingData.start.x, this.drawingData.start.y);
+                        ctx.lineTo(this.drawingData.end.x, this.drawingData.end.y);
+                        ctx.stroke();
+                        break;
+
+                    case 'rectangle':
+                        const width = this.drawingData.end.x - this.drawingData.start.x;
+                        const height = this.drawingData.end.y - this.drawingData.start.y;
+
+                        ctx.beginPath();
+                        ctx.rect(this.drawingData.start.x, this.drawingData.start.y, width, height);
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+
+                    case 'circle':
+                        ctx.beginPath();
+                        ctx.arc(this.drawingData.center.x, this.drawingData.center.y, this.drawingData.radius, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+
+                    case 'arc':
+                        ctx.beginPath();
+                        ctx.arc(this.drawingData.center.x, this.drawingData.center.y, this.drawingData.radius, 0, this.drawingData.endAngle);
+                        ctx.stroke();
+                        break;
+
+                    case 'polygon':
+                        ctx.beginPath();
+                        const radius = this.drawingData.radius || 50;
+                        const sides = 6;
+                        for (let i = 0; i < sides; i++) {
+                            const angle = (i * 2 * Math.PI) / sides;
+                            const x = this.drawingData.center.x + radius * Math.cos(angle);
+                            const y = this.drawingData.center.y + radius * Math.sin(angle);
+
+                            if (i === 0) {
+                                ctx.moveTo(x, y);
+                            } else {
+                                ctx.lineTo(x, y);
+                            }
+                        }
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.stroke();
+                        break;
+                }
+
+                ctx.restore();
+            }
+
+            renderControlPoints() {
+                const ctx = this.ctx;
+
+                // 切换到屏幕坐标
+                ctx.save();
+
+                // 渲染控制点
+                this.controlPoints.forEach(point => {
+                    ctx.fillStyle = '#4a9eff';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.lineWidth = 2;
+
+                    ctx.beginPath();
+                    ctx.arc(point.x, point.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                });
+
+                // 渲染旋转手柄
+                if (this.rotationHandle) {
+                    const center = this.worldToScreen(this.rotationHandle.object.center);
+
+                    ctx.strokeStyle = '#ff9800';
+                    ctx.lineWidth = 2;
+                    ctx.setLineDash([3, 3]);
+
+                    ctx.beginPath();
+                    ctx.moveTo(center.x, center.y);
+                    ctx.lineTo(this.rotationHandle.x, this.rotationHandle.y);
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#ff9800';
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.setLineDash([]);
+
+                    ctx.beginPath();
+                    ctx.arc(this.rotationHandle.x, this.rotationHandle.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 显示旋转角度
+                    const angle = this.rotationHandle.object.rotation;
+                    ctx.fillStyle = '#ff9800';
+                    ctx.font = '12px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(`${angle.toFixed(1)}°`, this.rotationHandle.x, this.rotationHandle.y - 10);
+                }
+
+                ctx.restore();
+            }
+
+            // ==================== UI更新 ====================
+
+            updateUI() {
+                document.getElementById('object-count').textContent = this.objects.length;
+                document.getElementById('selected-count').textContent =
+                    `${this.selectedObjects.size} selected`;
+            }
+
+            updateObjectProperties() {
+                const obj = this.getSelectedObject();
+                const panel = document.getElementById('object-properties');
+
+                if (obj) {
+                    panel.style.display = 'block';
+                    document.getElementById('obj-type').textContent =
+                        obj.type.charAt(0).toUpperCase() + obj.type.slice(1);
+
+                    // 更新通用属性
+                    const center = obj.center || obj.start;
+                    document.getElementById('pos-x').value = center ? center.x.toFixed(2) : '';
+                    document.getElementById('pos-y').value = center ? center.y.toFixed(2) : '';
+                    document.getElementById('rotation').value = obj.rotation || 0;
+                    document.getElementById('scale').value = 1.0;
+
+                    // 更新类型特定属性
+                    const typePanel = document.getElementById('type-specific-props');
+                    typePanel.innerHTML = '';
+
+                    switch (obj.type) {
+                        case 'line':
+                            typePanel.innerHTML = `
+                                    <h4 style="color: #b0b8c8; margin-bottom: 10px;">Line Properties</h4>
+                                    <div class="property-row">
+                                        <span class="property-label">Start X:</span>
+                                        <input type="number" id="start-x" class="property-input" value="${obj.start.x.toFixed(2)}" step="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">Start Y:</span>
+                                        <input type="number" id="start-y" class="property-input" value="${obj.start.y.toFixed(2)}" step="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">End X:</span>
+                                        <input type="number" id="end-x" class="property-input" value="${obj.end.x.toFixed(2)}" step="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">End Y:</span>
+                                        <input type="number" id="end-y" class="property-input" value="${obj.end.y.toFixed(2)}" step="0.1">
+                                    </div>
+                                `;
+                            break;
+
+                        case 'rectangle':
+                            typePanel.innerHTML = `
+                                    <h4 style="color: #b0b8c8; margin-bottom: 10px;">Rectangle Properties</h4>
+                                    <div class="property-row">
+                                        <span class="property-label">Width:</span>
+                                        <input type="number" id="width" class="property-input" value="${obj.width.toFixed(2)}" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">Height:</span>
+                                        <input type="number" id="height" class="property-input" value="${obj.height.toFixed(2)}" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">Corner Radius:</span>
+                                        <input type="number" id="corner-radius" class="property-input" value="0" step="0.1" min="0">
+                                    </div>
+                                `;
+                            break;
+
+                        case 'circle':
+                            typePanel.innerHTML = `
+                                    <h4 style="color: #b0b8c8; margin-bottom: 10px;">Circle Properties</h4>
+                                    <div class="property-row">
+                                        <span class="property-label">Radius:</span>
+                                        <input type="number" id="radius" class="property-input" value="${obj.radius.toFixed(2)}" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">Start Angle:</span>
+                                        <input type="number" id="start-angle" class="property-input" value="0" step="1" min="0" max="360">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">End Angle:</span>
+                                        <input type="number" id="end-angle" class="property-input" value="360" step="1" min="0" max="360">
+                                    </div>
+                                `;
+                            break;
+
+                        case 'polygon':
+                            typePanel.innerHTML = `
+                                    <h4 style="color: #b0b8c8; margin-bottom: 10px;">Polygon Properties</h4>
+                                    <div class="property-row">
+                                        <span class="property-label">Radius:</span>
+                                        <input type="number" id="poly-radius" class="property-input" value="${obj.radius.toFixed(2)}" step="0.1" min="0.1">
+                                    </div>
+                                    <div class="property-row">
+                                        <span class="property-label">Sides:</span>
+                                        <input type="number" id="sides" class="property-input" value="${obj.sides}" step="1" min="3" max="20">
+                                    </div>
+                                `;
+                            break;
+                    }
+                } else {
+                    panel.style.display = 'none';
+                }
+            }
+
+            updateMouseCoordinates(worldPos, screenPos) {
+                document.getElementById('world-x').textContent = worldPos.x.toFixed(2);
+                document.getElementById('world-y').textContent = worldPos.y.toFixed(2);
+
+                if (screenPos) {
+                    document.getElementById('screen-x').textContent = Math.round(screenPos.x);
+                    document.getElementById('screen-y').textContent = Math.round(screenPos.y);
+                }
+            }
+
+            updateStatus(message) {
+                document.getElementById('status-message').textContent = message;
+            }
+        }
+
+        // ==================== 启动应用 ====================
+        let cadApp;
+
+        window.addEventListener('load', () => {
+            try {
+                cadApp = new ProfessionalCAD();
+                console.log('Professional CAD Application started successfully');
+            } catch (error) {
+                console.error('Failed to start application:', error);
+                document.body.innerHTML = `
+                        <div style="
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            background: #1a1a2e;
+                            color: #ff6b6b;
+                            display: flex;
+                            flex-direction: column;
+                            justify-content: center;
+                            align-items: center;
+                            font-family: Arial, sans-serif;
+                            padding: 20px;
+                            text-align: center;
+                        ">
+                            <h1 style="font-size: 24px; margin-bottom: 20px;">Application Error</h1>
+                            <p style="margin-bottom: 20px; max-width: 600px;">${error.message}</p>
+                            <p style="margin-bottom: 30px; color: #aaa;">Please ensure your browser supports Canvas 2D</p>
+                            <button onclick="location.reload()" style="
+                                background: #007acc;
+                                color: white;
+                                border: none;
+                                padding: 10px 20px;
+                                border-radius: 5px;
+                                cursor: pointer;
+                                font-size: 16px;
+                            ">
+                                Reload Application
+                            </button>
+                        </div>
+                    `;
+            }
+        });
+
+    </script>
+</body>
+</html>

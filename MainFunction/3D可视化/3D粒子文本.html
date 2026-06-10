@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D粒子文本显示系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.158.0/build/three.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-color: #000;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(30, 30, 30, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 600px;
+            z-index: 100;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            margin-bottom: 10px;
+            background: #111;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            padding: 8px;
+            resize: vertical;
+        }
+
+        .control-group {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .form-group {
+            flex: 1;
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            margin-bottom: 4px;
+            color: #ccc;
+        }
+
+        input, select {
+            width: 100%;
+            padding: 6px;
+            background: #111;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+        }
+
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #45a049;
+        }
+
+        .status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 16px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container"></div>
+    
+    <div class="controls">
+        <div class="form-group">
+            <label for="textInput">输入文本（支持多行）</label>
+            <textarea id="textInput" placeholder="请输入文本，支持多行">欢迎使用
+3D粒子系统
+这是多行文本示例</textarea>
+        </div>
+        
+        <div class="control-group">
+            <div class="form-group">
+                <label for="fontSize">字体大小</label>
+                <input type="number" id="fontSize" value="40" min="10" max="100">
+            </div>
+            <div class="form-group">
+                <label for="particleSize">粒子大小</label>
+                <input type="number" id="particleSize" value="2" min="1" max="10">
+            </div>
+            <div class="form-group">
+                <label for="density">粒子密度</label>
+                <input type="number" id="density" value="3" min="1" max="10">
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <div class="form-group">
+                <label for="zMode">Z轴模式</label>
+                <select id="zMode">
+                    <option value="random">随机分布</option>
+                    <option value="x-dependent">随X轴变化</option>
+                    <option value="y-dependent">随Y轴变化</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="zDepth">Z轴深度</label>
+                <input type="number" id="zDepth" value="50" min="0" max="200">
+            </div>
+        </div>
+        
+        <button id="renderBtn">生成粒子图案</button>
+        <button id="rotateBtn">开始/停止旋转</button>
+    </div>
+    
+    <div class="status" id="status">准备就绪，请点击"生成粒子图案"</div>
+
+    <script>
+        // 初始化Three.js核心组件
+        let scene, camera, renderer;
+        let particleSystem = null;
+        let isRotating = false;
+        let rotationSpeed = 0.005;
+        let animationId = null;
+        
+        // 初始化场景
+        function initScene() {
+            // 创建场景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x000000);
+            
+            // 创建相机
+            camera = new THREE.PerspectiveCamera(
+                60, 
+                window.innerWidth / window.innerHeight, 
+                1, 
+                2000
+            );
+            camera.position.z = 500;
+            
+            // 创建渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // 添加环境光确保粒子可见
+            const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
+            scene.add(ambientLight);
+            
+            // 窗口大小变化处理
+            window.addEventListener('resize', onWindowResize);
+            
+            // 初始渲染一次空场景
+            renderer.render(scene, camera);
+        }
+        
+        // 窗口大小变化时调整相机和渲染器
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+        
+        // 从文本生成粒子
+        function generateParticlesFromText() {
+            // 清除现有粒子系统
+            if (particleSystem) {
+                scene.remove(particleSystem);
+                particleSystem.geometry.dispose();
+                particleSystem.material.dispose();
+                particleSystem = null;
+            }
+            
+            // 获取用户输入
+            const text = document.getElementById('textInput').value;
+            const fontSize = parseInt(document.getElementById('fontSize').value);
+            const particleSize = parseInt(document.getElementById('particleSize').value);
+            const density = parseInt(document.getElementById('density').value);
+            const zMode = document.getElementById('zMode').value;
+            const zDepth = parseInt(document.getElementById('zDepth').value);
+            
+            // 更新状态提示
+            document.getElementById('status').textContent = `正在生成粒子...`;
+            
+            // 创建Canvas用于文本绘制
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // 计算文本所需的Canvas大小
+            // 先测量文本尺寸
+            ctx.font = `${fontSize}px Arial`;
+            const lines = text.split('\n');
+            const lineHeights = lines.map(line => ctx.measureText(line).actualBoundingBoxAscent + ctx.measureText(line).actualBoundingBoxDescent);
+            const maxLineWidth = Math.max(...lines.map(line => ctx.measureText(line).width));
+            const totalHeight = lineHeights.reduce((sum, h) => sum + h, 0) + (lines.length - 1) * fontSize * 0.3; // 行间距
+            
+            // 设置Canvas尺寸，留出足够边距
+            canvas.width = maxLineWidth + fontSize;
+            canvas.height = totalHeight + fontSize;
+            
+            // 重新设置字体并绘制文本
+            ctx.font = `${fontSize}px Arial`;
+            ctx.fillStyle = '#ffffff';
+            ctx.textBaseline = 'top';
+            
+            // 计算起始Y位置，使文本居中
+            let y = (canvas.height - totalHeight) / 2;
+            
+            lines.forEach((line, index) => {
+                // 计算每行X位置，使文本居中
+                const x = (canvas.width - ctx.measureText(line).width) / 2;
+                ctx.fillText(line, x, y);
+                y += lineHeights[index] + fontSize * 0.3; // 行间距
+            });
+            
+            // 获取像素数据
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            
+            // 创建粒子几何
+            const geometry = new THREE.BufferGeometry();
+            const positions = [];
+            const colors = [];
+            
+            // 粒子颜色
+            const color = new THREE.Color(0x00ff00); // 绿色粒子
+            
+            // 遍历像素创建粒子
+            let particleCount = 0;
+            const halfWidth = canvas.width / 2;
+            const halfHeight = canvas.height / 2;
+            
+            for (let y = 0; y < canvas.height; y += density) {
+                for (let x = 0; x < canvas.width; x += density) {
+                    const index = (y * canvas.width + x) * 4;
+                    const alpha = imageData[index + 3];
+                    
+                    // 如果像素不透明，创建粒子
+                    if (alpha > 10) {
+                        // 计算3D位置（居中显示）
+                        const posX = (x - halfWidth) * 0.5;
+                        const posY = (halfHeight - y) * 0.5;
+                        
+                        // 根据选择的Z轴模式计算Z值
+                        let posZ;
+                        switch(zMode) {
+                            case 'x-dependent':
+                                // Z轴随X轴变化
+                                posZ = (x / canvas.width - 0.5) * zDepth;
+                                break;
+                            case 'y-dependent':
+                                // Z轴随Y轴变化
+                                posZ = (y / canvas.height - 0.5) * zDepth;
+                                break;
+                            case 'random':
+                            default:
+                                // 随机Z轴分布
+                                posZ = (Math.random() - 0.5) * zDepth;
+                                break;
+                        }
+                        
+                        // 添加粒子位置
+                        positions.push(posX, posY, posZ);
+                        
+                        // 添加粒子颜色
+                        colors.push(color.r, color.g, color.b);
+                        
+                        particleCount++;
+                    }
+                }
+            }
+            
+            // 设置几何体属性
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+            
+            // 创建粒子材质
+            const material = new THREE.PointsMaterial({
+                size: particleSize,
+                vertexColors: THREE.VertexColors,
+                transparent: true,
+                opacity: 1.0
+            });
+            
+            // 创建粒子系统并添加到场景
+            particleSystem = new THREE.Points(geometry, material);
+            scene.add(particleSystem);
+            
+            // 更新状态提示
+            document.getElementById('status').textContent = `已生成 ${particleCount} 个粒子`;
+            
+            // 渲染场景
+            renderer.render(scene, camera);
+        }
+        
+        // 动画循环
+        function animate() {
+            if (isRotating && particleSystem) {
+                particleSystem.rotation.y += rotationSpeed;
+                renderer.render(scene, camera);
+            }
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        // 切换旋转状态
+        function toggleRotation() {
+            isRotating = !isRotating;
+            const btn = document.getElementById('rotateBtn');
+            btn.textContent = isRotating ? '停止旋转' : '开始旋转';
+        }
+        
+        // 初始化事件监听
+        function initEvents() {
+            document.getElementById('renderBtn').addEventListener('click', generateParticlesFromText);
+            document.getElementById('rotateBtn').addEventListener('click', toggleRotation);
+        }
+        
+        // 初始化应用
+        function init() {
+            initScene();
+            initEvents();
+            animate(); // 启动动画循环
+        }
+        
+        // 页面加载完成后初始化
+        window.addEventListener('load', init);
+    </script>
+</body>
+</html>

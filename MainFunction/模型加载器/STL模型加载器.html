@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pure WebGL STL Viewer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#36CFC9',
+                        dark: '#1D2129',
+                        light: '#F2F3F5',
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+
+            .control-panel {
+                @apply bg-white/90 backdrop-blur-sm shadow-lg rounded-lg p-4 transition-all duration-300;
+            }
+
+            .btn-control {
+                @apply flex items-center justify-center w-10 h-10 rounded-full bg-light hover:bg-gray-200 transition-all duration-200 text-dark active:scale-95;
+            }
+
+            .btn-primary {
+                @apply bg-primary text-white hover:bg-primary/90 transition-all duration-200 px-4 py-2 rounded-lg active:scale-95;
+            }
+
+            .slider {
+                @apply w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer;
+            }
+
+            .slider::-webkit-slider-thumb {
+                @apply appearance-none w-4 h-4 rounded-full bg-primary cursor-pointer transition-transform hover:scale-125;
+            }
+
+            .key-hint {
+                @apply inline-flex items-center justify-center w-5 h-5 text-xs bg-gray-100 rounded border border-gray-300 mx-1;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-inter overflow-hidden h-screen flex flex-col">
+    <!-- Header -->
+    <header class="bg-white shadow-sm py-3 px-6 flex justify-between items-center">
+        <div class="flex items-center space-x-2">
+            <i class="fa fa-cube text-primary text-2xl"></i>
+            <h1 class="text-xl font-bold text-dark">Pure WebGL STL Viewer</h1>
+        </div>
+        <div class="flex items-center space-x-4">
+            <!-- File Upload Area -->
+            <div class="relative">
+                <label for="file-upload" class="btn-primary flex items-center cursor-pointer">
+                    <i class="fa fa-upload mr-2"></i> Load STL
+                </label>
+                <input id="file-upload" type="file" accept=".stl,.STL" class="hidden">
+                <div id="file-info" class="hidden absolute -bottom-8 left-0 bg-dark text-white text-xs px-2 py-1 rounded whitespace-nowrap z-10">
+                    <span id="file-name"></span>
+                </div>
+            </div>
+            
+            <!-- Quick Actions -->
+            <div class="flex space-x-2">
+                <button id="reset-view" class="btn-control" title="Reset View">
+                    <i class="fa fa-refresh"></i>
+                </button>
+                <button id="show-help" class="btn-control" title="Help">
+                    <i class="fa fa-question-circle"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-1 relative">
+        <!-- WebGL Canvas -->
+        <canvas id="glCanvas" class="w-full h-full"></canvas>
+
+        <!-- Empty State Indicator -->
+        <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-100 z-30">
+            <i class="fa fa-cube text-primary text-5xl mb-4 opacity-30"></i>
+            <p class="text-gray-500 mb-6">No model loaded</p>
+            <label for="file-upload" class="btn-primary flex items-center cursor-pointer">
+                <i class="fa fa-upload mr-2"></i> Load STL File
+            </label>
+            <p class="text-xs text-gray-400 mt-4">Supports both ASCII and binary STL formats</p>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loading" class="hidden absolute inset-0 flex items-center justify-center bg-black/50 z-50">
+            <div class="bg-white p-6 rounded-lg flex items-center space-x-4">
+                <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary"></div>
+                <p class="text-dark font-medium">Loading STL file...</p>
+            </div>
+        </div>
+
+        <!-- Floating Controls -->
+        <div class="absolute bottom-6 left-6 right-6 flex justify-between items-end z-40">
+            <!-- Left Controls - View Manipulation -->
+            <div class="control-panel max-w-xs">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm font-medium text-dark">View Controls</span>
+                    <div class="flex space-x-1">
+                        <span class="key-hint">LMB</span>
+                        <span class="text-xs text-gray-500">Rotate</span>
+                        <span class="key-hint">⇧</span>
+                        <span class="text-xs text-gray-500">Pan</span>
+                        <span class="key-hint">␛</span>
+                        <span class="text-xs text-gray-500">Reset</span>
+                    </div>
+                </div>
+
+                <!-- Rotation Controls -->
+                <div class="grid grid-cols-3 gap-1 mb-3">
+                    <div></div>
+                    <button id="rotate-up" class="btn-control" title="Rotate Up">
+                        <i class="fa fa-arrow-up text-sm"></i>
+                    </button>
+                    <div></div>
+                    <button id="rotate-left" class="btn-control" title="Rotate Left">
+                        <i class="fa fa-arrow-left text-sm"></i>
+                    </button>
+                    <button id="rotate-reset" class="btn-control" title="Reset Rotation">
+                        <i class="fa fa-refresh text-sm"></i>
+                    </button>
+                    <button id="rotate-right" class="btn-control" title="Rotate Right">
+                        <i class="fa fa-arrow-right text-sm"></i>
+                    </button>
+                    <div></div>
+                    <button id="rotate-down" class="btn-control" title="Rotate Down">
+                        <i class="fa fa-arrow-down text-sm"></i>
+                    </button>
+                    <div></div>
+                </div>
+
+                <!-- Zoom Control -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="text-xs text-gray-600">Zoom</span>
+                        <div class="flex items-center">
+                            <button id="zoom-out" class="text-xs text-gray-500 hover:text-primary mr-2">
+                                <i class="fa fa-search-minus"></i>
+                            </button>
+                            <span id="zoom-value" class="text-xs text-gray-600">100%</span>
+                            <button id="zoom-in" class="text-xs text-gray-500 hover:text-primary ml-2">
+                                <i class="fa fa-search-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <input type="range" id="zoom-slider" min="10" max="300" value="100" class="slider">
+                </div>
+            </div>
+
+            <!-- Right Controls - Appearance -->
+            <div class="control-panel w-24">
+                <div class="flex justify-between items-center mb-3">
+                    <span class="text-sm font-medium text-dark">Appearance</span>
+                </div>
+
+                <!-- Color Picker -->
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs text-gray-600">Model Color</span>
+                    <input type="color" id="model-color" value="#165DFF" class="w-8 h-8 p-0 border-0 rounded cursor-pointer">
+                </div>
+
+                <!-- Background Toggle -->
+                <div class="flex items-center justify-between">
+                    <span class="text-xs text-gray-600">Background</span>
+                    <button id="toggle-background" class="btn-control w-8 h-8" title="Toggle Background">
+                        <i class="fa fa-paint-brush text-sm"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-lg max-w-md w-full p-6 shadow-xl transform transition-all">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-dark">How to Use</h2>
+                <button id="close-help" class="text-gray-500 hover:text-dark transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            <div class="space-y-4 text-sm text-gray-700">
+                <div>
+                    <h3 class="font-medium text-dark mb-1">Loading Models</h3>
+                    <p>Click "Load STL" button to upload and view your STL files.</p>
+                </div>
+                <div>
+                    <h3 class="font-medium text-dark mb-1">Navigation</h3>
+                    <ul class="list-disc pl-5 space-y-1">
+                        <li><strong>Rotate:</strong> Click and drag with mouse <span class="key-hint">LMB</span></li>
+                        <li><strong>Pan:</strong> Hold Shift + Click and drag <span class="key-hint">⇧</span> + <span class="key-hint">LMB</span></li>
+                        <li><strong>Zoom:</strong> Mouse wheel or zoom slider <span class="key-hint">⌃</span>/<span class="key-hint">⌄</span></li>
+                        <li><strong>Reset View:</strong> Press Escape <span class="key-hint">␛</span> or click refresh button</li>
+                    </ul>
+                </div>
+                <div>
+                    <h3 class="font-medium text-dark mb-1">Keyboard Shortcuts</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div><span class="key-hint">␛</span> Reset view</div>
+                        <div><span class="key-hint">+</span> Zoom in</div>
+                        <div><span class="key-hint">-</span> Zoom out</div>
+                        <div><span class="key-hint">B</span> Toggle background</div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-6">
+                <button id="got-it" class="btn-primary w-full">Got it</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 矩阵运算工具 - 不依赖外部库
+        const MatrixMath = {
+            // 创建4x4单位矩阵
+            createIdentityMatrix: function () {
+                return [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ];
+            },
+
+            // 创建3x3单位矩阵
+            createIdentityMatrix3: function () {
+                return [
+                    1, 0, 0,
+                    0, 1, 0,
+                    0, 0, 1
+                ];
+            },
+
+            // 矩阵乘法 (4x4)
+            multiply: function (a, b) {
+                const result = new Array(16);
+                for (let i = 0; i < 4; i++) {
+                    for (let j = 0; j < 4; j++) {
+                        result[i * 4 + j] =
+                            a[i * 4 + 0] * b[0 * 4 + j] +
+                            a[i * 4 + 1] * b[1 * 4 + j] +
+                            a[i * 4 + 2] * b[2 * 4 + j] +
+                            a[i * 4 + 3] * b[3 * 4 + j];
+                    }
+                }
+                return result;
+            },
+
+            // 平移矩阵
+            translate: function (matrix, x, y, z) {
+                const translation = this.createIdentityMatrix();
+                translation[3] = x;
+                translation[7] = y;
+                translation[11] = z;
+                return this.multiply(matrix, translation);
+            },
+
+            // 缩放矩阵
+            scale: function (matrix, x, y, z) {
+                const scaling = this.createIdentityMatrix();
+                scaling[0] = x;
+                scaling[5] = y;
+                scaling[10] = z;
+                return this.multiply(matrix, scaling);
+            },
+
+            // X轴旋转矩阵
+            rotateX: function (matrix, angle) {
+                const c = Math.cos(angle);
+                const s = Math.sin(angle);
+                const rotation = this.createIdentityMatrix();
+                rotation[5] = c;
+                rotation[6] = -s;
+                rotation[9] = s;
+                rotation[10] = c;
+                return this.multiply(matrix, rotation);
+            },
+
+            // Y轴旋转矩阵
+            rotateY: function (matrix, angle) {
+                const c = Math.cos(angle);
+                const s = Math.sin(angle);
+                const rotation = this.createIdentityMatrix();
+                rotation[0] = c;
+                rotation[2] = s;
+                rotation[8] = -s;
+                rotation[10] = c;
+                return this.multiply(matrix, rotation);
+            },
+
+            // Z轴旋转矩阵
+            rotateZ: function (matrix, angle) {
+                const c = Math.cos(angle);
+                const s = Math.sin(angle);
+                const rotation = this.createIdentityMatrix();
+                rotation[0] = c;
+                rotation[1] = -s;
+                rotation[4] = s;
+                rotation[5] = c;
+                return this.multiply(matrix, rotation);
+            },
+
+            // 透视投影矩阵
+            perspective: function (fov, aspect, near, far) {
+                const f = 1.0 / Math.tan(fov / 2);
+                const rangeInv = 1.0 / (near - far);
+
+                return [
+                    f / aspect, 0, 0, 0,
+                    0, f, 0, 0,
+                    0, 0, (near + far) * rangeInv, -1,
+                    0, 0, near * far * rangeInv * 2, 0
+                ];
+            },
+
+            // 计算矩阵的行列式 (3x3)
+            determinant3: function (m) {
+                return m[0] * (m[4] * m[8] - m[5] * m[7]) -
+                    m[1] * (m[3] * m[8] - m[5] * m[6]) +
+                    m[2] * (m[3] * m[7] - m[4] * m[6]);
+            },
+
+            // 计算矩阵的逆矩阵 (3x3)
+            inverse3: function (m) {
+                const det = this.determinant3(m);
+                if (det === 0) return null;
+
+                const invDet = 1 / det;
+
+                return [
+                    (m[4] * m[8] - m[5] * m[7]) * invDet,
+                    (m[2] * m[7] - m[1] * m[8]) * invDet,
+                    (m[1] * m[5] - m[2] * m[4]) * invDet,
+
+                    (m[5] * m[6] - m[3] * m[8]) * invDet,
+                    (m[0] * m[8] - m[2] * m[6]) * invDet,
+                    (m[2] * m[3] - m[0] * m[5]) * invDet,
+
+                    (m[3] * m[7] - m[4] * m[6]) * invDet,
+                    (m[1] * m[6] - m[0] * m[7]) * invDet,
+                    (m[0] * m[4] - m[1] * m[3]) * invDet
+                ];
+            },
+
+            // 计算矩阵的转置 (3x3)
+            transpose3: function (m) {
+                return [
+                    m[0], m[3], m[6],
+                    m[1], m[4], m[7],
+                    m[2], m[5], m[8]
+                ];
+            },
+
+            // 从4x4矩阵提取3x3矩阵
+            extract3x3: function (m4) {
+                return [
+                    m4[0], m4[1], m4[2],
+                    m4[4], m4[5], m4[6],
+                    m4[8], m4[9], m4[10]
+                ];
+            },
+
+            // 计算法向量矩阵 (4x4矩阵的逆转置的3x3部分)
+            normalMatrix: function (m4) {
+                const m3 = this.extract3x3(m4);
+                const inv = this.inverse3(m3);
+                return inv ? this.transpose3(inv) : this.createIdentityMatrix3();
+            }
+        };
+
+        // 全局变量
+        let canvas, gl;
+        let program;
+        let model = {
+            vertices: [],
+            normals: [],
+            vertexBuffer: null,
+            normalBuffer: null,
+            numTriangles: 0,
+            center: [0, 0, 0],
+            radius: 1,
+            name: ""
+        };
+
+        // 变换变量
+        let rotation = [0, 0, 0];
+        let translation = [0, 0, 0];
+        let scale = 1.0;
+        let modelColor = [0.094, 0.361, 1.0, 1.0]; // 默认: #165DFF
+        let isDarkBackground = false;
+
+        // 鼠标交互变量
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+        let isPanning = false;
+
+        // 矩阵变量
+        let projectionMatrix, modelViewMatrix, normalMatrix;
+
+        // 初始化WebGL
+        function initWebGL() {
+            canvas = document.getElementById('glCanvas');
+            gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+
+            if (!gl) {
+                alert('无法初始化WebGL。您的浏览器可能不支持。');
+                return false;
+            }
+
+            // 设置canvas尺寸以匹配显示尺寸
+            resizeCanvas();
+            window.addEventListener('resize', resizeCanvas);
+
+            // 设置清除颜色并启用深度测试
+            updateBackgroundColor();
+            gl.enable(gl.DEPTH_TEST);
+            gl.enable(gl.CULL_FACE);
+
+            return true;
+        }
+
+        // 更新背景颜色
+        function updateBackgroundColor() {
+            if (isDarkBackground) {
+                gl.clearColor(0.1, 0.1, 0.15, 1.0); // 深色背景
+                document.getElementById('empty-state').classList.add('bg-gray-900');
+                document.getElementById('empty-state').classList.remove('bg-gray-100');
+                document.querySelector('#empty-state p:first-of-type').classList.add('text-gray-400');
+                document.querySelector('#empty-state p:first-of-type').classList.remove('text-gray-500');
+            } else {
+                gl.clearColor(0.95, 0.96, 0.97, 1.0); // 浅色背景
+                document.getElementById('empty-state').classList.remove('bg-gray-900');
+                document.getElementById('empty-state').classList.add('bg-gray-100');
+                document.querySelector('#empty-state p:first-of-type').classList.remove('text-gray-400');
+                document.querySelector('#empty-state p:first-of-type').classList.add('text-gray-500');
+            }
+        }
+
+        // 切换背景颜色
+        function toggleBackground() {
+            isDarkBackground = !isDarkBackground;
+            updateBackgroundColor();
+            render();
+        }
+
+        // 调整canvas尺寸以匹配其显示尺寸
+        function resizeCanvas() {
+            const displayWidth = canvas.clientWidth;
+            const displayHeight = canvas.clientHeight;
+
+            if (canvas.width !== displayWidth || canvas.height !== displayHeight) {
+                canvas.width = displayWidth;
+                canvas.height = displayHeight;
+                gl.viewport(0, 0, displayWidth, displayHeight);
+
+                // 更新投影矩阵
+                updateProjectionMatrix();
+                if (model.numTriangles > 0) {
+                    render();
+                }
+            }
+        }
+
+        // 根据canvas宽高比更新投影矩阵
+        function updateProjectionMatrix() {
+            const aspect = canvas.clientWidth / canvas.clientHeight;
+            // 45度视场角，转换为弧度
+            const fov = Math.PI * 0.25;
+            projectionMatrix = MatrixMath.perspective(fov, aspect, 0.1, 1000.0);
+        }
+
+        // 创建并编译着色器
+        function createShader(type, source) {
+            const shader = gl.createShader(type);
+            gl.shaderSource(shader, source);
+            gl.compileShader(shader);
+
+            if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+                console.error('编译着色器时发生错误:', gl.getShaderInfoLog(shader));
+                gl.deleteShader(shader);
+                return null;
+            }
+
+            return shader;
+        }
+
+        // 初始化着色器和程序
+        function initShaders() {
+            // 顶点着色器源码
+            const vertexShaderSource = `
+                    attribute vec3 aVertexPosition;
+                    attribute vec3 aVertexNormal;
+
+                    uniform mat4 uModelViewMatrix;
+                    uniform mat4 uProjectionMatrix;
+                    uniform mat3 uNormalMatrix;
+
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+
+                    void main() {
+                        gl_Position = uProjectionMatrix * uModelViewMatrix * vec4(aVertexPosition, 1.0);
+                        vPosition = vec3(uModelViewMatrix * vec4(aVertexPosition, 1.0));
+                        vNormal = uNormalMatrix * aVertexNormal;
+                    }
+                `;
+
+            // 片元着色器源码
+            const fragmentShaderSource = `
+                    precision mediump float;
+
+                    varying vec3 vNormal;
+                    varying vec3 vPosition;
+
+                    uniform vec4 uColor;
+                    uniform vec3 uLightPosition;
+                    uniform vec3 uAmbientColor;
+                    uniform vec3 uDiffuseColor;
+
+                    void main() {
+                        // 归一化法向量（因为它是插值的）
+                        vec3 normal = normalize(vNormal);
+
+                        // 计算光源方向并归一化
+                        vec3 lightDirection = normalize(uLightPosition - vPosition);
+
+                        // 计算环境光
+                        vec3 ambient = uAmbientColor * uColor.rgb;
+
+                        // 计算漫反射光
+                        float diff = max(dot(normal, lightDirection), 0.0);
+                        vec3 diffuse = diff * uDiffuseColor * uColor.rgb;
+
+                        // 最终颜色
+                        gl_FragColor = vec4(ambient + diffuse, uColor.a);
+                    }
+                `;
+
+            // 创建着色器
+            const vertexShader = createShader(gl.VERTEX_SHADER, vertexShaderSource);
+            const fragmentShader = createShader(gl.FRAGMENT_SHADER, fragmentShaderSource);
+
+            // 创建并链接程序
+            program = gl.createProgram();
+            gl.attachShader(program, vertexShader);
+            gl.attachShader(program, fragmentShader);
+            gl.linkProgram(program);
+
+            if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+                console.error('无法初始化着色器程序:', gl.getProgramInfoLog(program));
+                return false;
+            }
+
+            gl.useProgram(program);
+            return true;
+        }
+
+        // 为模型设置缓冲区
+        function setupBuffers() {
+            // 创建顶点缓冲区
+            model.vertexBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.vertices), gl.STATIC_DRAW);
+
+            // 创建法向量缓冲区
+            model.normalBuffer = gl.createBuffer();
+            gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+            gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(model.normals), gl.STATIC_DRAW);
+        }
+
+        // 初始化属性和uniform位置
+        function initLocations() {
+            // 属性位置
+            program.vertexPositionAttribute = gl.getAttribLocation(program, 'aVertexPosition');
+            gl.enableVertexAttribArray(program.vertexPositionAttribute);
+
+            program.vertexNormalAttribute = gl.getAttribLocation(program, 'aVertexNormal');
+            gl.enableVertexAttribArray(program.vertexNormalAttribute);
+
+            // Uniform位置
+            program.projectionMatrixUniform = gl.getUniformLocation(program, 'uProjectionMatrix');
+            program.modelViewMatrixUniform = gl.getUniformLocation(program, 'uModelViewMatrix');
+            program.normalMatrixUniform = gl.getUniformLocation(program, 'uNormalMatrix');
+            program.colorUniform = gl.getUniformLocation(program, 'uColor');
+            program.lightPositionUniform = gl.getUniformLocation(program, 'uLightPosition');
+            program.ambientColorUniform = gl.getUniformLocation(program, 'uAmbientColor');
+            program.diffuseColorUniform = gl.getUniformLocation(program, 'uDiffuseColor');
+
+            // 设置光源属性
+            gl.uniform3f(program.lightPositionUniform, 10.0, 10.0, 10.0);
+            gl.uniform3f(program.ambientColorUniform, 0.3, 0.3, 0.3);
+            gl.uniform3f(program.diffuseColorUniform, 0.8, 0.8, 0.8);
+        }
+
+        // 解析STL文件内容
+        function parseSTL(content, fileName) {
+            // 清除先前的模型数据
+            model.vertices = [];
+            model.normals = [];
+            model.numTriangles = 0;
+            model.name = fileName;
+
+            // 显示文件名
+            const fileNameEl = document.getElementById('file-name');
+            const fileInfoEl = document.getElementById('file-info');
+            fileNameEl.textContent = fileName;
+            fileInfoEl.classList.remove('hidden');
+
+            // 隐藏空状态
+            document.getElementById('empty-state').classList.add('hidden');
+
+            // 检查是二进制还是ASCII STL
+            if (content.byteLength) {
+                // 二进制STL
+                parseBinarySTL(content);
+            } else {
+                // ASCII STL
+                parseASCIISTL(content);
+            }
+
+            // 计算模型边界框和中心
+            calculateModelBounds();
+
+            // 用新数据设置缓冲区
+            setupBuffers();
+
+            // 重置变换
+            resetTransformations();
+
+            // 渲染新模型
+            render();
+        }
+
+        // 解析ASCII STL内容
+        function parseASCIISTL(content) {
+            const lines = content.split('\n');
+            let normal = [0, 0, 0];
+            let vertices = [];
+
+            for (let line of lines) {
+                line = line.trim().toLowerCase();
+
+                if (line.startsWith('facet normal')) {
+                    // 提取法向量
+                    const parts = line.split(/\s+/).slice(2, 5).map(Number);
+                    normal = [parts[0], parts[1], parts[2]];
+                } else if (line.startsWith('vertex')) {
+                    // 提取顶点坐标
+                    const parts = line.split(/\s+/).slice(1, 4).map(Number);
+                    vertices.push(parts[0], parts[1], parts[2]);
+
+                    // 当我们有3个顶点时，将它们添加到模型中
+                    if (vertices.length === 9) {
+                        // 添加3个具有相同法向量的顶点
+                        for (let i = 0; i < 3; i++) {
+                            model.vertices.push(vertices[i * 3], vertices[i * 3 + 1], vertices[i * 3 + 2]);
+                            model.normals.push(normal[0], normal[1], normal[2]);
+                        }
+                        model.numTriangles++;
+                        vertices = [];
+                    }
+                }
+            }
+        }
+
+        // 解析二进制STL内容
+        function parseBinarySTL(arrayBuffer) {
+            const dataView = new DataView(arrayBuffer);
+            let offset = 80; // 跳过80字节的头部
+
+            // 读取三角形数量
+            const numTriangles = dataView.getUint32(offset, true);
+            offset += 4;
+
+            model.numTriangles = numTriangles;
+
+            // 读取每个三角形
+            for (let i = 0; i < numTriangles; i++) {
+                // 读取法向量
+                const nx = dataView.getFloat32(offset, true);
+                const ny = dataView.getFloat32(offset + 4, true);
+                const nz = dataView.getFloat32(offset + 8, true);
+                offset += 12;
+
+                // 读取3个顶点
+                for (let j = 0; j < 3; j++) {
+                    const x = dataView.getFloat32(offset, true);
+                    const y = dataView.getFloat32(offset + 4, true);
+                    const z = dataView.getFloat32(offset + 8, true);
+                    offset += 12;
+
+                    model.vertices.push(x, y, z);
+                    model.normals.push(nx, ny, nz);
+                }
+
+                // 跳过2字节的属性计数
+                offset += 2;
+            }
+        }
+
+        // 计算模型边界框和中心
+        function calculateModelBounds() {
+            if (model.vertices.length === 0) return;
+
+            let minX = model.vertices[0], maxX = model.vertices[0];
+            let minY = model.vertices[1], maxY = model.vertices[1];
+            let minZ = model.vertices[2], maxZ = model.vertices[2];
+
+            for (let i = 0; i < model.vertices.length; i += 3) {
+                const x = model.vertices[i];
+                const y = model.vertices[i + 1];
+                const z = model.vertices[i + 2];
+
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
+            }
+
+            // 计算中心
+            model.center[0] = (minX + maxX) / 2;
+            model.center[1] = (minY + maxY) / 2;
+            model.center[2] = (minZ + maxZ) / 2;
+
+            // 计算半径（从中心到最远顶点的距离）
+            const dx = maxX - minX;
+            const dy = maxY - minY;
+            const dz = maxZ - minZ;
+            model.radius = Math.sqrt(dx * dx + dy * dy + dz * dz) / 2;
+        }
+
+        // 重置所有变换
+        function resetTransformations() {
+            rotation = [0, 0, 0];
+            translation = [0, 0, 0];
+
+            // 设置初始缩放以适合视图中的模型
+            scale = 2.0 / model.radius;
+
+            // 更新缩放滑块
+            document.getElementById('zoom-slider').value = 100;
+            document.getElementById('zoom-value').textContent = '100%';
+
+            render();
+        }
+
+        // 根据变换更新模型视图矩阵
+        function updateModelViewMatrix() {
+            modelViewMatrix = MatrixMath.createIdentityMatrix();
+
+            // 平移相机以看到模型
+            modelViewMatrix = MatrixMath.translate(modelViewMatrix, 0, 0, -5);
+
+            // 应用用户平移
+            modelViewMatrix = MatrixMath.translate(modelViewMatrix, translation[0], translation[1], translation[2]);
+
+            // 应用缩放
+            modelViewMatrix = MatrixMath.scale(modelViewMatrix, scale, scale, scale);
+
+            // 应用旋转
+            modelViewMatrix = MatrixMath.rotateX(modelViewMatrix, rotation[0]);
+            modelViewMatrix = MatrixMath.rotateY(modelViewMatrix, rotation[1]);
+            modelViewMatrix = MatrixMath.rotateZ(modelViewMatrix, rotation[2]);
+
+            // 使模型居中
+            modelViewMatrix = MatrixMath.translate(
+                modelViewMatrix,
+                -model.center[0],
+                -model.center[1],
+                -model.center[2]
+            );
+
+            // 计算法向量矩阵（模型视图矩阵的逆矩阵的转置）
+            normalMatrix = MatrixMath.normalMatrix(modelViewMatrix);
+        }
+
+        // 渲染场景
+        function render() {
+            // 清除画布
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+            // 只有当我们有模型时才渲染
+            if (model.numTriangles === 0) return;
+
+            // 更新模型视图矩阵
+            updateModelViewMatrix();
+
+            // 设置uniforms
+            gl.uniformMatrix4fv(program.projectionMatrixUniform, false, projectionMatrix);
+            gl.uniformMatrix4fv(program.modelViewMatrixUniform, false, modelViewMatrix);
+            gl.uniformMatrix3fv(program.normalMatrixUniform, false, normalMatrix);
+            gl.uniform4fv(program.colorUniform, modelColor);
+
+            // 绑定并设置顶点缓冲区
+            gl.bindBuffer(gl.ARRAY_BUFFER, model.vertexBuffer);
+            gl.vertexAttribPointer(program.vertexPositionAttribute, 3, gl.FLOAT, false, 0, 0);
+
+            // 绑定并设置法向量缓冲区
+            gl.bindBuffer(gl.ARRAY_BUFFER, model.normalBuffer);
+            gl.vertexAttribPointer(program.vertexNormalAttribute, 3, gl.FLOAT, false, 0, 0);
+
+            // 绘制模型
+            gl.drawArrays(gl.TRIANGLES, 0, model.vertices.length / 3);
+        }
+
+        // 设置事件监听器
+        function setupEventListeners() {
+            // 文件上传
+            const fileInput = document.getElementById('file-upload');
+            fileInput.addEventListener('change', handleFileUpload);
+
+            // 鼠标按下事件
+            canvas.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                isPanning = e.shiftKey;
+                canvas.style.cursor = isPanning ? 'grabbing' : 'grabbing';
+            });
+
+            // 鼠标移动事件
+            canvas.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+
+                if (isPanning) {
+                    // 平移模型
+                    translation[0] += deltaX * 0.01 / scale;
+                    translation[1] -= deltaY * 0.01 / scale;
+                } else {
+                    // 旋转模型
+                    rotation[1] += deltaX * 0.01;
+                    rotation[0] += deltaY * 0.01;
+                }
+
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+                render();
+            });
+
+            // 鼠标释放事件
+            window.addEventListener('mouseup', () => {
+                isDragging = false;
+                canvas.style.cursor = 'default';
+            });
+
+            // 鼠标滚轮事件（缩放）
+            canvas.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const zoomFactor = e.deltaY < 0 ? 1.1 : 0.9;
+                scale *= zoomFactor;
+
+                // 更新缩放滑块
+                const zoomPercent = Math.round(scale / (2.0 / model.radius) * 100);
+                const clampedPercent = Math.max(10, Math.min(300, zoomPercent));
+                document.getElementById('zoom-slider').value = clampedPercent;
+                document.getElementById('zoom-value').textContent = `${clampedPercent}%`;
+
+                render();
+            });
+
+            // 缩放按钮
+            document.getElementById('zoom-in').addEventListener('click', () => {
+                scale *= 1.1;
+                const zoomPercent = Math.round(scale / (2.0 / model.radius) * 100);
+                const clampedPercent = Math.max(10, Math.min(300, zoomPercent));
+                document.getElementById('zoom-slider').value = clampedPercent;
+                document.getElementById('zoom-value').textContent = `${clampedPercent}%`;
+                render();
+            });
+
+            document.getElementById('zoom-out').addEventListener('click', () => {
+                scale *= 0.9;
+                const zoomPercent = Math.round(scale / (2.0 / model.radius) * 100);
+                const clampedPercent = Math.max(10, Math.min(300, zoomPercent));
+                document.getElementById('zoom-slider').value = clampedPercent;
+                document.getElementById('zoom-value').textContent = `${clampedPercent}%`;
+                render();
+            });
+
+            // 缩放滑块
+            const zoomSlider = document.getElementById('zoom-slider');
+            zoomSlider.addEventListener('input', (e) => {
+                const zoomPercent = parseInt(e.target.value);
+                document.getElementById('zoom-value').textContent = `${zoomPercent}%`;
+                scale = (2.0 / model.radius) * (zoomPercent / 100);
+                render();
+            });
+
+            // 旋转按钮
+            document.getElementById('rotate-up').addEventListener('click', () => {
+                rotation[0] -= 0.1;
+                render();
+            });
+
+            document.getElementById('rotate-down').addEventListener('click', () => {
+                rotation[0] += 0.1;
+                render();
+            });
+
+            document.getElementById('rotate-left').addEventListener('click', () => {
+                rotation[1] -= 0.1;
+                render();
+            });
+
+            document.getElementById('rotate-right').addEventListener('click', () => {
+                rotation[1] += 0.1;
+                render();
+            });
+
+            document.getElementById('rotate-reset').addEventListener('click', () => {
+                rotation = [0, 0, 0];
+                render();
+            });
+
+            // 重置视图按钮
+            document.getElementById('reset-view').addEventListener('click', resetTransformations);
+
+            // 颜色选择器
+            const colorPicker = document.getElementById('model-color');
+            colorPicker.addEventListener('input', (e) => {
+                const color = e.target.value;
+                // 转换十六进制到RGBA
+                const r = parseInt(color.slice(1, 3), 16) / 255;
+                const g = parseInt(color.slice(3, 5), 16) / 255;
+                const b = parseInt(color.slice(5, 7), 16) / 255;
+                modelColor = [r, g, b, 1.0];
+                render();
+            });
+
+            // 背景切换按钮
+            document.getElementById('toggle-background').addEventListener('click', toggleBackground);
+
+            // 帮助模态框
+            const showHelpBtn = document.getElementById('show-help');
+            const closeHelpBtn = document.getElementById('close-help');
+            const gotItBtn = document.getElementById('got-it');
+            const helpModal = document.getElementById('help-modal');
+
+            showHelpBtn.addEventListener('click', () => {
+                helpModal.classList.remove('hidden');
+            });
+
+            [closeHelpBtn, gotItBtn].forEach(btn => {
+                btn.addEventListener('click', () => {
+                    helpModal.classList.add('hidden');
+                });
+            });
+
+            // 键盘快捷键
+            window.addEventListener('keydown', (e) => {
+                // 只在没有输入框聚焦时处理快捷键
+                if (document.activeElement.tagName === 'INPUT') return;
+
+                switch(e.key) {
+                    case 'Escape':
+                        resetTransformations();
+                        break;
+                    case '+':
+                    case '=':
+                        document.getElementById('zoom-in').click();
+                        break;
+                    case '-':
+                        document.getElementById('zoom-out').click();
+                        break;
+                    case 'b':
+                    case 'B':
+                        toggleBackground();
+                        break;
+                }
+            });
+
+            // 文件信息提示框
+            const fileInfo = document.getElementById('file-info');
+            const fileUpload = document.getElementById('file-upload');
+            
+            fileUpload.addEventListener('mouseenter', () => {
+                if (model.name) {
+                    fileInfo.classList.remove('hidden');
+                }
+            });
+            
+            fileUpload.addEventListener('mouseleave', () => {
+                fileInfo.classList.add('hidden');
+            });
+            
+            fileInfo.addEventListener('mouseenter', () => {
+                fileInfo.classList.remove('hidden');
+            });
+            
+            fileInfo.addEventListener('mouseleave', () => {
+                fileInfo.classList.add('hidden');
+            });
+        }
+
+        // 处理文件上传
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // 显示加载指示器
+            document.getElementById('loading').classList.remove('hidden');
+
+            const reader = new FileReader();
+            const fileName = file.name;
+
+            // 检查文件是二进制还是ASCII
+            if (file.name.toLowerCase().endsWith('.stl')) {
+                // 尝试检测它是二进制还是ASCII
+                reader.onload = function (event) {
+                    const content = event.target.result;
+
+                    // 简单检查二进制STL（前5个字符不应该是"solid"）
+                    let isBinary = true;
+                    if (typeof content === 'string' && content.substring(0, 5).toLowerCase() === 'solid') {
+                        isBinary = false;
+                    } else if (content instanceof ArrayBuffer) {
+                        // 检查前5个字节是否为ASCII的"solid"
+                        const text = new TextDecoder().decode(new Uint8Array(content, 0, 5));
+                        if (text.toLowerCase() === 'solid') {
+                            isBinary = false;
+                            // 重新作为文本读取
+                            const textReader = new FileReader();
+                            textReader.onload = function (textEvent) {
+                                parseSTL(textEvent.target.result, fileName);
+                                document.getElementById('loading').classList.add('hidden');
+                            };
+                            textReader.readAsText(file);
+                            return;
+                        }
+                    }
+
+                    // 作为二进制处理
+                    if (isBinary && typeof content !== 'string') {
+                        parseSTL(content, fileName);
+                    } else if (!isBinary && typeof content === 'string') {
+                        parseSTL(content, fileName);
+                    }
+
+                    document.getElementById('loading').classList.add('hidden');
+                };
+
+                if (file.size > 10 * 1024 * 1024) { // 10MB
+                    // 对于大文件，作为二进制读取
+                    reader.readAsArrayBuffer(file);
+                } else {
+                    // 对于较小的文件，先尝试作为文本读取
+                    reader.readAsText(file);
+                }
+            }
+        }
+
+        // 初始化应用程序
+        function init() {
+            if (!initWebGL()) return;
+            if (!initShaders()) return;
+            initLocations();
+            setupEventListeners();
+            updateProjectionMatrix();
+
+            // 初始渲染
+            render();
+        }
+
+        // 启动应用程序
+        window.onload = init;
+    </script>
+</body>
+</html>

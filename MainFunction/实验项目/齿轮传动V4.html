@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>真实复合联动齿轮系统（物理级联传动） v4</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #0d1b2a;
+            color: #e0e1dd;
+            font-family: 'Segoe UI', sans-serif;
+        }
+        canvas { display: block; }
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(13, 19, 26, 0.85);
+            padding: 14px;
+            border-radius: 10px;
+            max-width: 340px;
+            z-index: 100;
+            border: 1px solid #415a77;
+        }
+        h3 {
+            margin: 0 0 10px 0;
+            color: #77af9c;
+            font-size: 16px;
+        }
+        .btn-row { margin: 6px 0; }
+        button {
+            background: #2a9d8f;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            margin: 0 4px 4px 0;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+        button:hover { background: #264653; }
+        button.driver { background: #e76f51; }
+        .gear-list {
+            max-height: 160px;
+            overflow-y: auto;
+            margin-top: 8px;
+            font-size: 12px;
+        }
+        .gear-item {
+            padding: 4px;
+            margin: 2px 0;
+            background: rgba(26, 38, 50, 0.6);
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .gear-item.active { background: rgba(42, 157, 143, 0.4); border-left: 3px solid #77af9c; }
+        .info { color: #8d99ae; font-size: 11px; margin-top: 8px; line-height: 1.4; }
+        .highlight { color: #e9c46a; }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h3>⚙️ 真实复合联动齿轮箱</h3>
+        <div class="btn-row">
+            <button onclick="addGear('spur')">直齿轮</button>
+            <button onclick="addGear('helical')">斜齿轮</button>
+            <button onclick="addGear('bevel')">锥齿轮</button>
+            <button onclick="addGear('worm')">蜗杆</button>
+        </div>
+        <div class="btn-row">
+            <button id="set-driver" class="driver">设为驱动轮</button>
+            <button onclick="resetSystem()">↺ 重置演示</button>
+            <button onclick="autoLayout()">📐 自动布局</button>
+        </div>
+        <label>RPM: <input type="range" id="rpm" min="-120" max="120" value="60" style="width:130px;"></label>
+        <span id="rpm-value">60</span>
+
+        <div class="gear-list" id="gear-list"></div>
+        <div class="info">
+            • <span class="highlight">点击齿轮设为驱动源</span><br>
+            • 支持<span class="highlight">多分支传动</span>（如一驱二）<br>
+            • <span class="highlight">蜗杆不可反驱</span>（自锁）<br>
+            • 拖拽旋转 | 滚轮缩放 | 箭头=转向+速度
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/build/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // ======================
+        // 齿轮系统核心数据
+        // ======================
+        let scene, camera, renderer, controls;
+        const clock = new THREE.Clock();
+        let gearObjects = [];
+        let arrowHelpers = [];
+        let shafts = [];
+        let selectedGearIndex = -1;
+        let driverIndex = -1;
+
+        // 齿轮列表（可动态增删）
+        let gears = [];
+
+        // ======================
+        // 初始化
+        // ======================
+        window.addEventListener('load', () => {
+            init();
+            animate();
+            document.getElementById('rpm').addEventListener('input', (e) => {
+                const val = parseFloat(e.target.value);
+                document.getElementById('rpm-value').textContent = val;
+                if (driverIndex >= 0) {
+                    gears[driverIndex].rpm = val;
+                    propagateMotion(); // 关键：触发级联传播
+                }
+            });
+            resetSystem(); // 加载默认场景
+        });
+
+        function init() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0d1b2a);
+            scene.fog = new THREE.Fog(0x0d1b2a, 10, 30);
+
+            camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+            camera.position.set(0, 8, 15);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            document.body.appendChild(renderer.domElement);
+
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambient);
+            const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+            dirLight.position.set(10, 15, 10);
+            dirLight.castShadow = true;
+            scene.add(dirLight);
+
+            const ground = new THREE.Mesh(
+                new THREE.PlaneGeometry(50, 50),
+                new THREE.MeshStandardMaterial({ color: 0x1b263b, roughness: 0.9 })
+            );
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -3;
+            scene.add(ground);
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ======================
+        // 齿轮几何生成（简化但有效）
+        // ======================
+        function createSpurGear(teeth, radius, width = 0.4) {
+            const points = [];
+            const step = Math.PI * 2 / teeth;
+            for (let i = 0; i < teeth; i++) {
+                const a1 = i * step;
+                const a2 = a1 + step * 0.4;
+                const a3 = a1 + step * 0.5;
+                const a4 = a1 + step * 0.6;
+                const a5 = (i + 1) * step;
+                points.push(
+                    new THREE.Vector2(Math.cos(a1) * (radius - 0.2), Math.sin(a1) * (radius - 0.2)),
+                    new THREE.Vector2(Math.cos(a2) * radius, Math.sin(a2) * radius),
+                    new THREE.Vector2(Math.cos(a3) * (radius + 0.2), Math.sin(a3) * (radius + 0.2)),
+                    new THREE.Vector2(Math.cos(a4) * radius, Math.sin(a4) * radius),
+                    new THREE.Vector2(Math.cos(a5) * (radius - 0.2), Math.sin(a5) * (radius - 0.2))
+                );
+            }
+            const shape = new THREE.Shape(points);
+            return new THREE.ExtrudeGeometry(shape, { depth: width, bevelEnabled: false });
+        }
+
+        function createHelicalGear(teeth, radius, width = 0.4) {
+            const group = new THREE.Group();
+            const slices = 10;
+            for (let i = 0; i < slices; i++) {
+                const geo = createSpurGear(teeth, radius, width / slices);
+                const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial());
+                mesh.position.z = -width/2 + i * width/slices + width/(2*slices);
+                mesh.rotation.z = (i / slices) * Math.PI / 2;
+                group.add(mesh);
+            }
+            return group;
+        }
+
+        function createBevelGear(teeth, radius, width = 0.4) {
+            return new THREE.ConeGeometry(radius, width, teeth * 2);
+        }
+
+        function createWorm(radius, width = 0.4) {
+            const geo = new THREE.CylinderGeometry(radius, radius, width, 64);
+            geo.rotateX(Math.PI / 2);
+            return geo;
+        }
+
+        // ======================
+        // 核心：构建啮合图 & 级联传播
+        // ======================
+        function buildMeshAndShaft() {
+            // 清理
+            gearObjects.forEach(o => scene.remove(o.mesh));
+            arrowHelpers.forEach(a => scene.remove(a));
+            shafts.forEach(s => scene.remove(s));
+            gearObjects = [];
+            arrowHelpers = [];
+            shafts = [];
+
+            // 创建轴（视觉辅助）
+            gears.forEach(g => {
+                const len = 6;
+                const shaftGeo = new THREE.CylinderGeometry(0.06, 0.06, len, 8);
+                const shaftMat = new THREE.MeshBasicMaterial({ color: 0x415a77 });
+                const shaft = new THREE.Mesh(shaftGeo, shaftMat);
+                shaft.position.copy(g.position);
+                if (g.axis.equals(new THREE.Vector3(0,0,1))) {
+                    shaft.rotation.x = Math.PI / 2;
+                    shaft.position.y -= len/2;
+                } else if (g.axis.equals(new THREE.Vector3(1,0,0))) {
+                    shaft.position.z -= len/2;
+                }
+                scene.add(shaft);
+                shafts.push(shaft);
+            });
+
+            // 创建齿轮网格
+            gears.forEach((g, i) => {
+                let mesh;
+                const radius = g.teeth * 0.05;
+                const mat = new THREE.MeshStandardMaterial({
+                    color: g.isDriver ? 0xe76f51 : 
+                           g.type === 'helical' ? 0x2a9d8f :
+                           g.type === 'worm' ? 0xe9c46a : 0x77af9c,
+                    metalness: 0.8,
+                    roughness: 0.3
+                });
+
+                switch (g.type) {
+                    case 'spur':
+                        mesh = new THREE.Mesh(createSpurGear(g.teeth, radius), mat);
+                        break;
+                    case 'helical':
+                        mesh = createHelicalGear(g.teeth, radius);
+                        mesh.traverse(child => {
+                            if (child.isMesh) child.material = mat.clone();
+                        });
+                        break;
+                    case 'bevel':
+                        mesh = new THREE.Mesh(createBevelGear(g.teeth, radius), mat);
+                        mesh.rotation.x = Math.PI / 2;
+                        break;
+                    case 'worm':
+                        mesh = new THREE.Mesh(createWorm(radius), mat);
+                        break;
+                }
+
+                mesh.position.copy(g.position);
+                mesh.userData.index = i;
+                mesh.renderOrder = 10;
+                mesh.addEventListener('click', () => onGearClick(i));
+
+                scene.add(mesh);
+                gearObjects.push({ mesh, data: g, angle: 0 });
+            });
+
+            updateArrows();
+        }
+
+        function detectMeshing() {
+            // 构建邻接表
+            gears.forEach(g => g.neighbors = []);
+
+            for (let i = 0; i < gears.length; i++) {
+                for (let j = i + 1; j < gears.length; j++) {
+                    const g1 = gears[i];
+                    const g2 = gears[j];
+
+                    // 跳过不兼容类型（如蜗杆只能驱动蜗轮，但本例简化）
+                    if (g1.type === 'worm' || g2.type === 'worm') continue; // 演示中暂不处理蜗轮啮合检测
+
+                    // 必须同轴向或垂直（锥齿轮）
+                    const samePlane = g1.axis.equals(g2.axis);
+                    const perpendicular = Math.abs(g1.axis.dot(g2.axis)) < 0.1;
+
+                    if (!samePlane && !perpendicular) continue;
+
+                    const dist = g1.position.distanceTo(g2.position);
+                    const r1 = g1.teeth * 0.05;
+                    const r2 = g2.teeth * 0.05;
+                    const gap = Math.abs(dist - (r1 + r2));
+
+                    if (gap < 0.3) { // 容差
+                        // 添加双向连接
+                        g1.neighbors.push({ index: j, ratio: -g1.teeth / g2.teeth });
+                        g2.neighbors.push({ index: i, ratio: -g2.teeth / g1.teeth });
+                    }
+                }
+            }
+        }
+
+        function propagateMotion() {
+            // 重置所有非驱动轮
+            gears.forEach(g => {
+                if (!g.isDriver) g.rpm = 0;
+            });
+
+            if (driverIndex === -1) return;
+
+            const visited = new Set();
+            const queue = [{ index: driverIndex, rpm: gears[driverIndex].rpm }];
+
+            while (queue.length > 0) {
+                const { index, rpm } = queue.shift();
+                if (visited.has(index)) continue;
+                visited.add(index);
+                gears[index].rpm = rpm;
+
+                // 向邻居传播
+                const current = gears[index];
+                current.neighbors.forEach(neighbor => {
+                    if (!visited.has(neighbor.index)) {
+                        const newRpm = rpm * neighbor.ratio;
+                        queue.push({ index: neighbor.index, rpm: newRpm });
+                    }
+                });
+            }
+
+            updateArrows();
+        }
+
+        function updateArrows() {
+            arrowHelpers.forEach(a => scene.remove(a));
+            arrowHelpers = [];
+
+            gears.forEach((g, i) => {
+                const dir = g.axis.clone().normalize();
+                if (g.rpm < 0) dir.negate();
+                const origin = g.position.clone();
+                const length = Math.min(1.5, Math.abs(g.rpm) / 40);
+                const color = g.rpm >= 0 ? 0x77af9c : 0xe76f51;
+                const arrow = new THREE.ArrowHelper(dir, origin, length, color, 0.3, 0.15);
+                scene.add(arrow);
+                arrowHelpers.push(arrow);
+            });
+        }
+
+        // ======================
+        // 交互与UI
+        // ======================
+        function onGearClick(index) {
+            selectedGearIndex = index;
+            gears.forEach((g, i) => g.isDriver = (i === index));
+            driverIndex = index;
+            const rpmInput = document.getElementById('rpm');
+            gears[index].rpm = parseFloat(rpmInput.value) || 60;
+            propagateMotion();
+            buildMeshAndShaft();
+            updateUI();
+        }
+
+        function addGear(type) {
+            const teeth = type === 'worm' ? 2 : Math.floor(Math.random() * 15) + 15;
+            const radius = teeth * 0.05;
+            let axis = new THREE.Vector3(0, 0, 1);
+            let pos;
+
+            if (gears.length === 0) {
+                pos = new THREE.Vector3(0, 0, 0);
+            } else {
+                const last = gears[gears.length - 1];
+                pos = last.position.clone().add(new THREE.Vector3(last.teeth * 0.05 + radius + 0.8, 0, 0));
+            }
+
+            gears.push({
+                type: type,
+                teeth: teeth,
+                isDriver: gears.length === 0,
+                rpm: gears.length === 0 ? 60 : 0,
+                position: pos,
+                axis: axis,
+                neighbors: []
+            });
+
+            if (gears.length === 1) driverIndex = 0;
+
+            rebuildSystem();
+        }
+
+        function autoLayout() {
+            // 简单水平排列
+            let x = - (gears.length * 2) / 2;
+            gears.forEach(g => {
+                g.position.set(x, 0, 0);
+                x += g.teeth * 0.05 + 1.0;
+            });
+            rebuildSystem();
+        }
+
+        function rebuildSystem() {
+            detectMeshing();
+            if (driverIndex >= 0) propagateMotion();
+            buildMeshAndShaft();
+            updateUI();
+        }
+
+        function resetSystem() {
+            gears = [
+                { type: 'spur', teeth: 20, isDriver: true, rpm: 60, position: new THREE.Vector3(-4, 0, 0), axis: new THREE.Vector3(0,0,1) },
+                { type: 'spur', teeth: 20, isDriver: false, rpm: 0, position: new THREE.Vector3(0, 0, 0), axis: new THREE.Vector3(0,0,1) },
+                { type: 'spur', teeth: 30, isDriver: false, rpm: 0, position: new THREE.Vector3(4, 0, 0), axis: new THREE.Vector3(0,0,1) },
+                // 分支：中间轮驱动上方惰轮
+                { type: 'spur', teeth: 16, isDriver: false, rpm: 0, position: new THREE.Vector3(0, 3, 0), axis: new THREE.Vector3(0,0,1) }
+            ];
+            driverIndex = 0;
+            rebuildSystem();
+            updateUI();
+        }
+
+        function updateUI() {
+            const list = document.getElementById('gear-list');
+            list.innerHTML = '';
+            gears.forEach((g, i) => {
+                const div = document.createElement('div');
+                div.className = 'gear-item' + (i === selectedGearIndex ? ' active' : '');
+                div.textContent = `#${i+1} ${g.type} | 齿:${g.teeth} | RPM:${g.rpm.toFixed(1)}`;
+                div.onclick = () => onGearClick(i);
+                list.appendChild(div);
+            });
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ======================
+        // 动画循环
+        // ======================
+        function animate() {
+            requestAnimationFrame(animate);
+            const delta = Math.min(clock.getDelta(), 0.1);
+
+            gearObjects.forEach(obj => {
+                const rpm = obj.data.rpm || 0;
+                const radPerSec = (rpm / 60) * 2 * Math.PI;
+                obj.angle += radPerSec * delta;
+
+                if (obj.data.type === 'helical') {
+                    obj.mesh.rotation.z = obj.angle;
+                } else {
+                    obj.mesh.quaternion.setFromAxisAngle(obj.data.axis, obj.angle);
+                }
+            });
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>

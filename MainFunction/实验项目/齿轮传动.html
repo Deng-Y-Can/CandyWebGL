@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <title>Three.js 齿轮传动 (CDN 旧版兼容) v1</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* 隐藏滚动条 */
+            background-color: #000;
+            color: #fff;
+            font-family: Monospace;
+        }
+
+        #info {
+            position: absolute;
+            top: 10px;
+            width: 100%;
+            text-align: center;
+            z-index: 100; /* 确保信息在 Canvas 上方 */
+            font-size: 16px;
+            pointer-events: none; /* 鼠标事件穿透，不影响下方的 Canvas 交互 */
+            background-color: rgba(0,0,0,0.5);
+            padding: 5px 0;
+        }
+
+        #loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 20px;
+            z-index: 1000;
+        }
+
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: red;
+            font-size: 20px;
+            text-align: center;
+            z-index: 1000;
+            background-color: rgba(0,0,0,0.7);
+            padding: 20px;
+            border-radius: 10px;
+            display: none; /* 默认隐藏 */
+        }
+
+        #container {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        Three.js 齿轮传动仿真 (CDN 旧版兼容)<br />
+        <span style="font-size: 12px;">点击并拖动旋转视角 | 滚轮缩放 | 右键拖动平移</span>
+    </div>
+    <div id="loading">正在从 CDN 加载资源 (v0.144.0)...</div>
+    <div id="error">
+        错误：从 CDN 加载资源失败。<br />
+        请检查网络连接或稍后重试。
+    </div>
+    <div id="container"></div>
+
+    <!-- *** 使用 jsDelivr CDN 加载 Three.js 核心库 (旧版本以确保兼容性) *** -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/build/three.min.js"></script>
+
+    <!-- *** 使用 jsDelivr CDN 加载 OrbitControls 控制器 (旧版本 UMD 格式) *** -->
+    <script src="https://cdn.jsdelivr.net/npm/three@0.144.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // --- 全局变量 ---
+        let scene, camera, renderer, controls;
+        let clock = new THREE.Clock(); // Clock 也可能在旧版本中有所不同，但我们先试试
+        let gears = [];
+
+        // --- 配置 ---
+        const CONFIG = {
+            gearData: [
+                { teeth: 20, radius: 1.0, position: new THREE.Vector3(-2.5, 0, 0), isDriver: true, speed: 0.5 },
+                { teeth: 40, radius: 2.0, position: new THREE.Vector3(2.5, 0, 0), isDriver: false, speed: 0 }
+            ]
+        };
+
+        // --- 等待所有资源加载完成 ---
+        window.addEventListener('load', function () {
+            console.log("Window loaded event fired.");
+
+            // 检查关键对象是否存在
+            if (typeof THREE === 'undefined' || typeof THREE.OrbitControls === 'undefined') {
+                console.error('Required libraries (Three.js or OrbitControls) not found.');
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('error').style.display = 'block';
+                return;
+            }
+
+            document.getElementById('loading').style.display = 'none';
+            console.log('Three.js (v0.144.0) and OrbitControls loaded successfully via CDN.');
+
+            init();
+            animate();
+        });
+
+        // --- 初始化 Three.js 场景 ---
+        function init() {
+            console.log("--- 开始执行 init() ---");
+
+            // --- 场景、相机、渲染器 ---
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x2a3b4c);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.set(0, 5, 10);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // 注意：旧版本可能没有 PCFSoftShadowMap，可以先设为 THREE.PCFShadowMap 或注释掉测试
+
+            const container = document.getElementById('container');
+            container.appendChild(renderer.domElement);
+
+            // --- OrbitControls 控制器 ---
+            try {
+                controls = new THREE.OrbitControls(camera, renderer.domElement); // 关键：从 THREE 对象访问
+                controls.enableDamping = true;
+                controls.dampingFactor = 0.05;
+                controls.screenSpacePanning = false;
+                controls.minDistance = 5;
+                controls.maxDistance = 50;
+                console.log("OrbitControls initialized.");
+            } catch (e) {
+                console.error("Failed to initialize OrbitControls:", e);
+                alert("OrbitControls 初始化失败，请检查控制台错误。");
+                return;
+            }
+
+
+            // --- 光照 ---
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            // 尝试简化阴影设置，避免旧版本 API 差异
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 10, 7);
+            directionalLight.castShadow = true;
+            /*
+            directionalLight.shadow.mapSize.width = 1024;
+            directionalLight.shadow.mapSize.height = 1024;
+            directionalLight.shadow.camera.near = 0.5;
+            directionalLight.shadow.camera.far = 50;
+            directionalLight.shadow.camera.left = -10;
+            directionalLight.shadow.camera.right = 10;
+            directionalLight.shadow.camera.top = 10;
+            directionalLight.shadow.camera.bottom = -10;
+            */
+            scene.add(directionalLight);
+
+
+            // --- 地面 ---
+            const groundGeometry = new THREE.PlaneGeometry(30, 30);
+            const groundMaterial = new THREE.MeshStandardMaterial({
+                color: 0x666666,
+                roughness: 0.8,
+                metalness: 0.2,
+                side: THREE.DoubleSide
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.position.y = -2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+
+
+            // --- 创建齿轮 ---
+            createGears();
+
+
+            // --- 窗口大小调整 ---
+            window.addEventListener('resize', onWindowResize);
+
+            console.log("--- init() 执行完成 ---");
+        }
+
+
+        class Gear {
+            constructor(data, scene) {
+                this.data = data;
+                this.scene = scene;
+                this.group = new THREE.Group();
+                this.angle = 0;
+
+                this.createVisual();
+                this.group.position.copy(this.data.position);
+                this.scene.add(this.group);
+            }
+
+            createVisual() {
+                const rimRadius = this.data.radius;
+                const rimHeight = 0.2;
+
+                const rimGeometry = new THREE.CylinderGeometry(rimRadius, rimRadius, rimHeight, 64);
+                const rimMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xdddddd,
+                    metalness: 0.7,
+                    roughness: 0.3
+                });
+                const rim = new THREE.Mesh(rimGeometry, rimMaterial);
+                rim.rotation.x = Math.PI / 2;
+                rim.castShadow = true;
+                rim.receiveShadow = true;
+                this.group.add(rim);
+
+
+                const toothWidth = (2 * Math.PI * rimRadius) / this.data.teeth / 3;
+                const toothHeight = 0.3;
+                const toothDepth = 0.2;
+                const toothGeometry = new THREE.BoxGeometry(toothWidth, toothHeight, toothDepth);
+                const toothMaterial = new THREE.MeshStandardMaterial({
+                    color: 0xbbbbbb,
+                    metalness: 0.5,
+                    roughness: 0.4
+                });
+
+                for (let i = 0; i < this.data.teeth; i++) {
+                    const angle = (i / this.data.teeth) * Math.PI * 2;
+                    const tooth = new THREE.Mesh(toothGeometry, toothMaterial);
+
+                    tooth.position.x = Math.cos(angle) * (rimRadius + toothHeight / 2 + 0.01);
+                    tooth.position.y = Math.sin(angle) * (rimRadius + toothHeight / 2 + 0.01);
+                    tooth.position.z = 0;
+
+                    tooth.lookAt(0, 0, 0);
+                    tooth.rotateX(Math.PI / 2);
+
+                    tooth.castShadow = true;
+                    tooth.receiveShadow = true;
+                    this.group.add(tooth);
+                }
+
+
+                const hubRadius = rimRadius * 0.3;
+                const hubHeight = rimHeight * 1.1;
+                const hubGeometry = new THREE.CylinderGeometry(hubRadius, hubRadius, hubHeight, 32);
+                const hubMaterial = new THREE.MeshStandardMaterial({
+                    color: 0x999999,
+                    metalness: 0.8,
+                    roughness: 0.2
+                });
+                const hub = new THREE.Mesh(hubGeometry, hubMaterial);
+                hub.rotation.x = Math.PI / 2;
+                hub.castShadow = true;
+                hub.receiveShadow = true;
+                this.group.add(hub);
+            }
+
+
+            update(deltaTime) {
+                this.angle += this.data.speed * deltaTime;
+                this.group.rotation.z = this.angle;
+            }
+        }
+
+
+        function createGears() {
+            console.log("开始创建齿轮...");
+            CONFIG.gearData.forEach(data => {
+                const gear = new Gear(data, scene);
+                gears.push(gear);
+            });
+
+            setupGearLogic();
+            console.log("所有齿轮创建完毕");
+        }
+
+
+        function setupGearLogic() {
+            const driverGear = CONFIG.gearData.find(d => d.isDriver);
+            const followerGearIndex = CONFIG.gearData.findIndex(d => !d.isDriver);
+
+            if (driverGear && followerGearIndex !== -1) {
+                const speedRatio = -driverGear.teeth / CONFIG.gearData[followerGearIndex].teeth;
+                gears[followerGearIndex].data.speed = driverGear.speed * speedRatio;
+                console.log(`齿轮传动比: ${speedRatio}`);
+            }
+        }
+
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            gears.forEach(gear => gear.update(delta));
+
+            if (controls && controls.update) { // 检查 update 方法是否存在
+                controls.update();
+            }
+
+            renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>
