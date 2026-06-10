@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>4.7-VAO顶点数组对象</title>
+  <link rel="stylesheet" href="webgl-tutorials.css">
+</head>
+<body>
+  <div class="container">
+    <h1>4.7 VAO顶点数组对象</h1>
+    <div class="description">
+      <h2>什么是VAO?</h2>
+      <p>Vertex Array Object (VAO) 是WebGL 2.0引入的核心功能，它可以存储和管理顶点属性的配置状态。使用VAO可以在不同几何体之间快速切换，无需重复设置顶点属性指针。</p>
+      <h3>使用VAO的优势：</h3>
+      <ul>
+        <li><strong>性能提升：</strong>切换VAO只需一个函数调用，避免重复的gl.bindBuffer和gl.vertexAttribPointer调用</li>
+        <li><strong>代码组织：</strong>将几何体的数据和属性配置封装在一起</li>
+        <li><strong>状态管理：</strong>VAO保存完整的顶点属性状态</li>
+      </ul>
+      <h3>本示例展示：</h3>
+      <ul>
+        <li>创建三个不同的几何体（立方体、球体、圆柱体）</li>
+        <li>为每个几何体创建VAO</li>
+        <li>演示VAO的绑定和切换</li>
+        <li>对比使用VAO和不使用VAO的性能差异</li>
+      </ul>
+    </div>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label>使用VAO:</label>
+        <input type="checkbox" id="useVAO" checked>
+        <span id="useVAOValue"></span>
+      </div>
+      <div class="control-group">
+        <label>旋转角度:</label>
+        <input type="range" id="rotation" min="0" max="360" value="0" step="1">
+        <span class="value" id="rotationValue">0.00</span>
+      </div>
+      <div class="control-group">
+        <label>当前几何体:</label>
+        <select id="geometry">
+          <option value="cube">立方体</option>
+          <option value="sphere">球体</option>
+          <option value="cylinder">圆柱体</option>
+        </select>
+      </div>
+      <div class="control-group">
+        <label>FPS:</label>
+        <span class="value" id="fps">0</span>
+      </div>
+    </div>
+  </div>
+  <script src="m4.js"></script>
+  <script src="primitives.js"></script>
+  <script src="webgl-utils.js"></script>
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl2');
+    
+    if (!gl) {
+      alert('WebGL 2.0 不可用，请使用支持WebGL 2.0的浏览器');
+    }
+    
+    const vertexShaderSource = `#version 300 es
+      in vec4 a_position;
+      in vec3 a_color;
+      
+      uniform mat4 u_modelViewMatrix;
+      uniform mat4 u_projectionMatrix;
+      
+      out vec3 v_color;
+      
+      void main() {
+        gl_Position = u_projectionMatrix * u_modelViewMatrix * a_position;
+        v_color = a_color;
+      }
+    `;
+    
+    const fragmentShaderSource = `#version 300 es
+      precision highp float;
+      
+      in vec3 v_color;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        fragColor = vec4(v_color, 1.0);
+      }
+    `;
+    
+    const program = webglUtils.createProgramFromSources(gl, [vertexShaderSource, fragmentShaderSource]);
+    
+    const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+    const colorAttributeLocation = gl.getAttribLocation(program, 'a_color');
+    
+    const projectionMatrixLocation = gl.getUniformLocation(program, 'u_projectionMatrix');
+    const modelViewMatrixLocation = gl.getUniformLocation(program, 'u_modelViewMatrix');
+    
+    const cubeData = primitives.createCube();
+    const sphereData = primitives.createSphere(1, 20);
+    const cylinderData = primitives.createCylinder(0.5, 2, 20);
+    
+    const geometries = {
+      cube: { data: cubeData, vao: null, positionBuffer: null, colorBuffer: null, indexBuffer: null },
+      sphere: { data: sphereData, vao: null, positionBuffer: null, colorBuffer: null, indexBuffer: null },
+      cylinder: { data: cylinderData, vao: null, positionBuffer: null, colorBuffer: null, indexBuffer: null }
+    };
+    
+    function createVAO(geometry) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, geometry.data.positions, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+      
+      const colorBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, geometry.data.colors, gl.STATIC_DRAW);
+      gl.enableVertexAttribArray(colorAttributeLocation);
+      gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+      
+      const indexBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.data.indices, gl.STATIC_DRAW);
+      
+      gl.bindVertexArray(null);
+      
+      return { vao, positionBuffer, colorBuffer, indexBuffer };
+    }
+    
+    for (const name in geometries) {
+      const buffers = createVAO(geometries[name]);
+      geometries[name].vao = buffers.vao;
+      geometries[name].positionBuffer = buffers.positionBuffer;
+      geometries[name].colorBuffer = buffers.colorBuffer;
+      geometries[name].indexBuffer = buffers.indexBuffer;
+    }
+    
+    let useVAO = true;
+    let rotation = 0;
+    let currentGeometry = 'cube';
+    
+    webglLessonsUI.setupCheckbox('#useVAO', {
+      value: true,
+      onChange: (value) => { useVAO = value; }
+    });
+    
+    webglLessonsUI.setupSlider('#rotation', {
+      min: 0,
+      max: 360,
+      value: 0,
+      step: 1,
+      valueDisplay: '#rotationValue',
+      onChange: (value) => { rotation = value; }
+    });
+    
+    document.getElementById('geometry').addEventListener('change', (e) => {
+      currentGeometry = e.target.value;
+    });
+    
+    const projectionMatrix = m4.perspective(45 * Math.PI / 180, canvas.width / canvas.height, 0.1, 100);
+    const cameraPosition = [0, 0, 5];
+    const target = [0, 0, 0];
+    const up = [0, 1, 0];
+    const viewMatrix = m4.lookAt(cameraPosition, target, up);
+    
+    let frameCount = 0;
+    let startTime = performance.now();
+    const fpsDisplay = document.getElementById('fps');
+    
+    function render(time) {
+      webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      
+      gl.enable(gl.DEPTH_TEST);
+      gl.useProgram(program);
+      
+      const modelMatrix = m4.identity();
+      const angle = rotation * Math.PI / 180;
+      m4.multiply(modelMatrix, m4.xRotation(angle), modelMatrix);
+      m4.multiply(modelMatrix, m4.yRotation(angle * 0.7), modelMatrix);
+      
+      const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+      
+      gl.uniformMatrix4fv(projectionMatrixLocation, false, projectionMatrix);
+      gl.uniformMatrix4fv(modelViewMatrixLocation, false, modelViewMatrix);
+      
+      const geometry = geometries[currentGeometry];
+      
+      if (useVAO) {
+        gl.bindVertexArray(geometry.vao);
+        gl.drawElements(gl.TRIANGLES, geometry.data.indices.length, gl.UNSIGNED_SHORT, 0);
+        gl.bindVertexArray(null);
+      } else {
+        gl.bindBuffer(gl.ARRAY_BUFFER, geometry.positionBuffer);
+        gl.enableVertexAttribArray(positionAttributeLocation);
+        gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.bindBuffer(gl.ARRAY_BUFFER, geometry.colorBuffer);
+        gl.enableVertexAttribArray(colorAttributeLocation);
+        gl.vertexAttribPointer(colorAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+        
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, geometry.indexBuffer);
+        gl.drawElements(gl.TRIANGLES, geometry.data.indices.length, gl.UNSIGNED_SHORT, 0);
+      }
+      
+      frameCount++;
+      const elapsed = performance.now() - startTime;
+      if (elapsed >= 1000) {
+        fpsDisplay.textContent = frameCount;
+        frameCount = 0;
+        startTime = performance.now();
+      }
+      
+      requestAnimationFrame(render);
+    }
+    
+    requestAnimationFrame(render);
+  </script>
+  <script src="webgl-lessons-ui.js"></script>
+</body>
+</html>

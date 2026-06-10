@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>4.9-多重渲染目标</title>
+  <style>
+    canvas { border: 1px solid #ccc; display: block; margin: 10px auto; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f0f0f0; }
+    .container { max-width: 1000px; margin: 0 auto; }
+    .controls { margin-top: 15px; padding: 10px; background: #fff; border-radius: 5px; }
+    .control-group { margin-bottom: 10px; }
+    label { display: inline-block; width: 150px; font-weight: bold; }
+    select { width: 150px; }
+    h1 { text-align: center; color: #333; }
+    .description { background: #fff; padding: 15px; margin-bottom: 15px; border-radius: 5px; line-height: 1.6; }
+    .textures { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+    .texture-canvas { width: 150px; height: 150px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>4.9 多重渲染目标 (Multiple Render Targets)</h1>
+    <div class="description">
+      <h2>什么是多重渲染目标?</h2>
+      <p>Multiple Render Targets (MRT) 是WebGL 2.0的功能，允许一次渲染到多个颜色附件。这是延迟渲染和G-buffer技术的基础。</p>
+      <h3>MRT的优势：</h3>
+      <ul>
+        <li><strong>性能提升：</strong>单次渲染可以输出多个缓冲区</li>
+        <li><strong>延迟渲染：</strong>支持G-buffer技术，分离几何处理和光照计算</li>
+        <li><strong>灵活输出：</strong>可以同时输出位置、法线、颜色、深度等信息</li>
+      </ul>
+      <h3>本示例展示：</h3>
+      <ul>
+        <li>创建包含3个颜色附件的帧缓冲</li>
+        <li>渲染立方体到多个目标</li>
+        <li>分别显示各个颜色附件的内容</li>
+      </ul>
+    </div>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+    <div class="textures">
+      <div>
+        <canvas id="color0" class="texture-canvas"></canvas>
+        <p style="text-align:center;">位置</p>
+      </div>
+      <div>
+        <canvas id="color1" class="texture-canvas"></canvas>
+        <p style="text-align:center;">法线</p>
+      </div>
+      <div>
+        <canvas id="color2" class="texture-canvas"></canvas>
+        <p style="text-align:center;">颜色</p>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="control-group">
+        <label>显示模式:</label>
+        <select id="displayMode">
+          <option value="final">最终渲染</option>
+          <option value="position">位置缓冲</option>
+          <option value="normal">法线缓冲</option>
+          <option value="color">颜色缓冲</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <script src="m4.js"></script>
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl2');
+    
+    if (!gl) {
+      alert('WebGL 2.0 不可用');
+    }
+
+    const mrtVertexShader = `#version 300 es
+      in vec4 a_position;
+      in vec3 a_normal;
+      in vec3 a_color;
+      
+      uniform mat4 u_modelViewMatrix;
+      uniform mat4 u_projectionMatrix;
+      
+      out vec3 v_position;
+      out vec3 v_normal;
+      out vec3 v_color;
+      
+      void main() {
+        vec4 pos = u_modelViewMatrix * a_position;
+        v_position = pos.xyz;
+        v_normal = mat3(u_modelViewMatrix) * a_normal;
+        v_color = a_color;
+        gl_Position = u_projectionMatrix * pos;
+      }
+    `;
+
+    const mrtFragmentShader = `#version 300 es
+      precision highp float;
+      
+      in vec3 v_position;
+      in vec3 v_normal;
+      in vec3 v_color;
+      
+      layout(location = 0) out vec4 outPosition;
+      layout(location = 1) out vec4 outNormal;
+      layout(location = 2) out vec4 outColor;
+      
+      void main() {
+        outPosition = vec4(v_position * 0.5 + 0.5, 1.0);
+        outNormal = vec4(normalize(v_normal) * 0.5 + 0.5, 1.0);
+        outColor = vec4(v_color, 1.0);
+      }
+    `;
+
+    const displayVertexShader = `#version 300 es
+      in vec4 a_position;
+      in vec2 a_texCoord;
+      
+      out vec2 v_texCoord;
+      
+      void main() {
+        gl_Position = a_position;
+        v_texCoord = a_texCoord;
+      }
+    `;
+
+    const displayFragmentShader = `#version 300 es
+      precision highp float;
+      
+      in vec2 v_texCoord;
+      uniform sampler2D u_texture;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        fragColor = texture(u_texture, v_texCoord);
+      }
+    `;
+
+    const mrtProgram = webglUtils.createProgram(gl, [mrtVertexShader, mrtFragmentShader]);
+    const displayProgram = webglUtils.createProgram(gl, [displayVertexShader, displayFragmentShader]);
+
+    const cubePositions = new Float32Array([
+      -1,-1,-1, 1,-1,-1, 1,1,-1, -1,1,-1,
+      -1,-1,1, 1,-1,1, 1,1,1, -1,1,1,
+      -1,-1,-1, -1,1,-1, -1,1,1, -1,-1,1,
+      1,-1,-1, 1,1,-1, 1,1,1, 1,-1,1,
+      -1,-1,-1, -1,-1,1, 1,-1,1, 1,-1,-1,
+      -1,1,-1, -1,1,1, 1,1,1, 1,1,-1,
+    ]);
+
+    const cubeNormals = new Float32Array([
+      0,0,-1, 0,0,-1, 0,0,-1, 0,0,-1,
+      0,0,1, 0,0,1, 0,0,1, 0,0,1,
+      -1,0,0, -1,0,0, -1,0,0, -1,0,0,
+      1,0,0, 1,0,0, 1,0,0, 1,0,0,
+      0,-1,0, 0,-1,0, 0,-1,0, 0,-1,0,
+      0,1,0, 0,1,0, 0,1,0, 0,1,0,
+    ]);
+
+    const cubeColors = new Float32Array([
+      1,0,0, 1,0,0, 1,0,0, 1,0,0,
+      0,1,0, 0,1,0, 0,1,0, 0,1,0,
+      0,0,1, 0,0,1, 0,0,1, 0,0,1,
+      1,1,0, 1,1,0, 1,1,0, 1,1,0,
+      1,0,1, 1,0,1, 1,0,1, 1,0,1,
+      0,1,1, 0,1,1, 0,1,1, 0,1,1,
+    ]);
+
+    const cubeIndices = new Uint16Array([
+      0,1,2, 0,2,3, 4,5,6, 4,6,7, 8,9,10, 8,10,11,
+      12,13,14, 12,14,15, 16,17,18, 16,18,19, 20,21,22, 20,22,23
+    ]);
+
+    function createFramebuffer(width, height) {
+      const framebuffer = gl.createFramebuffer();
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+      
+      const attachments = [];
+      for (let i = 0; i < 3; i++) {
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, gl.TEXTURE_2D, texture, 0);
+        attachments.push(gl.COLOR_ATTACHMENT0 + i);
+      }
+      
+      const depthTexture = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, depthTexture);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.DEPTH_COMPONENT24, width, height, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.TEXTURE_2D, depthTexture, 0);
+      
+      gl.drawBuffers(attachments);
+      
+      if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) {
+        console.error('Framebuffer not complete');
+        return null;
+      }
+      
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      return { framebuffer, colorTextures: [gl.createTexture(), gl.createTexture(), gl.createTexture()] };
+    }
+
+    const fbo = createFramebuffer(canvas.width, canvas.height);
+    if (!fbo) {
+      alert('无法创建帧缓冲');
+    }
+
+    const cubeVAO = gl.createVertexArray();
+    gl.bindVertexArray(cubeVAO);
+    
+    const posBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, posBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, cubePositions, gl.STATIC_DRAW);
+    const posLoc = gl.getAttribLocation(mrtProgram, 'a_position');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+    
+    const normalBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, cubeNormals, gl.STATIC_DRAW);
+    const normalLoc = gl.getAttribLocation(mrtProgram, 'a_normal');
+    gl.enableVertexAttribArray(normalLoc);
+    gl.vertexAttribPointer(normalLoc, 3, gl.FLOAT, false, 0, 0);
+    
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, cubeColors, gl.STATIC_DRAW);
+    const colorLoc = gl.getAttribLocation(mrtProgram, 'a_color');
+    gl.enableVertexAttribArray(colorLoc);
+    gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+    
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, cubeIndices, gl.STATIC_DRAW);
+    
+    gl.bindVertexArray(null);
+
+    const quadVAO = gl.createVertexArray();
+    gl.bindVertexArray(quadVAO);
+    
+    const quadPositions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, quadPositions, gl.STATIC_DRAW);
+    const quadPosLoc = gl.getAttribLocation(displayProgram, 'a_position');
+    gl.enableVertexAttribArray(quadPosLoc);
+    gl.vertexAttribPointer(quadPosLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    const quadTexCoords = new Float32Array([0,0, 1,0, 0,1, 1,1]);
+    const texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, quadTexCoords, gl.STATIC_DRAW);
+    const texCoordLoc = gl.getAttribLocation(displayProgram, 'a_texCoord');
+    gl.enableVertexAttribArray(texCoordLoc);
+    gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    gl.bindVertexArray(null);
+
+    const projectionMatrix = m4.perspective(45 * Math.PI / 180, canvas.width / canvas.height, 0.1, 100);
+    const viewMatrix = m4.lookAt([3, 3, 5], [0, 0, 0], [0, 1, 0]);
+    
+    let displayMode = 'final';
+    let rotation = 0;
+    
+    document.getElementById('displayMode').addEventListener('change', (e) => {
+      displayMode = e.target.value;
+    });
+
+    function render() {
+      webglUtils.resizeCanvasToDisplaySize(canvas);
+      
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo.framebuffer);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.enable(gl.DEPTH_TEST);
+      
+      gl.useProgram(mrtProgram);
+      
+      rotation += 0.01;
+      const modelMatrix = m4.multiply(m4.xRotation(rotation), m4.yRotation(rotation * 0.7));
+      const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+      
+      const projLoc = gl.getUniformLocation(mrtProgram, 'u_projectionMatrix');
+      const mvLoc = gl.getUniformLocation(mrtProgram, 'u_modelViewMatrix');
+      gl.uniformMatrix4fv(projLoc, false, projectionMatrix);
+      gl.uniformMatrix4fv(mvLoc, false, modelViewMatrix);
+      
+      gl.bindVertexArray(cubeVAO);
+      gl.drawElements(gl.TRIANGLES, cubeIndices.length, gl.UNSIGNED_SHORT, 0);
+      
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      
+      gl.useProgram(displayProgram);
+      const texLoc = gl.getUniformLocation(displayProgram, 'u_texture');
+      gl.uniform1i(texLoc, 0);
+      
+      let attachmentIndex = 0;
+      if (displayMode === 'position') attachmentIndex = 0;
+      else if (displayMode === 'normal') attachmentIndex = 1;
+      else if (displayMode === 'color') attachmentIndex = 2;
+      
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, fbo.colorTextures[attachmentIndex]);
+      
+      gl.bindVertexArray(quadVAO);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      
+      requestAnimationFrame(render);
+    }
+    
+    requestAnimationFrame(render);
+  </script>
+  <script src="webgl-utils.js"></script>
+</body>
+</html>

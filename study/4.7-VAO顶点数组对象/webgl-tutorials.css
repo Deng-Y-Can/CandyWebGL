@@ -1,0 +1,64 @@
+canvas {
+  border: 1px solid #ccc;
+  display: block;
+  margin: 0 auto;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 10px;
+  background-color: #f0f0f0;
+}
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.controls {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #fff;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.control-group {
+  margin-bottom: 10px;
+}
+
+label {
+  display: inline-block;
+  width: 150px;
+  font-weight: bold;
+}
+
+input[type="range"] {
+  width: 200px;
+}
+
+input[type="checkbox"] {
+  margin-right: 10px;
+}
+
+.value {
+  display: inline-block;
+  width: 60px;
+  text-align: right;
+  margin-left: 10px;
+}
+
+h1 {
+  text-align: center;
+  color: #333;
+}
+
+.description {
+  background-color: #fff;
+  padding: 15px;
+  margin-bottom: 15px;
+  border-radius: 5px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  line-height: 1.6;
+}

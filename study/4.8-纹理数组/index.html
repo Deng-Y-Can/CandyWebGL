@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>4.8-纹理数组</title>
+  <link rel="stylesheet" href="webgl-tutorials.css">
+</head>
+<body>
+  <div class="container">
+    <h1>4.8 纹理数组 (Texture Array)</h1>
+    <div class="description">
+      <h2>什么是纹理数组?</h2>
+      <p>Texture Array 是WebGL 2.0引入的功能，允许将多个2D纹理打包成一个单一的纹理对象。这对于需要管理大量纹理的场景非常有用。</p>
+      <h3>纹理数组的优势：</h3>
+      <ul>
+        <li><strong>减少状态切换：</strong>多个纹理存储在一个对象中，无需频繁绑定不同纹理</li>
+        <li><strong>内存效率：</strong>共享相同的尺寸和格式，减少内存开销</li>
+        <li><strong>层级选择：</strong>通过顶点属性或uniform选择不同层级</li>
+      </ul>
+      <h3>本示例展示：</h3>
+      <ul>
+        <li>创建包含4个不同渐变纹理的纹理数组</li>
+        <li>通过uniform选择不同层级的纹理</li>
+        <li>在单个平面上展示不同纹理效果</li>
+      </ul>
+    </div>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label>纹理层级:</label>
+        <input type="range" id="textureLayer" min="0" max="3" value="0" step="1">
+        <span class="value" id="textureLayerValue">0</span>
+      </div>
+      <div class="control-group">
+        <label>当前纹理:</label>
+        <select id="textureSelect">
+          <option value="0">红色渐变</option>
+          <option value="1">绿色渐变</option>
+          <option value="2">蓝色渐变</option>
+          <option value="3">紫色渐变</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <script src="m4.js"></script>
+  <script src="primitives.js"></script>
+  <script src="webgl-utils.js"></script>
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl2');
+    
+    if (!gl) {
+      alert('WebGL 2.0 不可用，请使用支持WebGL 2.0的浏览器');
+    }
+    
+    const vertexShaderSource = `#version 300 es
+      in vec4 a_position;
+      in vec2 a_texCoord;
+      
+      uniform mat4 u_modelViewMatrix;
+      uniform mat4 u_projectionMatrix;
+      
+      out vec2 v_texCoord;
+      
+      void main() {
+        gl_Position = u_projectionMatrix * u_modelViewMatrix * a_position;
+        v_texCoord = a_texCoord;
+      }
+    `;
+    
+    const fragmentShaderSource = `#version 300 es
+      precision highp float;
+      
+      in vec2 v_texCoord;
+      uniform sampler2DArray u_textureArray;
+      uniform float u_layer;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        fragColor = texture(u_textureArray, vec3(v_texCoord, u_layer));
+      }
+    `;
+    
+    const program = webglUtils.createProgramFromSources(gl, [vertexShaderSource, fragmentShaderSource]);
+    
+    const positionAttributeLocation = gl.getAttribLocation(program, 'a_position');
+    const texCoordAttributeLocation = gl.getAttribLocation(program, 'a_texCoord');
+    
+    const projectionMatrixLocation = gl.getUniformLocation(program, 'u_projectionMatrix');
+    const modelViewMatrixLocation = gl.getUniformLocation(program, 'u_modelViewMatrix');
+    const textureArrayLocation = gl.getUniformLocation(program, 'u_textureArray');
+    const layerLocation = gl.getUniformLocation(program, 'u_layer');
+    
+    const planeData = primitives.createPlane(3, 2, 10);
+    
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, planeData.positions, gl.STATIC_DRAW);
+    
+    const texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, planeData.texCoords, gl.STATIC_DRAW);
+    
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, planeData.indices, gl.STATIC_DRAW);
+    
+    function createTextureArray() {
+      const textureWidth = 256;
+      const textureHeight = 256;
+      const numLayers = 4;
+      
+      const textureArray = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+      
+      gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, textureWidth, textureHeight, numLayers);
+      
+      const gradients = [
+        { r: 1, g: 0, b: 0 },
+        { r: 0, g: 1, b: 0 },
+        { r: 0, g: 0, b: 1 },
+        { r: 1, g: 0, b: 1 },
+      ];
+      
+      gradients.forEach((color, layer) => {
+        const imageData = new Uint8Array(textureWidth * textureHeight * 4);
+        for (let y = 0; y < textureHeight; y++) {
+          for (let x = 0; x < textureWidth; x++) {
+            const idx = (y * textureWidth + x) * 4;
+            const t = y / textureHeight;
+            imageData[idx] = Math.floor(color.r * 255 * t);
+            imageData[idx + 1] = Math.floor(color.g * 255 * t);
+            imageData[idx + 2] = Math.floor(color.b * 255 * t);
+            imageData[idx + 3] = 255;
+          }
+        }
+        gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, textureWidth, textureHeight, 1, 
+                         gl.RGBA, gl.UNSIGNED_BYTE, imageData);
+      });
+      
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      
+      return textureArray;
+    }
+    
+    const textureArray = createTextureArray();
+    
+    let currentLayer = 0;
+    
+    webglLessonsUI.setupSlider('#textureLayer', {
+      min: 0,
+      max: 3,
+      value: 0,
+      step: 1,
+      valueDisplay: '#textureLayerValue',
+      onChange: (value) => { 
+        currentLayer = value;
+        document.getElementById('textureSelect').value = value;
+      }
+    });
+    
+    document.getElementById('textureSelect').addEventListener('change', (e) => {
+      currentLayer = parseFloat(e.target.value);
+      document.getElementById('textureLayer').value = currentLayer;
+      document.getElementById('textureLayerValue').textContent = currentLayer;
+    });
+    
+    const projectionMatrix = m4.perspective(45 * Math.PI / 180, canvas.width / canvas.height, 0.1, 100);
+    const cameraPosition = [0, 0, 5];
+    const target = [0, 0, 0];
+    const up = [0, 1, 0];
+    const viewMatrix = m4.lookAt(cameraPosition, target, up);
+    
+    function render() {
+      webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+      gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+      
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      
+      gl.enable(gl.DEPTH_TEST);
+      gl.useProgram(program);
+      
+      const modelMatrix = m4.identity();
+      const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+      
+      gl.uniformMatrix4fv(projectionMatrixLocation, false, projectionMatrix);
+      gl.uniformMatrix4fv(modelViewMatrixLocation, false, modelViewMatrix);
+      
+      gl.uniform1i(textureArrayLocation, 0);
+      gl.uniform1f(layerLocation, currentLayer);
+      
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D_ARRAY, textureArray);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.enableVertexAttribArray(positionAttributeLocation);
+      gl.vertexAttribPointer(positionAttributeLocation, 3, gl.FLOAT, false, 0, 0);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.enableVertexAttribArray(texCoordAttributeLocation);
+      gl.vertexAttribPointer(texCoordAttributeLocation, 2, gl.FLOAT, false, 0, 0);
+      
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.drawElements(gl.TRIANGLES, planeData.indices.length, gl.UNSIGNED_SHORT, 0);
+      
+      requestAnimationFrame(render);
+    }
+    
+    requestAnimationFrame(render);
+  </script>
+  <script src="webgl-lessons-ui.js"></script>
+</body>
+</html>

@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>4.6-立方体贴图</title>
+  <link rel="stylesheet" href="webgl-tutorials.css">
+  <style>
+    canvas {
+      width: 600px;
+      height: 400px;
+    }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <script src="webgl-utils.js"></script>
+  <script src="m4.js"></script>
+  <script>
+    'use strict';
+
+    function createCubeMap(gl) {
+      const size = 256;
+      const format = gl.RGBA;
+      const type = gl.UNSIGNED_BYTE;
+
+      const cubeMap = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeMap);
+
+      const faces = [
+        gl.TEXTURE_CUBE_MAP_POSITIVE_X,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_X,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Y,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Y,
+        gl.TEXTURE_CUBE_MAP_POSITIVE_Z,
+        gl.TEXTURE_CUBE_MAP_NEGATIVE_Z,
+      ];
+
+      const faceColors = [
+        [1.0, 0.5, 0.5, 1.0],
+        [0.5, 1.0, 0.5, 1.0],
+        [0.5, 0.5, 1.0, 1.0],
+        [1.0, 1.0, 0.5, 1.0],
+        [1.0, 0.5, 1.0, 1.0],
+        [0.5, 1.0, 1.0, 1.0],
+      ];
+
+      faces.forEach((face, i) => {
+        const imageData = new Uint8Array(size * size * 4);
+        const color = faceColors[i];
+        for (let y = 0; y < size; ++y) {
+          for (let x = 0; x < size; ++x) {
+            const idx = (y * size + x) * 4;
+            const u = x / (size - 1);
+            const v = y / (size - 1);
+            const dist = Math.sqrt((u - 0.5) ** 2 + (v - 0.5) ** 2);
+            const alpha = Math.max(0, 1 - dist * 2);
+            imageData[idx + 0] = (color[0] * 255 * alpha + (1 - alpha) * 32) | 0;
+            imageData[idx + 1] = (color[1] * 255 * alpha + (1 - alpha) * 32) | 0;
+            imageData[idx + 2] = (color[2] * 255 * alpha + (1 - alpha) * 32) | 0;
+            imageData[idx + 3] = 255;
+          }
+        }
+        gl.texImage2D(face, 0, format, size, size, 0, format, type, imageData);
+      });
+
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_CUBE_MAP, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+
+      return cubeMap;
+    }
+
+    function createSkybox(gl) {
+      const positions = new Float32Array([
+        -1, -1, -1,
+         1, -1, -1,
+        -1,  1, -1,
+         1,  1, -1,
+        -1, -1,  1,
+         1, -1,  1,
+        -1,  1,  1,
+         1,  1,  1,
+      ]);
+
+      const indices = new Uint16Array([
+        0, 1, 2,   2, 1, 3,
+        4, 0, 6,   6, 0, 2,
+        7, 5, 6,   6, 5, 4,
+        3, 1, 7,   7, 1, 5,
+        3, 7, 2,   2, 7, 6,
+        4, 5, 0,   0, 5, 1,
+      ]);
+
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, positions, gl.STATIC_DRAW);
+
+      const indexBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+
+      return {
+        positionBuffer,
+        indexBuffer,
+        numElements: indices.length,
+      };
+    }
+
+    function createSphere(gl, radius, slices, stacks) {
+      const positions = [];
+      const texCoords = [];
+      const indices = [];
+
+      for (let stack = 0; stack <= stacks; ++stack) {
+        const v = stack / stacks;
+        const phi = Math.PI * v;
+        const sinPhi = Math.sin(phi);
+        const cosPhi = Math.cos(phi);
+
+        for (let slice = 0; slice <= slices; ++slice) {
+          const u = slice / slices;
+          const theta = Math.PI * 2 * u;
+          const sinTheta = Math.sin(theta);
+          const cosTheta = Math.cos(theta);
+
+          positions.push(
+            radius * sinPhi * cosTheta,
+            radius * cosPhi,
+            radius * sinPhi * sinTheta
+          );
+          texCoords.push(u, v);
+        }
+      }
+
+      for (let stack = 0; stack < stacks; ++stack) {
+        for (let slice = 0; slice < slices; ++slice) {
+          const i0 = stack * (slices + 1) + slice;
+          const i1 = i0 + 1;
+          const i2 = i0 + slices + 1;
+          const i3 = i2 + 1;
+
+          indices.push(i0, i2, i1);
+          indices.push(i1, i2, i3);
+        }
+      }
+
+      const positionBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(positions), gl.STATIC_DRAW);
+
+      const texCoordBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(texCoords), gl.STATIC_DRAW);
+
+      const indexBuffer = gl.createBuffer();
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+      return {
+        positionBuffer,
+        texCoordBuffer,
+        indexBuffer,
+        numElements: indices.length,
+      };
+    }
+
+    function main() {
+      const canvas = document.getElementById('canvas');
+      const gl = canvas.getContext('webgl');
+      if (!gl) {
+        alert('WebGL not available');
+        return;
+      }
+
+      const skyboxVS = `
+        attribute vec4 a_position;
+        uniform mat4 u_viewProjection;
+        varying vec3 v_texCoord;
+        void main() {
+          v_texCoord = a_position.xyz;
+          gl_Position = u_viewProjection * a_position;
+        }
+      `;
+
+      const skyboxFS = `
+        precision highp float;
+        varying vec3 v_texCoord;
+        uniform samplerCube u_cubeMap;
+        void main() {
+          gl_FragColor = textureCube(u_cubeMap, v_texCoord);
+        }
+      `;
+
+      const sphereVS = `
+        attribute vec4 a_position;
+        attribute vec2 a_texCoord;
+        uniform mat4 u_modelViewProjection;
+        varying vec3 v_texCoord;
+        void main() {
+          gl_Position = u_modelViewProjection * a_position;
+          v_texCoord = a_position.xyz;
+        }
+      `;
+
+      const sphereFS = `
+        precision highp float;
+        varying vec3 v_texCoord;
+        uniform samplerCube u_cubeMap;
+        void main() {
+          gl_FragColor = textureCube(u_cubeMap, normalize(v_texCoord));
+        }
+      `;
+
+      const skyboxProgram = webglUtils.createProgramFromSources(gl, [skyboxVS, skyboxFS]);
+      const sphereProgram = webglUtils.createProgramFromSources(gl, [sphereVS, sphereFS]);
+
+      const skyboxInfo = createSkybox(gl);
+      const sphereInfo = createSphere(gl, 0.5, 32, 16);
+      const cubeMap = createCubeMap(gl);
+
+      const skyboxLoc = {
+        position: gl.getAttribLocation(skyboxProgram, 'a_position'),
+        viewProjection: gl.getUniformLocation(skyboxProgram, 'u_viewProjection'),
+        cubeMap: gl.getUniformLocation(skyboxProgram, 'u_cubeMap'),
+      };
+
+      const sphereLoc = {
+        position: gl.getAttribLocation(sphereProgram, 'a_position'),
+        texCoord: gl.getAttribLocation(sphereProgram, 'a_texCoord'),
+        modelViewProjection: gl.getUniformLocation(sphereProgram, 'u_modelViewProjection'),
+        cubeMap: gl.getUniformLocation(sphereProgram, 'u_cubeMap'),
+      };
+
+      let cameraAngle = 0;
+
+      function render(time) {
+        webglUtils.resizeCanvasToDisplaySize(gl.canvas);
+        gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
+
+        gl.enable(gl.DEPTH_TEST);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+        cameraAngle = time * 0.0005;
+
+        const cameraPosition = [
+          Math.sin(cameraAngle) * 3,
+          1.5,
+          Math.cos(cameraAngle) * 3,
+        ];
+        const target = [0, 0, 0];
+        const up = [0, 1, 0];
+
+        const viewMatrix = m4.lookAt(cameraPosition, target, up);
+        const projMatrix = m4.perspective(Math.PI / 3, gl.canvas.width / gl.canvas.height, 0.1, 100);
+        const viewProjection = m4.multiply(projMatrix, viewMatrix);
+
+        gl.useProgram(skyboxProgram);
+        gl.bindBuffer(gl.ARRAY_BUFFER, skyboxInfo.positionBuffer);
+        gl.enableVertexAttribArray(skyboxLoc.position);
+        gl.vertexAttribPointer(skyboxLoc.position, 3, gl.FLOAT, false, 0, 0);
+
+        gl.uniformMatrix4fv(skyboxLoc.viewProjection, false, viewProjection);
+        gl.uniform1i(skyboxLoc.cubeMap, 0);
+
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_CUBE_MAP, cubeMap);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyboxInfo.indexBuffer);
+        gl.drawElements(gl.TRIANGLES, skyboxInfo.numElements, gl.UNSIGNED_SHORT, 0);
+
+        gl.useProgram(sphereProgram);
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereInfo.positionBuffer);
+        gl.enableVertexAttribArray(sphereLoc.position);
+        gl.vertexAttribPointer(sphereLoc.position, 3, gl.FLOAT, false, 0, 0);
+
+        gl.bindBuffer(gl.ARRAY_BUFFER, sphereInfo.texCoordBuffer);
+        gl.enableVertexAttribArray(sphereLoc.texCoord);
+        gl.vertexAttribPointer(sphereLoc.texCoord, 2, gl.FLOAT, false, 0, 0);
+
+        const modelMatrix = m4.identity();
+        const modelView = m4.multiply(viewMatrix, modelMatrix);
+        const mvp = m4.multiply(projMatrix, modelView);
+
+        gl.uniformMatrix4fv(sphereLoc.modelViewProjection, false, mvp);
+        gl.uniform1i(sphereLoc.cubeMap, 0);
+
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, sphereInfo.indexBuffer);
+        gl.drawElements(gl.TRIANGLES, sphereInfo.numElements, gl.UNSIGNED_SHORT, 0);
+
+        requestAnimationFrame(render);
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    main();
+  </script>
+</body>
+</html>

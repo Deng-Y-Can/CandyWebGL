@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>4.12-抗锯齿技术</title>
+  <style>
+    canvas { border: 1px solid #ccc; display: block; margin: 10px auto; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f0f0f0; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .controls { margin-top: 15px; padding: 10px; background: #fff; border-radius: 5px; }
+    .control-group { margin-bottom: 10px; }
+    label { display: inline-block; width: 150px; font-weight: bold; }
+    select { width: 150px; }
+    h1 { text-align: center; color: #333; }
+    .description { background: #fff; padding: 15px; margin-bottom: 15px; border-radius: 5px; line-height: 1.6; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>4.12 抗锯齿技术 (Anti-Aliasing)</h1>
+    <div class="description">
+      <h2>什么是抗锯齿?</h2>
+      <p>抗锯齿是一种减少图像边缘锯齿效果的技术。在计算机图形中，由于像素是离散的，斜线和曲线边缘会呈现锯齿状。抗锯齿技术通过平滑这些边缘来提高图像质量。</p>
+      <h3>常见的抗锯齿方法：</h3>
+      <ul>
+        <li><strong>MSAA (多重采样抗锯齿)：</strong>在每个像素内进行多次采样，然后平均。硬件支持，质量好但性能开销较大。</li>
+        <li><strong>FXAA (快速近似抗锯齿)：</strong>基于后处理的抗锯齿，在渲染后对图像进行模糊处理。性能好但质量稍差。</li>
+        <li><strong>SSAA (超级采样抗锯齿)：</strong>以更高分辨率渲染，然后缩小到目标分辨率。质量最好但性能开销最大。</li>
+      </ul>
+      <h3>本示例展示：</h3>
+      <ul>
+        <li>对比不同抗锯齿方法的效果</li>
+        <li>展示MSAA的不同样本数量</li>
+        <li>实现FXAA后处理效果</li>
+      </ul>
+    </div>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label>抗锯齿模式:</label>
+        <select id="aaMode">
+          <option value="none">无抗锯齿</option>
+          <option value="msaa2">MSAA 2x</option>
+          <option value="msaa4">MSAA 4x</option>
+          <option value="fxaa">FXAA</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl2', { antialias: true });
+    
+    if (!gl) {
+      alert('WebGL 2.0 不可用');
+    }
+
+    const vertexShaderSource = `#version 300 es
+      in vec4 a_position;
+      in vec3 a_color;
+      
+      uniform mat4 u_modelViewMatrix;
+      uniform mat4 u_projectionMatrix;
+      
+      out vec3 v_color;
+      
+      void main() {
+        gl_Position = u_projectionMatrix * u_modelViewMatrix * a_position;
+        v_color = a_color;
+      }
+    `;
+
+    const fragmentShaderSource = `#version 300 es
+      precision highp float;
+      
+      in vec3 v_color;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        fragColor = vec4(v_color, 1.0);
+      }
+    `;
+
+    const fxaaVertexShader = `#version 300 es
+      in vec4 a_position;
+      in vec2 a_texCoord;
+      out vec2 v_texCoord;
+      void main() {
+        gl_Position = a_position;
+        v_texCoord = a_texCoord;
+      }
+    `;
+
+    const fxaaFragmentShader = `#version 300 es
+      precision highp float;
+      
+      in vec2 v_texCoord;
+      uniform sampler2D u_texture;
+      uniform vec2 u_resolution;
+      
+      out vec4 fragColor;
+      
+      void main() {
+        vec2 texelSize = 1.0 / u_resolution;
+        vec3 rgbM = texture(u_texture, v_texCoord).rgb;
+        
+        vec3 rgbNW = textureOffset(u_texture, v_texCoord, ivec2(-1, -1)).rgb;
+        vec3 rgbNE = textureOffset(u_texture, v_texCoord, ivec2(1, -1)).rgb;
+        vec3 rgbSW = textureOffset(u_texture, v_texCoord, ivec2(-1, 1)).rgb;
+        vec3 rgbSE = textureOffset(u_texture, v_texCoord, ivec2(1, 1)).rgb;
+        vec3 rgbE = textureOffset(u_texture, v_texCoord, ivec2(1, 0)).rgb;
+        vec3 rgbW = textureOffset(u_texture, v_texCoord, ivec2(-1, 0)).rgb;
+        vec3 rgbN = textureOffset(u_texture, v_texCoord, ivec2(0, -1)).rgb;
+        vec3 rgbS = textureOffset(u_texture, v_texCoord, ivec2(0, 1)).rgb;
+        
+        vec3 luma = vec3(0.299, 0.587, 0.114);
+        float lumaNW = dot(rgbNW, luma);
+        float lumaNE = dot(rgbNE, luma);
+        float lumaSW = dot(rgbSW, luma);
+        float lumaSE = dot(rgbSE, luma);
+        float lumaM = dot(rgbM, luma);
+        float lumaE = dot(rgbE, luma);
+        float lumaW = dot(rgbW, luma);
+        float lumaN = dot(rgbN, luma);
+        float lumaS = dot(rgbS, luma);
+        
+        float maxLuma = max(max(max(lumaNW, lumaNE), max(lumaSW, lumaSE)), lumaM);
+        float minLuma = min(min(min(lumaNW, lumaNE), min(lumaSW, lumaSE)), lumaM);
+        float range = maxLuma - minLuma;
+        
+        if (range < 0.1 * maxLuma) {
+          fragColor = vec4(rgbM, 1.0);
+          return;
+        }
+        
+        float edgeH = abs(-2.0 * lumaN + lumaNW + lumaNE) + abs(-2.0 * lumaM + lumaN + lumaS) * 2.0 + abs(-2.0 * lumaS + lumaSW + lumaSE);
+        float edgeV = abs(-2.0 * lumaW + lumaNW + lumaSW) + abs(-2.0 * lumaM + lumaW + lumaE) * 2.0 + abs(-2.0 * lumaE + lumaNE + lumaSE);
+        
+        bool isHorizontal = edgeH >= edgeV;
+        
+        float stepSize = 1.0;
+        float offset1 = isHorizontal ? 0.0 : texelSize.y;
+        float offset2 = isHorizontal ? texelSize.x : 0.0;
+        
+        float luma1 = isHorizontal ? lumaN : lumaW;
+        float luma2 = isHorizontal ? lumaS : lumaE;
+        float gradient1 = abs(luma1 - lumaM);
+        float gradient2 = abs(luma2 - lumaM);
+        
+        if (gradient1 < gradient2) {
+          stepSize = -stepSize;
+          luma1 = luma2;
+        }
+        
+        vec2 finalOffset = vec2(isHorizontal ? stepSize * texelSize.x : 0.0, isHorizontal ? 0.0 : stepSize * texelSize.y);
+        vec3 rgbA = 0.5 * (texture(u_texture, v_texCoord + finalOffset).rgb + texture(u_texture, v_texCoord - finalOffset).rgb);
+        
+        fragColor = vec4(rgbA, 1.0);
+      }
+    `;
+
+    const renderProgram = webglUtils.createProgram(gl, [vertexShaderSource, fragmentShaderSource]);
+    const fxaaProgram = webglUtils.createProgram(gl, [fxaaVertexShader, fxaaFragmentShader]);
+
+    const teapotPositions = [];
+    const teapotColors = [];
+    
+    function generateTeapot() {
+      const stacks = 10;
+      const slices = 20;
+      
+      for (let i = 0; i <= stacks; i++) {
+        const phi = (i / stacks) * Math.PI;
+        const sinPhi = Math.sin(phi);
+        const cosPhi = Math.cos(phi);
+        
+        for (let j = 0; j <= slices; j++) {
+          const theta = (j / slices) * Math.PI * 2;
+          const sinTheta = Math.sin(theta);
+          const cosTheta = Math.cos(theta);
+          
+          const x = (0.5 + 0.3 * cosPhi) * sinTheta;
+          const y = sinPhi * 0.5;
+          const z = (0.5 + 0.3 * cosPhi) * cosTheta;
+          
+          teapotPositions.push(x, y, z);
+          teapotColors.push(0.8 + Math.random() * 0.2, 0.6 + Math.random() * 0.2, 0.4 + Math.random() * 0.2);
+        }
+      }
+    }
+    
+    generateTeapot();
+
+    const positionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotPositions), gl.STATIC_DRAW);
+
+    const colorBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(teapotColors), gl.STATIC_DRAW);
+
+    const indices = [];
+    for (let i = 0; i < stacks; i++) {
+      for (let j = 0; j < slices; j++) {
+        const a = i * (slices + 1) + j;
+        const b = (i + 1) * (slices + 1) + j;
+        const c = (i + 1) * (slices + 1) + j + 1;
+        const d = i * (slices + 1) + j + 1;
+        indices.push(a, b, d, b, c, d);
+      }
+    }
+
+    const indexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(indices), gl.STATIC_DRAW);
+
+    const fbo = gl.createFramebuffer();
+    const renderTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, renderTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const quadVAO = gl.createVertexArray();
+    gl.bindVertexArray(quadVAO);
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const quadPosLoc = gl.getAttribLocation(fxaaProgram, 'a_position');
+    gl.enableVertexAttribArray(quadPosLoc);
+    gl.vertexAttribPointer(quadPosLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    const texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0,0, 1,0, 0,1, 1,1]), gl.STATIC_DRAW);
+    const texCoordLoc = gl.getAttribLocation(fxaaProgram, 'a_texCoord');
+    gl.enableVertexAttribArray(texCoordLoc);
+    gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
+
+    let aaMode = 'msaa4';
+    
+    document.getElementById('aaMode').addEventListener('change', (e) => {
+      aaMode = e.target.value;
+    });
+
+    let rotation = 0;
+
+    function render() {
+      webglUtils.resizeCanvasToDisplaySize(canvas);
+      
+      if (aaMode === 'fxaa') {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, renderTexture, 0);
+      } else {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      }
+      
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      
+      gl.enable(gl.DEPTH_TEST);
+      gl.useProgram(renderProgram);
+      
+      rotation += 0.01;
+      const modelMatrix = m4.multiply(m4.xRotation(rotation), m4.yRotation(rotation * 0.7));
+      const viewMatrix = m4.lookAt([0, 0, 3], [0, 0, 0], [0, 1, 0]);
+      const modelViewMatrix = m4.multiply(viewMatrix, modelMatrix);
+      const projectionMatrix = m4.perspective(45 * Math.PI / 180, canvas.width / canvas.height, 0.1, 100);
+      
+      const mvLoc = gl.getUniformLocation(renderProgram, 'u_modelViewMatrix');
+      const projLoc = gl.getUniformLocation(renderProgram, 'u_projectionMatrix');
+      gl.uniformMatrix4fv(mvLoc, false, modelViewMatrix);
+      gl.uniformMatrix4fv(projLoc, false, projectionMatrix);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
+      const posLoc = gl.getAttribLocation(renderProgram, 'a_position');
+      gl.enableVertexAttribArray(posLoc);
+      gl.vertexAttribPointer(posLoc, 3, gl.FLOAT, false, 0, 0);
+      
+      gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+      const colorLoc = gl.getAttribLocation(renderProgram, 'a_color');
+      gl.enableVertexAttribArray(colorLoc);
+      gl.vertexAttribPointer(colorLoc, 3, gl.FLOAT, false, 0, 0);
+      
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
+      gl.drawElements(gl.TRIANGLES, indices.length, gl.UNSIGNED_SHORT, 0);
+      
+      if (aaMode === 'fxaa') {
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+        gl.viewport(0, 0, canvas.width, canvas.height);
+        
+        gl.useProgram(fxaaProgram);
+        const texLoc = gl.getUniformLocation(fxaaProgram, 'u_texture');
+        const resLoc = gl.getUniformLocation(fxaaProgram, 'u_resolution');
+        gl.uniform1i(texLoc, 0);
+        gl.uniform2f(resLoc, canvas.width, canvas.height);
+        
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, renderTexture);
+        
+        gl.bindVertexArray(quadVAO);
+        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      }
+      
+      requestAnimationFrame(render);
+    }
+    
+    requestAnimationFrame(render);
+  </script>
+  <script src="m4.js"></script>
+  <script src="webgl-utils.js"></script>
+</body>
+</html>

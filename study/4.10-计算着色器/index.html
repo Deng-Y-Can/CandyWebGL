@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>4.10-计算着色器</title>
+  <style>
+    canvas { border: 1px solid #ccc; display: block; margin: 10px auto; }
+    body { font-family: Arial, sans-serif; margin: 0; padding: 10px; background: #f0f0f0; }
+    .container { max-width: 800px; margin: 0 auto; }
+    .controls { margin-top: 15px; padding: 10px; background: #fff; border-radius: 5px; }
+    .control-group { margin-bottom: 10px; }
+    label { display: inline-block; width: 150px; font-weight: bold; }
+    input[type="range"] { width: 200px; }
+    .value { display: inline-block; width: 60px; text-align: right; margin-left: 10px; }
+    h1 { text-align: center; color: #333; }
+    .description { background: #fff; padding: 15px; margin-bottom: 15px; border-radius: 5px; line-height: 1.6; }
+    .info { background: #e8f4f8; padding: 10px; border-radius: 5px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>4.10 计算着色器 (Compute Shader)</h1>
+    <div class="description">
+      <h2>什么是计算着色器?</h2>
+      <p>Compute Shader 是WebGL 2.0通过EXT_compute_shader扩展支持的功能，允许GPU进行通用计算。计算着色器不依赖于图形管线，可以直接在GPU上执行并行计算任务。</p>
+      <h3>计算着色器的应用场景：</h3>
+      <ul>
+        <li><strong>粒子模拟：</strong>物理模拟、粒子系统更新</li>
+        <li><strong>图像处理：</strong>滤镜、模糊、特效</li>
+        <li><strong>物理计算：</strong>流体模拟、碰撞检测</li>
+        <li><strong>数据并行处理：</strong>大规模数据计算</li>
+      </ul>
+      <h3>本示例展示：</h3>
+      <ul>
+        <li>使用计算着色器生成分形图案（曼德博集合）</li>
+        <li>通过uniform参数控制计算</li>
+        <li>将计算结果渲染到屏幕</li>
+      </ul>
+    </div>
+    <canvas id="glCanvas" width="600" height="400"></canvas>
+    <div class="controls">
+      <div class="control-group">
+        <label>迭代次数:</label>
+        <input type="range" id="iterations" min="10" max="200" value="100" step="10">
+        <span class="value" id="iterationsValue">100</span>
+      </div>
+      <div class="control-group">
+        <label>缩放:</label>
+        <input type="range" id="zoom" min="1" max="100" value="1" step="1">
+        <span class="value" id="zoomValue">1</span>
+      </div>
+    </div>
+    <div class="info">
+      <strong>注意:</strong> 本示例需要浏览器支持EXT_compute_shader扩展。如果不支持，将显示回退方案。
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const gl = canvas.getContext('webgl2');
+    
+    if (!gl) {
+      alert('WebGL 2.0 不可用');
+    }
+
+    const computeShaderSource = `#version 310 es
+      layout(local_size_x = 16, local_size_y = 16) in;
+      
+      layout(rgba8, binding = 0) writeonly uniform image2D u_output;
+      uniform int u_iterations;
+      uniform float u_zoom;
+      uniform vec2 u_offset;
+      
+      void main() {
+        ivec2 coord = ivec2(gl_GlobalInvocationID.xy);
+        ivec2 size = imageSize(u_output);
+        
+        float x = (float(coord.x) / float(size.x) - 0.5) * 3.0 * u_zoom + u_offset.x;
+        float y = (float(coord.y) / float(size.y) - 0.5) * 3.0 * u_zoom + u_offset.y;
+        
+        float real = 0.0;
+        float imag = 0.0;
+        int iteration = 0;
+        
+        while (real * real + imag * imag < 4.0 && iteration < u_iterations) {
+          float temp = real * real - imag * imag + x;
+          imag = 2.0 * real * imag + y;
+          real = temp;
+          iteration++;
+        }
+        
+        float color = float(iteration) / float(u_iterations);
+        color = sqrt(color);
+        
+        vec4 pixel;
+        if (iteration == u_iterations) {
+          pixel = vec4(0.0, 0.0, 0.0, 1.0);
+        } else {
+          pixel = vec4(color, color * 0.5, color * 0.2, 1.0);
+        }
+        
+        imageStore(u_output, coord, pixel);
+      }
+    `;
+
+    const vertexShaderSource = `#version 300 es
+      in vec4 a_position;
+      in vec2 a_texCoord;
+      out vec2 v_texCoord;
+      void main() {
+        gl_Position = a_position;
+        v_texCoord = a_texCoord;
+      }
+    `;
+
+    const fragmentShaderSource = `#version 300 es
+      precision highp float;
+      in vec2 v_texCoord;
+      uniform sampler2D u_texture;
+      out vec4 fragColor;
+      void main() {
+        fragColor = texture(u_texture, v_texCoord);
+      }
+    `;
+
+    const ext = gl.getExtension('EXT_compute_shader');
+    let computeProgram = null;
+    
+    if (ext) {
+      const computeShader = gl.createShader(ext.COMPUTE_SHADER_EXT);
+      gl.shaderSource(computeShader, computeShaderSource);
+      gl.compileShader(computeShader);
+      
+      if (!gl.getShaderParameter(computeShader, gl.COMPILE_STATUS)) {
+        console.error('Compute shader error:', gl.getShaderInfoLog(computeShader));
+      }
+      
+      computeProgram = gl.createProgram();
+      gl.attachShader(computeProgram, computeShader);
+      gl.linkProgram(computeProgram);
+      
+      if (!gl.getProgramParameter(computeProgram, gl.LINK_STATUS)) {
+        console.error('Compute program error:', gl.getProgramInfoLog(computeProgram));
+        computeProgram = null;
+      }
+    }
+
+    const renderProgram = webglUtils.createProgram(gl, [vertexShaderSource, fragmentShaderSource]);
+
+    const outputTexture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, canvas.width, canvas.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    const quadVAO = gl.createVertexArray();
+    gl.bindVertexArray(quadVAO);
+    
+    const quadPositions = new Float32Array([-1,-1, 1,-1, -1,1, 1,1]);
+    const quadBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quadBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, quadPositions, gl.STATIC_DRAW);
+    const posLoc = gl.getAttribLocation(renderProgram, 'a_position');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    const quadTexCoords = new Float32Array([0,0, 1,0, 0,1, 1,1]);
+    const texCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, texCoordBuffer);
+    gl.bufferData(gl.ARRAY_BUFFER, quadTexCoords, gl.STATIC_DRAW);
+    const texCoordLoc = gl.getAttribLocation(renderProgram, 'a_texCoord');
+    gl.enableVertexAttribArray(texCoordLoc);
+    gl.vertexAttribPointer(texCoordLoc, 2, gl.FLOAT, false, 0, 0);
+    
+    gl.bindVertexArray(null);
+
+    let iterations = 100;
+    let zoom = 1;
+    
+    webglUtils.setupSlider = function(selector, options) {
+      const slider = document.querySelector(selector);
+      const valueDisplay = document.querySelector(options.valueDisplay);
+      slider.min = options.min;
+      slider.max = options.max;
+      slider.step = options.step;
+      slider.value = options.value;
+      
+      function update() {
+        if (valueDisplay) valueDisplay.textContent = slider.value;
+        if (options.onChange) options.onChange(parseFloat(slider.value));
+      }
+      slider.addEventListener('input', update);
+      update();
+    };
+    
+    webglUtils.setupSlider('#iterations', {
+      min: 10, max: 200, step: 10, value: 100,
+      valueDisplay: '#iterationsValue',
+      onChange: (v) => { iterations = v; }
+    });
+    
+    webglUtils.setupSlider('#zoom', {
+      min: 1, max: 100, step: 1, value: 1,
+      valueDisplay: '#zoomValue',
+      onChange: (v) => { zoom = v; }
+    });
+
+    function computeMandelbrot() {
+      if (!computeProgram || !ext) return;
+      
+      gl.useProgram(computeProgram);
+      
+      const iterationsLoc = gl.getUniformLocation(computeProgram, 'u_iterations');
+      const zoomLoc = gl.getUniformLocation(computeProgram, 'u_zoom');
+      const offsetLoc = gl.getUniformLocation(computeProgram, 'u_offset');
+      
+      gl.uniform1i(iterationsLoc, iterations);
+      gl.uniform1f(zoomLoc, zoom);
+      gl.uniform2f(offsetLoc, -0.5, 0);
+      
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+      ext.bindImageTextureEXT(0, outputTexture, 0, false, 0, gl.WRITE_ONLY, gl.RGBA8);
+      
+      const workGroupsX = Math.ceil(canvas.width / 16);
+      const workGroupsY = Math.ceil(canvas.height / 16);
+      ext.dispatchComputeEXT(workGroupsX, workGroupsY, 1);
+      
+      gl.memoryBarrier(gl.SHADER_IMAGE_ACCESS_BARRIER_BIT);
+    }
+
+    function render() {
+      webglUtils.resizeCanvasToDisplaySize(canvas);
+      
+      computeMandelbrot();
+      
+      gl.clearColor(0.1, 0.1, 0.1, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      
+      gl.useProgram(renderProgram);
+      const texLoc = gl.getUniformLocation(renderProgram, 'u_texture');
+      gl.uniform1i(texLoc, 0);
+      
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, outputTexture);
+      
+      gl.bindVertexArray(quadVAO);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      
+      requestAnimationFrame(render);
+    }
+    
+    requestAnimationFrame(render);
+  </script>
+  <script src="webgl-utils.js"></script>
+  <script src="m4.js"></script>
+</body>
+</html>
