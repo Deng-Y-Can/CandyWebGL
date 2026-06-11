@@ -32,7 +32,6 @@ void main() {
 }
 </script>
 <script  id="fragment-shader-3d" type="x-shader/x-fragment">
-precision mediump float;
 varying vec4 v_color;
 uniform vec4 u_colorMult;
 
@@ -49,7 +48,7 @@ void main() {
 
 function main() {
   var canvas = document.querySelector("#candy");
-  var gl = canvas.getContext("webgl");
+  var gl = canvas.getContext("webgl2");
   if (!gl) {
     return;
   }
