@@ -111,4 +111,375 @@
             <h1>🏠 WebGPU 教程7: 模型加载</h1>
             <p class="subtitle">加载和渲染 3D 模型：几何体数据解析和渲染</p>
             <div class="nav-links">
-                <a href="
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="tutorial-06.html">⬅️ 上一章</a>
+                <a href="tutorial-08.html">➡️ 下一章</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. 模型格式简介</h3>
+                    <p>常见的 3D 模型格式包括：</p>
+                    <ul>
+                        <li><strong>GLB/GLTF:</strong> Khronos 标准格式，二进制或 JSON</li>
+                        <li><strong>OBJ:</strong> 文本格式，简单易读</li>
+                        <li><strong>PLY:</strong> 多边形格式，支持颜色</li>
+                        <li><strong>STL:</strong> 三角形网格格式</li>
+                    </ul>
+                </div>
+
+                <div class="code-block">
+                    <code>// 解析简单的 OBJ 格式
+async function parseOBJ(data) {
+    const lines = data.split('\n');
+    const positions = [];
+    const normals = [];
+    const uvs = [];
+    const indices = [];
+    
+    for (const line of lines) {
+        const parts = line.trim().split(/\s+/);
+        if (parts[0] === 'v') {
+            positions.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (parts[0] === 'vn') {
+            normals.push(parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3]));
+        } else if (parts[0] === 'vt') {
+            uvs.push(parseFloat(parts[1]), parseFloat(parts[2]));
+        } else if (parts[0] === 'f') {
+            for (let i = 1; i <= 3; i++) {
+                const idx = parts[i].split('/');
+                indices.push(parseInt(idx[0]) - 1);
+            }
+        }
+    }
+    
+    return { positions, normals, uvs, indices };
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>2. 创建 GPU 缓冲区</h3>
+                    <p>将解析后的模型数据上传到 GPU 缓冲区中，以便渲染时使用。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 创建顶点和索引缓冲区
+function createModelBuffers(device, modelData) {
+    const vertexBuffer = device.createBuffer({
+        size: Float32Array.BYTES_PER_ELEMENT * modelData.positions.length,
+        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true
+    });
+    new Float32Array(vertexBuffer.getMappedRange()).set(modelData.positions);
+    vertexBuffer.unmap();
+
+    const indexBuffer = device.createBuffer({
+        size: Uint32Array.BYTES_PER_ELEMENT * modelData.indices.length,
+        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+        mappedAtCreation: true
+    });
+    new Uint32Array(indexBuffer.getMappedRange()).set(modelData.indices);
+    indexBuffer.unmap();
+
+    return { vertexBuffer, indexBuffer };
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 模型渲染</h3>
+                    <p>使用渲染管线绘制加载的模型，支持 MVP 变换和光照。</p>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解常见 3D 模型格式</li>
+                    <li>掌握模型数据解析方法</li>
+                    <li>学习创建 GPU 缓冲区</li>
+                    <li>实现模型渲染管线</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>GLTF:</strong> 现代 3D 资产格式</p>
+                <p><strong>顶点缓冲区:</strong> 存储顶点数据</p>
+                <p><strong>索引缓冲区:</strong> 存储三角形索引</p>
+                <p><strong>模型矩阵:</strong> 模型变换</p>
+
+                <h2>📊 模型信息</h2>
+                <div class="model-info" id="modelInfo">
+                    顶点数: 0<br>
+                    三角形数: 0<br>
+                    法线数: 0
+                </div>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+        const modelInfo = document.getElementById('modelInfo');
+
+        let device, context, pipeline;
+        let vertexBuffer, indexBuffer;
+        let rotationY = 0;
+        let vertexCount = 0;
+
+        function createTeapotModel() {
+            const vertices = [];
+            const indices = [];
+            
+            const stacks = 10;
+            const slices = 16;
+            const bodyRadius = 0.5;
+            const lidRadius = 0.3;
+            const bodyHeight = 1.0;
+            const lidHeight = 0.3;
+
+            for (let i = 0; i <= stacks; i++) {
+                const phi = (i / stacks) * Math.PI;
+                const r = i < stacks - 2 ? bodyRadius : lidRadius;
+                const y = -bodyHeight / 2 + (i / stacks) * (bodyHeight + lidHeight);
+                
+                for (let j = 0; j < slices; j++) {
+                    const theta = (j / slices) * Math.PI * 2;
+                    const x = r * Math.sin(phi) * Math.cos(theta);
+                    const z = r * Math.sin(phi) * Math.sin(theta);
+                    vertices.push(x, y, z);
+                }
+            }
+
+            for (let i = 0; i < stacks; i++) {
+                for (let j = 0; j < slices; j++) {
+                    const i0 = i * slices + j;
+                    const i1 = i * slices + ((j + 1) % slices);
+                    const i2 = (i + 1) * slices + j;
+                    const i3 = (i + 1) * slices + ((j + 1) % slices);
+                    indices.push(i0, i2, i1, i1, i2, i3);
+                }
+            }
+
+            return { vertices: new Float32Array(vertices), indices: new Uint16Array(indices) };
+        }
+
+        function createPerspective(fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const nf = 1.0 / (near - far);
+            return new Float32Array([f/aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far+near)*nf, -1, 0, 0, 2*far*near*nf, 0]);
+        }
+
+        function createViewMatrix() {
+            const eye = [2, 1.5, 2], center = [0, 0, 0], up = [0, 1, 0];
+            const z = [eye[0]-center[0], eye[1]-center[1], eye[2]-center[2]];
+            const zn = z.map(v => v / Math.hypot(...z));
+            const x = [up[1]*zn[2]-up[2]*zn[1], up[2]*zn[0]-up[0]*zn[2], up[0]*zn[1]-up[1]*zn[0]];
+            const xn = x.map(v => v / Math.hypot(...x));
+            const y = [zn[1]*xn[2]-zn[2]*xn[1], zn[2]*xn[0]-zn[0]*xn[2], zn[0]*xn[1]-zn[1]*xn[0]];
+            return new Float32Array([
+                xn[0], y[0], zn[0], 0, xn[1], y[1], zn[1], 0, xn[2], y[2], zn[2], 0,
+                -(xn[0]*eye[0]+xn[1]*eye[1]+xn[2]*eye[2]),
+                -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+                -(zn[0]*eye[0]+zn[1]*eye[1]+zn[2]*eye[2]), 1
+            ]);
+        }
+
+        function createModelMatrix(ry) {
+            const c = Math.cos(ry), s = Math.sin(ry);
+            return new Float32Array([c, 0, s, 0, 0, 1, 0, 0, -s, 0, c, 0, 0, 0, 0, 1]);
+        }
+
+        const vertexShader = `
+            struct VertexInput {
+                @location(0) position: vec3<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) color: vec3<f32>,
+            };
+
+            struct Uniforms {
+                model: mat4x4<f32>,
+                view: mat4x4<f32>,
+                projection: mat4x4<f32>,
+            };
+
+            @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                let modelPos = uniforms.model * vec4<f32>(input.position, 1.0);
+                let viewPos = uniforms.view * modelPos;
+                output.position = uniforms.projection * viewPos;
+                output.color = vec3<f32>(0.8, 0.6, 0.4);
+                return output;
+            }
+        `;
+
+        const fragmentShader = `
+            @fragment
+            fn main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+                return vec4<f32>(color, 1.0);
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) throw new Error("不支持 WebGPU");
+                
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({ device, format });
+
+                const model = createTeapotModel();
+                vertexCount = model.indices.length;
+
+                vertexBuffer = device.createBuffer({
+                    size: model.vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(model.vertices);
+                vertexBuffer.unmap();
+
+                indexBuffer = device.createBuffer({
+                    size: model.indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(indexBuffer.getMappedRange()).set(model.indices);
+                indexBuffer.unmap();
+
+                pipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: vertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 3 * 4,
+                            attributes: [{ shaderLocation: 0, offset: 0, format: 'float32x3' }]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: fragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list', cullMode: 'back' },
+                    depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
+                });
+
+                const uniformBuffer = device.createBuffer({
+                    size: 3 * 16 * 4,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+                });
+
+                const bindGroup = device.createBindGroup({
+                    layout: pipeline.getBindGroupLayout(0),
+                    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
+                });
+
+                const depthTexture = device.createTexture({
+                    size: [canvas.width, canvas.height],
+                    format: 'depth24plus',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT
+                });
+
+                modelInfo.innerHTML = `
+                    顶点数: ${model.vertices.length / 3}<br>
+                    三角形数: ${model.indices.length / 3}<br>
+                    面数: ${model.indices.length / 3}
+                `;
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+
+                render(uniformBuffer, bindGroup, depthTexture);
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        function render(uniformBuffer, bindGroup, depthTexture) {
+            const projection = createPerspective(Math.PI / 3, canvas.width / canvas.height, 0.1, 100);
+            const view = createViewMatrix();
+
+            function frame() {
+                rotationY += 0.005;
+                const model = createModelMatrix(rotationY);
+                const uniformData = new Float32Array([...model, ...view, ...projection]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                        clearValue: [0.05, 0.05, 0.08, 1.0]
+                    }],
+                    depthStencilAttachment: {
+                        view: depthTexture.createView(),
+                        depthLoadOp: 'clear',
+                        depthStoreOp: 'store',
+                        depthClearValue: 1.0
+                    }
+                });
+
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.setIndexBuffer(indexBuffer, 'uint16');
+                pass.setBindGroup(0, bindGroup);
+                pass.drawIndexed(vertexCount);
+                pass.end();
+
+                device.queue.submit([encoder.finish()]);
+                requestAnimationFrame(frame);
+            }
+
+            frame();
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>

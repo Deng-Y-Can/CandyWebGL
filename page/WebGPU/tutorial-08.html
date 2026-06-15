@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程8: 帧缓冲与后处理</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #3498db, #9b59b6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(52, 152, 219, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas { width: 100%; height: 450px; display: block; border-radius: 8px; background: #000; }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #3498db; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #3498db;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #3498db;
+        }
+        .step h3 { color: #3498db; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+        .controls {
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .controls label { color: #bdc3c7; font-size: 0.9rem; }
+        .controls select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔄 WebGPU 教程8: 帧缓冲与后处理</h1>
+            <p class="subtitle">实现屏幕后处理效果：高斯模糊、色调映射、颜色校正</p>
+            <div class="nav-links">
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="tutorial-07.html">⬅️ 上一章</a>
+                <a href="tutorials.html">🏠 返回首页</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. 帧缓冲概念</h3>
+                    <p>帧缓冲（Framebuffer）是一个离屏渲染目标，允许我们先渲染到纹理，然后对纹理进行后处理。</p>
+                    <ul>
+                        <li><strong>离屏渲染:</strong> 渲染到纹理而不是直接到屏幕</li>
+                        <li><strong>后处理:</strong> 对渲染结果应用滤镜效果</li>
+                        <li><strong>多重渲染:</strong> 可以进行多次后处理</li>
+                    </ul>
+                </div>
+
+                <div class="code-block">
+                    <code>// 创建帧缓冲纹理
+const framebufferTexture = device.createTexture({
+    size: [width, height],
+    format: 'rgba8unorm',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+});
+
+// 创建深度纹理
+const depthTexture = device.createTexture({
+    size: [width, height],
+    format: 'depth24plus',
+    usage: GPUTextureUsage.RENDER_ATTACHMENT
+});
+
+// 使用帧缓冲渲染
+const pass = encoder.beginRenderPass({
+    colorAttachments: [{
+        view: framebufferTexture.createView(),
+        loadOp: 'clear',
+        storeOp: 'store',
+        clearValue: [0, 0, 0, 1]
+    }],
+    depthStencilAttachment: {
+        view: depthTexture.createView(),
+        depthLoadOp: 'clear',
+        depthStoreOp: 'store',
+        depthClearValue: 1.0
+    }
+});</code>
+                </div>
+
+                <div class="step">
+                    <h3>2. 高斯模糊效果</h3>
+                    <p>高斯模糊是一种常用的平滑效果，使用高斯函数计算权重进行像素混合。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 高斯模糊片段着色器
+@fragment
+fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    var color: vec4<f32> = vec4<f32>(0.0);
+    const blurRadius: f32 = 3.0;
+    const samples: i32 = 7;
+    
+    let step = blurRadius / f32(samples);
+    var weightSum: f32 = 0.0;
+    
+    for (var i: i32 = -samples; i <= samples; i++) {
+        for (var j: i32 = -samples; j <= samples; j++) {
+            let offset = vec2<f32>(f32(i) * step, f32(j) * step);
+            let gaussian = exp(-(offset.x * offset.x + offset.y * offset.y) / (2.0 * blurRadius));
+            color += textureSample(texture, sampler, uv + offset) * gaussian;
+            weightSum += gaussian;
+        }
+    }
+    
+    return color / weightSum;
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 色调映射</h3>
+                    <p>色调映射用于将高动态范围（HDR）颜色转换为可显示的低动态范围（LDR）颜色。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// ACES 色调映射
+fn toneMapACES(color: vec3<f32>) -> vec3<f32> {
+    const a: f32 = 2.51;
+    const b: f32 = 0.03;
+    const c: f32 = 2.43;
+    const d: f32 = 0.59;
+    const e: f32 = 0.14;
+    return clamp((color * (a * color + b)) / (color * (c * color + d) + e), 0.0, 1.0);
+}
+
+@fragment
+fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+    let hdrColor = textureSample(texture, sampler, uv).rgb;
+    let ldrColor = toneMapACES(hdrColor);
+    return vec4<f32>(ldrColor, 1.0);
+}</code>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解帧缓冲的概念</li>
+                    <li>掌握离屏渲染技术</li>
+                    <li>学习高斯模糊实现</li>
+                    <li>理解色调映射原理</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>Framebuffer:</strong> 离屏渲染目标</p>
+                <p><strong>纹理绑定:</strong> 将纹理作为着色器输入</p>
+                <p><strong>后处理管线:</strong> 多个后处理效果串联</p>
+                <p><strong>HDR/LDR:</strong> 高动态范围与低动态范围</p>
+
+                <h2>🎛️ 后处理效果</h2>
+                <div class="controls">
+                    <label>效果类型:</label>
+                    <select id="effectSelect">
+                        <option value="none">无效果</option>
+                        <option value="blur">高斯模糊</option>
+                        <option value="grayscale">灰度</option>
+                        <option value="sepia">复古色调</option>
+                        <option value="edge">边缘检测</option>
+                    </select>
+                    <label>效果强度: <span id="intensityVal">1.0</span></label>
+                    <input type="range" id="intensitySlider" min="0" max="2" step="0.1" value="1">
+                </div>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+        const effectSelect = document.getElementById('effectSelect');
+        const intensitySlider = document.getElementById('intensitySlider');
+        const intensityVal = document.getElementById('intensityVal');
+
+        let device, context;
+        let scenePipeline, postPipeline;
+        let vertexBuffer, framebufferTexture, depthTexture;
+        let effect = 'none';
+        let intensity = 1.0;
+
+        const sceneVertexShader = `
+            struct VertexInput {
+                @location(0) position: vec3<f32>,
+                @location(1) color: vec3<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) color: vec3<f32>,
+            };
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                output.position = vec4<f32>(input.position, 1.0);
+                output.color = input.color;
+                return output;
+            }
+        `;
+
+        const sceneFragmentShader = `
+            @fragment
+            fn main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+                return vec4<f32>(color, 1.0);
+            }
+        `;
+
+        const postVertexShader = `
+            struct VertexInput {
+                @location(0) position: vec2<f32>,
+                @location(1) uv: vec2<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) uv: vec2<f32>,
+            };
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                output.position = vec4<f32>(input.position, 0.0, 1.0);
+                output.uv = input.uv;
+                return output;
+            }
+        `;
+
+        const postFragmentShader = `
+            @group(0) @binding(0) var sampler: sampler;
+            @group(0) @binding(1) var texture: texture_2d<f32>;
+            @group(0) @binding(2) var<uniform> effect: u32;
+            @group(0) @binding(3) var<uniform> intensity: f32;
+
+            @fragment
+            fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                let original = textureSample(texture, sampler, uv);
+                
+                if (effect == 0u) {
+                    return original;
+                }
+                
+                if (effect == 1u) {
+                    var color: vec4<f32> = vec4<f32>(0.0);
+                    const radius = 2.0 * intensity;
+                    for (var i: i32 = -2; i <= 2; i++) {
+                        for (var j: i32 = -2; j <= 2; j++) {
+                            let offset = vec2<f32>(f32(i) * radius * 0.01, f32(j) * radius * 0.01);
+                            color += textureSample(texture, sampler, uv + offset);
+                        }
+                    }
+                    return color / 25.0;
+                }
+                
+                if (effect == 2u) {
+                    let gray = dot(original.rgb, vec3<f32>(0.299, 0.587, 0.114));
+                    return mix(original, vec4<f32>(gray, gray, gray, 1.0), intensity);
+                }
+                
+                if (effect == 3u) {
+                    let sepia = vec3<f32>(0.393, 0.769, 0.189);
+                    let gray = dot(original.rgb, vec3<f32>(0.299, 0.587, 0.114));
+                    return mix(original, vec4<f32>(gray * sepia, 1.0), intensity);
+                }
+                
+                if (effect == 4u) {
+                    var dx: vec3<f32> = vec3<f32>(0.0);
+                    var dy: vec3<f32> = vec3<f32>(0.0);
+                    dx += textureSample(texture, sampler, uv + vec2<f32>(-0.01, 0)).rgb * -1.0;
+                    dx += textureSample(texture, sampler, uv + vec2<f32>(0.01, 0)).rgb * 1.0;
+                    dy += textureSample(texture, sampler, uv + vec2<f32>(0, -0.01)).rgb * -1.0;
+                    dy += textureSample(texture, sampler, uv + vec2<f32>(0, 0.01)).rgb * 1.0;
+                    let edge = sqrt(dot(dx, dx) + dot(dy, dy));
+                    return mix(original, vec4<f32>(edge, edge, edge, 1.0), intensity);
+                }
+                
+                return original;
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) throw new Error("不支持 WebGPU");
+                
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({ device, format });
+
+                const cubeVertices = new Float32Array([
+                    -0.5, -0.5, 0, 1,0,0,  0.5,-0.5,0, 0,1,0,  0.5,0.5,0, 0,0,1,  -0.5,0.5,0, 1,1,0
+                ]);
+                const cubeIndices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+
+                vertexBuffer = device.createBuffer({
+                    size: cubeVertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(cubeVertices);
+                vertexBuffer.unmap();
+
+                const indexBuffer = device.createBuffer({
+                    size: cubeIndices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(indexBuffer.getMappedRange()).set(cubeIndices);
+                indexBuffer.unmap();
+
+                scenePipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: sceneVertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 6 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                                { shaderLocation: 1, offset: 3 * 4, format: 'float32x3' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: sceneFragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list' }
+                });
+
+                framebufferTexture = device.createTexture({
+                    size: [canvas.width, canvas.height],
+                    format,
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING
+                });
+
+                depthTexture = device.createTexture({
+                    size: [canvas.width, canvas.height],
+                    format: 'depth24plus',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT
+                });
+
+                const postVertices = new Float32Array([-1,-1,0,0, 1,-1,1,0, 1,1,1,1, -1,1,0,1]);
+                const postVertexBuffer = device.createBuffer({
+                    size: postVertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(postVertexBuffer.getMappedRange()).set(postVertices);
+                postVertexBuffer.unmap();
+
+                const postIndexBuffer = device.createBuffer({
+                    size: 6 * 2,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(postIndexBuffer.getMappedRange()).set([0, 1, 2, 0, 2, 3]);
+                postIndexBuffer.unmap();
+
+                postPipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: postVertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 4 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x2' },
+                                { shaderLocation: 1, offset: 2 * 4, format: 'float32x2' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: postFragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list' }
+                });
+
+                const uniformBuffer = device.createBuffer({
+                    size: 8,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+                });
+
+                const postBindGroup = device.createBindGroup({
+                    layout: postPipeline.getBindGroupLayout(0),
+                    entries: [
+                        { binding: 0, resource: device.createSampler() },
+                        { binding: 1, resource: framebufferTexture.createView() },
+                        { binding: 2, resource: { buffer: uniformBuffer, offset: 0, size: 4 } },
+                        { binding: 3, resource: { buffer: uniformBuffer, offset: 4, size: 4 } }
+                    ]
+                });
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+
+                render(postVertexBuffer, postIndexBuffer, indexBuffer, uniformBuffer, postBindGroup);
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        function render(postVertexBuffer, postIndexBuffer, indexBuffer, uniformBuffer, postBindGroup) {
+            function frame() {
+                const effectMap = { none: 0, blur: 1, grayscale: 2, sepia: 3, edge: 4 };
+                const effectValue = effectMap[effect] || 0;
+                
+                device.queue.writeBuffer(uniformBuffer, 0, new Uint32Array([effectValue]));
+                device.queue.writeBuffer(uniformBuffer, 4, new Float32Array([intensity]));
+
+                const encoder = device.createCommandEncoder();
+
+                const scenePass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: framebufferTexture.createView(),
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                        clearValue: [0.05, 0.05, 0.08, 1.0]
+                    }],
+                    depthStencilAttachment: {
+                        view: depthTexture.createView(),
+                        depthLoadOp: 'clear',
+                        depthStoreOp: 'store',
+                        depthClearValue: 1.0
+                    }
+                });
+                scenePass.setPipeline(scenePipeline);
+                scenePass.setVertexBuffer(0, vertexBuffer);
+                scenePass.setIndexBuffer(indexBuffer, 'uint16');
+                scenePass.drawIndexed(6);
+                scenePass.end();
+
+                const postPass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                        clearValue: [0.1, 0.1, 0.1, 1.0]
+                    }]
+                });
+                postPass.setPipeline(postPipeline);
+                postPass.setVertexBuffer(0, postVertexBuffer);
+                postPass.setIndexBuffer(postIndexBuffer, 'uint16');
+                postPass.setBindGroup(0, postBindGroup);
+                postPass.drawIndexed(6);
+                postPass.end();
+
+                device.queue.submit([encoder.finish()]);
+                requestAnimationFrame(frame);
+            }
+
+            frame();
+        }
+
+        effectSelect.addEventListener('change', (e) => {
+            effect = e.target.value;
+        });
+
+        intensitySlider.addEventListener('input', (e) => {
+            intensity = parseFloat(e.target.value);
+            intensityVal.textContent = intensity.toFixed(1);
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>
