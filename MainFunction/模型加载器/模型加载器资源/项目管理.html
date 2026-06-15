@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CandyCAD - 项目管理</title>
+    <link rel="stylesheet" href="cad-styles.css">
+    <style>
+        .cad-page-header {
+            padding: 24px;
+            background: var(--cad-bg-panel);
+            border-bottom: 1px solid var(--cad-border);
+        }
+        
+        .cad-page-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .cad-page-desc {
+            font-size: 14px;
+            color: var(--cad-text-muted);
+        }
+        
+        .cad-page-content {
+            padding: 24px;
+            flex: 1;
+            overflow-y: auto;
+        }
+        
+        .cad-page-actions {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+        
+        .cad-projects-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+        
+        .cad-project-card {
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 12px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .cad-project-card:hover {
+            border-color: var(--cad-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        
+        .cad-project-card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        
+        .cad-project-card-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--cad-bg-input);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 12px;
+            color: var(--cad-accent);
+        }
+        
+        .cad-project-card-title {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .cad-project-card-meta {
+            font-size: 12px;
+            color: var(--cad-text-muted);
+            margin-top: 4px;
+        }
+        
+        .cad-project-card-desc {
+            font-size: 13px;
+            color: var(--cad-text-muted);
+            margin-bottom: 12px;
+            line-height: 1.5;
+        }
+        
+        .cad-project-card-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 12px;
+            color: var(--cad-text-muted);
+        }
+        
+        .cad-project-card-stat {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .cad-project-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            padding-top: 16px;
+            border-top: 1px solid var(--cad-border);
+        }
+        
+        .cad-project-card-btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 4px;
+            color: var(--cad-text);
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .cad-project-card-btn:hover {
+            background: var(--cad-border);
+        }
+        
+        .cad-project-card-btn.primary {
+            background: var(--cad-accent);
+            border-color: var(--cad-accent);
+        }
+        
+        .cad-project-card-btn.primary:hover {
+            background: var(--cad-accent-hover);
+        }
+        
+        .cad-project-card-btn.danger {
+            color: var(--cad-danger);
+        }
+        
+        .cad-project-card-btn.danger:hover {
+            background: var(--cad-danger);
+            color: white;
+        }
+        
+        /* 导入区域 */
+        .cad-import-area {
+            border: 2px dashed var(--cad-border);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .cad-import-area:hover {
+            border-color: var(--cad-accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .cad-import-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 16px;
+            color: var(--cad-text-muted);
+        }
+        
+        .cad-import-text {
+            font-size: 14px;
+            color: var(--cad-text-muted);
+        }
+        
+        /* 统计信息 */
+        .cad-stats-bar {
+            display: flex;
+            gap: 24px;
+            padding: 16px 24px;
+            background: var(--cad-bg-panel);
+            border-bottom: 1px solid var(--cad-border);
+        }
+        
+        .cad-stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cad-stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--cad-accent);
+        }
+        
+        .cad-stat-label {
+            font-size: 13px;
+            color: var(--cad-text-muted);
+        }
+    </style>
+</head>
+<body>
+    <div class="cad-container">
+        <!-- 顶部导航 -->
+        <div class="cad-toolbar">
+            <div class="cad-toolbar-title">CandyCAD</div>
+            <div class="cad-toolbar-group">
+                <button class="cad-toolbar-btn" onclick="goBack()" title="返回">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+            </div>
+            <div class="cad-toolbar-group" style="flex:1;">
+                <span style="font-size:14px;">项目管理</span>
+            </div>
+            <div class="cad-toolbar-group" style="justify-content:flex-end;">
+                <button class="cad-toolbar-btn" onclick="goToEditor()" title="CAD编辑器">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 统计栏 -->
+        <div class="cad-stats-bar">
+            <div class="cad-stat-item">
+                <span class="cad-stat-value" id="stat-projects">0</span>
+                <span class="cad-stat-label">个项目</span>
+            </div>
+            <div class="cad-stat-item">
+                <span class="cad-stat-value" id="stat-models">0</span>
+                <span class="cad-stat-label">个模型</span>
+            </div>
+            <div class="cad-stat-item">
+                <span class="cad-stat-value" id="stat-materials">0</span>
+                <span class="cad-stat-label">个材质</span>
+            </div>
+        </div>
+        
+        <!-- 页面内容 -->
+        <div class="cad-main">
+            <div class="cad-page-content">
+                <!-- 操作按钮 -->
+                <div class="cad-page-actions">
+                    <button class="cad-btn cad-btn-primary" onclick="createProject()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        新建项目
+                    </button>
+                    <button class="cad-btn" onclick="importProject()">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        导入项目
+                    </button>
+                </div>
+                
+                <!-- 导入区域 -->
+                <div class="cad-import-area" onclick="importProject()" id="import-area">
+                    <div class="cad-import-icon">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                    </div>
+                    <div class="cad-import-text">点击或拖拽文件到此处导入项目</div>
+                    <input type="file" id="import-input" accept=".json" style="display:none;">
+                </div>
+                
+                <!-- 项目列表 -->
+                <div class="cad-projects-grid" id="projects-grid">
+                    <!-- 项目卡片将动态生成 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态栏 -->
+        <div class="cad-statusbar">
+            <div class="cad-status-item">
+                <span>CandyCAD 项目管理</span>
+            </div>
+            <div class="cad-status-item" style="flex:1; justify-content:flex-end;">
+                <span id="status-message">就绪</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 新建项目模态框 -->
+    <div class="cad-modal" id="new-project-modal" style="display:none;">
+        <div class="cad-modal-content">
+            <div class="cad-modal-header">
+                <span class="cad-modal-title">新建项目</span>
+                <button class="cad-modal-close" onclick="closeModal('new-project-modal')">×</button>
+            </div>
+            <div class="cad-modal-body">
+                <div class="cad-form-row">
+                    <label class="cad-form-label">项目名称</label>
+                    <input type="text" class="cad-input cad-input-full cad-form-input" id="new-project-name" placeholder="输入项目名称">
+                </div>
+                <div class="cad-form-row">
+                    <label class="cad-form-label">描述</label>
+                    <textarea class="cad-input cad-input-full cad-form-input" id="new-project-desc" placeholder="项目描述（可选）" style="height:80px;resize:vertical;"></textarea>
+                </div>
+                <div class="cad-form-row">
+                    <label class="cad-form-label">单位</label>
+                    <select class="cad-select cad-form-input" id="new-project-unit">
+                        <option value="mm">毫米 (mm)</option>
+                        <option value="cm">厘米 (cm)</option>
+                        <option value="m">米 (m)</option>
+                        <option value="in">英寸 (in)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="cad-modal-footer">
+                <button class="cad-btn" onclick="closeModal('new-project-modal')">取消</button>
+                <button class="cad-btn cad-btn-primary" onclick="doCreateProject()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { cadDB } from './cad-database.js';
+        
+        let projects = [];
+        let totalModels = 0;
+        let totalMaterials = 0;
+        
+        // 初始化
+        async function init() {
+            await cadDB.init();
+            await loadProjects();
+            setupDragDrop();
+        }
+        
+        // 加载项目列表
+        async function loadProjects() {
+            projects = await cadDB.getAllProjects();
+            
+            // 统计模型和材质数量
+            totalModels = 0;
+            totalMaterials = 0;
+            
+            for (const project of projects) {
+                const models = await cadDB.getProjectModels(project.id);
+                totalModels += models.length;
+            }
+            
+            totalMaterials = (await cadDB.getAllMaterials()).length;
+            
+            updateStats();
+            renderProjects();
+        }
+        
+        // 更新统计
+        function updateStats() {
+            document.getElementById('stat-projects').textContent = projects.length;
+            document.getElementById('stat-models').textContent = totalModels;
+            document.getElementById('stat-materials').textContent = totalMaterials;
+        }
+        
+        // 渲染项目列表
+        function renderProjects() {
+            const grid = document.getElementById('projects-grid');
+            grid.innerHTML = '';
+            
+            if (projects.length === 0) {
+                grid.innerHTML = `
+                    <div class="cad-empty" style="grid-column: 1 / -1;">
+                        <div class="cad-empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <div class="cad-empty-text">暂无项目，点击上方按钮创建新项目</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            projects.forEach(project => {
+                const card = document.createElement('div');
+                card.className = 'cad-project-card';
+                card.onclick = () => openProject(project.id);
+                
+                const createdDate = new Date(project.createdAt).toLocaleDateString('zh-CN');
+                const updatedDate = new Date(project.updatedAt).toLocaleDateString('zh-CN');
+                
+                card.innerHTML = `
+                    <div class="cad-project-card-header">
+                        <div class="cad-project-card-icon">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                        </div>
+                        <div>
+                            <div class="cad-project-card-title">${project.name}</div>
+                            <div class="cad-project-card-meta">更新于 ${updatedDate}</div>
+                        </div>
+                    </div>
+                    <div class="cad-project-card-desc">${project.description || '暂无描述'}</div>
+                    <div class="cad-project-card-stats">
+                        <div class="cad-project-card-stat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                            <span>${project.settings?.unit || 'mm'}</span>
+                        </div>
+                        <div class="cad-project-card-stat">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+                            <span>创建于 ${createdDate}</span>
+                        </div>
+                    </div>
+                    <div class="cad-project-card-actions">
+                        <div class="cad-project-card-btn primary" onclick="event.stopPropagation(); openProject(${project.id})">打开</div>
+                        <div class="cad-project-card-btn" onclick="event.stopPropagation(); exportProject(${project.id})">导出</div>
+                        <div class="cad-project-card-btn" onclick="event.stopPropagation(); duplicateProject(${project.id})">复制</div>
+                        <div class="cad-project-card-btn danger" onclick="event.stopPropagation(); deleteProject(${project.id})">删除</div>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        // 设置拖拽导入
+        function setupDragDrop() {
+            const area = document.getElementById('import-area');
+            const input = document.getElementById('import-input');
+            
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.style.borderColor = 'var(--cad-accent)';
+                area.style.background = 'rgba(59, 130, 246, 0.1)';
+            });
+            
+            area.addEventListener('dragleave', () => {
+                area.style.borderColor = 'var(--cad-border)';
+                area.style.background = 'transparent';
+            });
+            
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.style.borderColor = 'var(--cad-border)';
+                area.style.background = 'transparent';
+                
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    handleImportFile(file);
+                }
+            });
+            
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleImportFile(file);
+                }
+            });
+        }
+        
+        // 处理导入文件
+        async function handleImportFile(file) {
+            try {
+                const text = await file.text();
+                const data = JSON.parse(text);
+                
+                if (!data.project) {
+                    showToast('无效的项目文件');
+                    return;
+                }
+                
+                const projectId = await cadDB.importProject(data);
+                showToast('项目导入成功');
+                await loadProjects();
+            } catch (err) {
+                showToast('导入失败: ' + err.message);
+            }
+        }
+        
+        // 全局函数
+        window.goBack = function() {
+            window.location.href = 'CAD编辑器.html';
+        };
+        
+        window.goToEditor = function() {
+            window.location.href = 'CAD编辑器.html';
+        };
+        
+        window.closeModal = function(id) {
+            document.getElementById(id).style.display = 'none';
+        };
+        
+        window.createProject = function() {
+            document.getElementById('new-project-modal').style.display = 'flex';
+            document.getElementById('new-project-name').value = '';
+            document.getElementById('new-project-desc').value = '';
+        };
+        
+        window.doCreateProject = async function() {
+            const name = document.getElementById('new-project-name').value || '新项目';
+            const desc = document.getElementById('new-project-desc').value;
+            const unit = document.getElementById('new-project-unit').value;
+            
+            await cadDB.createProject({
+                name: name,
+                description: desc,
+                settings: {
+                    unit: unit,
+                    gridSize: 20,
+                    gridVisible: true,
+                    snapEnabled: true
+                }
+            });
+            
+            closeModal('new-project-modal');
+            showToast('项目创建成功');
+            await loadProjects();
+        };
+        
+        window.importProject = function() {
+            document.getElementById('import-input').click();
+        };
+        
+        window.openProject = function(id) {
+            // 保存当前项目ID到localStorage
+            localStorage.setItem('cad-current-project', id);
+            window.location.href = 'CAD编辑器.html';
+        };
+        
+        window.exportProject = async function(id) {
+            const data = await cadDB.exportProject(id);
+            const project = await cadDB.getProject(id);
+            
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = project.name + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            showToast('项目已导出');
+        };
+        
+        window.duplicateProject = async function(id) {
+            const data = await cadDB.exportProject(id);
+            data.project.name = data.project.name + ' (副本)';
+            
+            const newId = await cadDB.importProject(data);
+            showToast('项目已复制');
+            await loadProjects();
+        };
+        
+        window.deleteProject = async function(id) {
+            if (confirm('确定要删除此项目吗？此操作不可撤销。')) {
+                // 删除项目及其所有模型
+                const models = await cadDB.getProjectModels(id);
+                for (const model of models) {
+                    await cadDB.deleteModel(model.id);
+                }
+                await cadDB.deleteProject(id);
+                await cadDB.clearProjectHistory(id);
+                
+                showToast('项目已删除');
+                await loadProjects();
+            }
+        };
+        
+        // 提示消息
+        function showToast(message) {
+            const existing = document.querySelector('.cad-toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'cad-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>

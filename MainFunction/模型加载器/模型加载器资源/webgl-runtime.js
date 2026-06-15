@@ -928,10 +928,9 @@ export class Renderer {
 }
 
 // ==============================
-// 可选：一些默认 shader（WebGL1/2 双版本）
+// 默认 Shader 库（WebGL1/2 双版本）
 // ==============================
 export const ShaderLib = {
-    // 简单纹理+顶点色（可扩展）
     UnlitTexture: {
         vs100: `
 precision highp float;
@@ -977,23 +976,444 @@ void main(){
 }
 `,
     },
+
+    UnlitColor: {
+        vs100: `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+varying vec4 vColor;
+void main(){
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+`,
+        fs100: `
+precision highp float;
+varying vec4 vColor;
+uniform vec4 uColor;
+void main(){
+  gl_FragColor = vColor * uColor;
+}
+`,
+        vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+in vec4 aColor;
+uniform mat4 uMVP;
+out vec4 vColor;
+void main(){
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+`,
+        fs300: `#version 300 es
+precision highp float;
+in vec4 vColor;
+uniform vec4 uColor;
+out vec4 outColor;
+void main(){
+  outColor = vColor * uColor;
+}
+`,
+    },
+
+    PointCloud: {
+        vs100: `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+uniform float uPointSize;
+varying vec4 vColor;
+void main(){
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+  gl_PointSize = uPointSize;
+}
+`,
+        fs100: `
+precision highp float;
+varying vec4 vColor;
+uniform vec4 uColor;
+uniform float uRoundPoints;
+void main(){
+  vec4 c = vColor * uColor;
+  if (uRoundPoints > 0.5) {
+    vec2 p = gl_PointCoord*2.0 - 1.0;
+    if (dot(p,p) > 1.0) discard;
+  }
+  gl_FragColor = c;
+}
+`,
+        vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+in vec4 aColor;
+uniform mat4 uMVP;
+uniform float uPointSize;
+out vec4 vColor;
+void main(){
+  vColor = aColor;
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+  gl_PointSize = uPointSize;
+}
+`,
+        fs300: `#version 300 es
+precision highp float;
+in vec4 vColor;
+uniform vec4 uColor;
+uniform float uRoundPoints;
+out vec4 outColor;
+void main(){
+  vec4 c = vColor * uColor;
+  if (uRoundPoints > 0.5) {
+    vec2 p = gl_PointCoord*2.0 - 1.0;
+    if (dot(p,p) > 1.0) discard;
+  }
+  outColor = c;
+}
+`,
+    },
+
+    LitMesh: {
+        vs100: `
+precision highp float;
+attribute vec3 aPosition;
+attribute vec3 aNormal;
+attribute vec4 aColor;
+uniform mat4 uMVP;
+uniform mat3 uNormalMat;
+varying vec4 vColor;
+varying vec3 vN;
+void main(){
+  vColor = aColor;
+  vN = normalize(uNormalMat * aNormal);
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+`,
+        fs100: `
+precision highp float;
+varying vec4 vColor;
+varying vec3 vN;
+uniform vec4 uColor;
+uniform float uUseFakeLight;
+void main(){
+  vec4 c = vColor * uColor;
+  if (uUseFakeLight > 0.5) {
+    vec3 L = normalize(vec3(0.35, 0.85, 0.55));
+    float ndl = max(dot(normalize(vN), L), 0.0);
+    c.rgb *= (0.22 + 0.78*ndl);
+  }
+  gl_FragColor = c;
+}
+`,
+        vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+in vec3 aNormal;
+in vec4 aColor;
+uniform mat4 uMVP;
+uniform mat3 uNormalMat;
+out vec4 vColor;
+out vec3 vN;
+void main(){
+  vColor = aColor;
+  vN = normalize(uNormalMat * aNormal);
+  gl_Position = uMVP * vec4(aPosition, 1.0);
+}
+`,
+        fs300: `#version 300 es
+precision highp float;
+in vec4 vColor;
+in vec3 vN;
+uniform vec4 uColor;
+uniform float uUseFakeLight;
+out vec4 outColor;
+void main(){
+  vec4 c = vColor * uColor;
+  if (uUseFakeLight > 0.5) {
+    vec3 L = normalize(vec3(0.35, 0.85, 0.55));
+    float ndl = max(dot(normalize(vN), L), 0.0);
+    c.rgb *= (0.22 + 0.78*ndl);
+  }
+  outColor = c;
+}
+`,
+    },
+
+    Lines: {
+        vs100: `
+precision highp float;
+attribute vec3 aPosition;
+uniform mat4 uMVP;
+void main(){ gl_Position = uMVP * vec4(aPosition, 1.0); }
+`,
+        fs100: `
+precision highp float;
+uniform vec4 uColor;
+void main(){ gl_FragColor = uColor; }
+`,
+        vs300: `#version 300 es
+precision highp float;
+in vec3 aPosition;
+uniform mat4 uMVP;
+void main(){ gl_Position = uMVP * vec4(aPosition, 1.0); }
+`,
+        fs300: `#version 300 es
+precision highp float;
+uniform vec4 uColor;
+out vec4 outColor;
+void main(){ outColor = uColor; }
+`,
+    },
 };
 
 // ==============================
-// 可选：资源加载工具（不强依赖）
+// 资源加载工具
 // ==============================
 export const Assets = {
-    loadText: async (url) => {
+    async loadText(url) {
         const r = await fetch(url);
-        if (!r.ok) throw new Error(`loadText failed: ${url}`);
+        if (!r.ok) throw new Error(`loadText failed: ${url} (HTTP ${r.status})`);
         return await r.text();
     },
-    loadImage: (url) =>
-        new Promise((resolve, reject) => {
+
+    async loadBinary(url) {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`loadBinary failed: ${url} (HTTP ${r.status})`);
+        return await r.arrayBuffer();
+    },
+
+    loadImage(url, opts = {}) {
+        return new Promise((resolve, reject) => {
             const img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = () => resolve(img);
+            img.crossOrigin = opts.crossOrigin ?? "anonymous";
+            img.decode = img.decode || (() => Promise.resolve());
+            img.onload = async () => {
+                try {
+                    await img.decode();
+                    resolve(img);
+                } catch (e) {
+                    reject(e);
+                }
+            };
             img.onerror = reject;
             img.src = url;
-        }),
+        });
+    },
+
+    async loadJSON(url) {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`loadJSON failed: ${url} (HTTP ${r.status})`);
+        return await r.json();
+    },
+
+    async loadTexture(device, url, opts = {}) {
+        const img = await this.loadImage(url, opts);
+        const tex = new Texture2D(device, {
+            flipY: opts.flipY ?? true,
+            minFilter: opts.minFilter ?? device.gl.LINEAR_MIPMAP_LINEAR,
+            magFilter: opts.magFilter ?? device.gl.LINEAR,
+            wrapS: opts.wrapS ?? device.gl.CLAMP_TO_EDGE,
+            wrapT: opts.wrapT ?? device.gl.CLAMP_TO_EDGE,
+        });
+        tex.setImage(img, { generateMipmap: opts.generateMipmap ?? true });
+        return tex;
+    },
+};
+
+// ==============================
+// 几何工具函数
+// ==============================
+export const GeometryUtils = {
+    createBox(device, width = 1, height = 1, depth = 1) {
+        const hw = width * 0.5;
+        const hh = height * 0.5;
+        const hd = depth * 0.5;
+
+        const positions = new Float32Array([
+            -hw, -hh, -hd, hw, -hh, -hd, hw, hh, -hd, -hw, hh, -hd,
+            -hw, -hh, hd, hw, -hh, hd, hw, hh, hd, -hw, hh, hd,
+            -hw, -hh, -hd, -hw, hh, -hd, -hw, hh, hd, -hw, -hh, hd,
+            hw, -hh, -hd, hw, hh, -hd, hw, hh, hd, hw, -hh, hd,
+            -hw, -hh, -hd, -hw, -hh, hd, hw, -hh, hd, hw, -hh, -hd,
+            -hw, hh, -hd, -hw, hh, hd, hw, hh, hd, hw, hh, -hd,
+        ]);
+
+        const normals = new Float32Array([
+            0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1,
+            0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1,
+            -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0, 0,
+            1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0,
+            0, -1, 0, 0, -1, 0, 0, -1, 0, 0, -1, 0,
+            0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0,
+        ]);
+
+        const indices = new Uint16Array([
+            0, 1, 2, 0, 2, 3,
+            4, 5, 6, 4, 6, 7,
+            8, 9, 10, 8, 10, 11,
+            12, 13, 14, 12, 14, 15,
+            16, 17, 18, 16, 18, 19,
+            20, 21, 22, 20, 22, 23,
+        ]);
+
+        return Mesh.fromData(device, {
+            attributes: {
+                aPosition: { data: positions, size: 3 },
+                aNormal: { data: normals, size: 3 },
+            },
+            indices,
+        });
+    },
+
+    createSphere(device, radius = 1, segments = 32) {
+        const positions = [];
+        const normals = [];
+        const indices = [];
+
+        for (let lat = 0; lat <= segments; lat++) {
+            const theta = (lat / segments) * Math.PI;
+            const sinTheta = Math.sin(theta);
+            const cosTheta = Math.cos(theta);
+
+            for (let lon = 0; lon <= segments; lon++) {
+                const phi = (lon / segments) * Math.PI * 2;
+                const sinPhi = Math.sin(phi);
+                const cosPhi = Math.cos(phi);
+
+                const x = radius * sinTheta * cosPhi;
+                const y = radius * cosTheta;
+                const z = radius * sinTheta * sinPhi;
+
+                positions.push(x, y, z);
+                normals.push(x / radius, y / radius, z / radius);
+            }
+        }
+
+        for (let lat = 0; lat < segments; lat++) {
+            for (let lon = 0; lon < segments; lon++) {
+                const first = lat * (segments + 1) + lon;
+                const second = first + segments + 1;
+
+                indices.push(first, second, first + 1);
+                indices.push(second, second + 1, first + 1);
+            }
+        }
+
+        return Mesh.fromData(device, {
+            attributes: {
+                aPosition: { data: new Float32Array(positions), size: 3 },
+                aNormal: { data: new Float32Array(normals), size: 3 },
+            },
+            indices: new Uint16Array(indices),
+        });
+    },
+
+    createPlane(device, width = 1, height = 1, segments = 1) {
+        const positions = [];
+        const normals = [];
+        const uvs = [];
+        const indices = [];
+
+        const w2 = width * 0.5;
+        const h2 = height * 0.5;
+        const sx = width / segments;
+        const sy = height / segments;
+
+        for (let y = 0; y <= segments; y++) {
+            for (let x = 0; x <= segments; x++) {
+                positions.push(-w2 + x * sx, -h2 + y * sy, 0);
+                normals.push(0, 0, 1);
+                uvs.push(x / segments, y / segments);
+            }
+        }
+
+        for (let y = 0; y < segments; y++) {
+            for (let x = 0; x < segments; x++) {
+                const i = y * (segments + 1) + x;
+                indices.push(i, i + segments + 1, i + segments + 2);
+                indices.push(i, i + segments + 2, i + 1);
+            }
+        }
+
+        return Mesh.fromData(device, {
+            attributes: {
+                aPosition: { data: new Float32Array(positions), size: 3 },
+                aNormal: { data: new Float32Array(normals), size: 3 },
+                aUV: { data: new Float32Array(uvs), size: 2 },
+            },
+            indices: new Uint16Array(indices),
+        });
+    },
+};
+
+// ==============================
+// 调试工具
+// ==============================
+export const DebugUtils = {
+    drawGrid(device, program, camera, size = 10, divisions = 10) {
+        const gl = device.gl;
+        const step = size / divisions;
+        const half = size * 0.5;
+
+        const positions = [];
+        for (let i = 0; i <= divisions; i++) {
+            const pos = -half + i * step;
+            positions.push(-half, 0, pos, half, 0, pos);
+            positions.push(pos, 0, -half, pos, 0, half);
+        }
+
+        const mesh = Mesh.fromData(device, {
+            attributes: { aPosition: { data: new Float32Array(positions), size: 3 } },
+            mode: gl.LINES,
+        });
+
+        const mat = new Material(program, {
+            depthTest: true,
+            depthWrite: false,
+            blend: false,
+            cull: false,
+            uniforms: { uColor: vec4.fromValues(0.3, 0.3, 0.3, 1) },
+        });
+
+        const model = new Model(mesh, mat);
+        return model;
+    },
+
+    drawAxis(device, program, camera, length = 1) {
+        const gl = device.gl;
+        const positions = [
+            0, 0, 0, length, 0, 0,
+            0, 0, 0, 0, length, 0,
+            0, 0, 0, 0, 0, length,
+        ];
+
+        const colors = [
+            1, 0, 0, 1, 1, 0, 0, 1,
+            0, 1, 0, 1, 0, 1, 0, 1,
+            0, 0, 1, 1, 0, 0, 1, 1,
+        ];
+
+        const mesh = Mesh.fromData(device, {
+            attributes: {
+                aPosition: { data: new Float32Array(positions), size: 3 },
+                aColor: { data: new Float32Array(colors), size: 4 },
+            },
+            mode: gl.LINES,
+        });
+
+        const mat = new Material(program, {
+            depthTest: false,
+            depthWrite: false,
+            blend: true,
+            cull: false,
+            uniforms: { uColor: vec4.fromValues(1, 1, 1, 1) },
+        });
+
+        const model = new Model(mesh, mat);
+        return model;
+    },
 };

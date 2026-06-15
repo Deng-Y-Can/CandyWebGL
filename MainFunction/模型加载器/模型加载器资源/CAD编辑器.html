@@ -1,0 +1,947 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CandyCAD - 网页版CAD编辑器</title>
+    <link rel="stylesheet" href="cad-styles.css">
+    <style>
+        /* 主编辑器额外样式 */
+        .cad-toolbar-menu {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        .cad-toolbar-menu-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            background: transparent;
+            border: none;
+            color: var(--cad-text);
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        
+        .cad-toolbar-menu-btn:hover {
+            background: var(--cad-bg-input);
+        }
+        
+        .cad-toolbar-dropdown {
+            position: relative;
+        }
+        
+        .cad-toolbar-dropdown-content {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 180px;
+            display: none;
+            z-index: 100;
+        }
+        
+        .cad-toolbar-dropdown:hover .cad-toolbar-dropdown-content {
+            display: block;
+        }
+        
+        .cad-toolbar-dropdown-item {
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cad-toolbar-dropdown-item:hover {
+            background: var(--cad-bg-input);
+        }
+        
+        /* 工具面板 */
+        .cad-tools-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .cad-tool-btn {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .cad-tool-btn:hover {
+            background: var(--cad-border);
+        }
+        
+        .cad-tool-btn.active {
+            background: var(--cad-accent);
+            border-color: var(--cad-accent);
+            color: white;
+        }
+        
+        .cad-tool-icon {
+            width: 24px;
+            height: 24px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .cad-tool-name {
+            font-size: 13px;
+        }
+        
+        /* 视图控制 */
+        .cad-view-controls {
+            position: absolute;
+            right: 16px;
+            top: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 10;
+        }
+        
+        .cad-view-btn {
+            width: 32px;
+            height: 32px;
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--cad-text);
+        }
+        
+        .cad-view-btn:hover {
+            background: var(--cad-bg-input);
+        }
+        
+        /* 坐标轴指示器 */
+        .cad-axis-indicator {
+            position: absolute;
+            left: 16px;
+            bottom: 16px;
+            width: 60px;
+            height: 60px;
+            z-index: 10;
+        }
+        
+        /* 右键菜单 */
+        .cad-context-menu {
+            position: fixed;
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 8px;
+            padding: 8px;
+            min-width: 160px;
+            z-index: 1000;
+            display: none;
+        }
+        
+        .cad-context-menu-item {
+            padding: 8px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cad-context-menu-item:hover {
+            background: var(--cad-bg-input);
+        }
+        
+        .cad-context-menu-divider {
+            height: 1px;
+            background: var(--cad-border);
+            margin: 4px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="cad-container">
+        <!-- 顶部工具栏 -->
+        <div class="cad-toolbar">
+            <div class="cad-toolbar-title">CandyCAD</div>
+            
+            <div class="cad-toolbar-group">
+                <div class="cad-toolbar-dropdown">
+                    <button class="cad-toolbar-menu-btn">文件</button>
+                    <div class="cad-toolbar-dropdown-content">
+                        <div class="cad-toolbar-dropdown-item" onclick="newProject()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                            新建项目
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="openProject()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            打开项目
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="saveProject()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17 3H5a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7z"/><polyline points="17 3 17 7 21 7"/><polyline points="10 14 10 17 14 17 14 14"/></svg>
+                            保存
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="exportProject()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            导出
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cad-toolbar-dropdown">
+                    <button class="cad-toolbar-menu-btn">编辑</button>
+                    <div class="cad-toolbar-dropdown-content">
+                        <div class="cad-toolbar-dropdown-item" onclick="undo()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>
+                            撤销
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="redo()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            重做
+                        </div>
+                        <div class="cad-context-menu-divider"></div>
+                        <div class="cad-toolbar-dropdown-item" onclick="copySelected()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            复制
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="pasteSelected()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/></svg>
+                            粘贴
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="deleteSelected()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                            删除
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="cad-toolbar-dropdown">
+                    <button class="cad-toolbar-menu-btn">视图</button>
+                    <div class="cad-toolbar-dropdown-content">
+                        <div class="cad-toolbar-dropdown-item" onclick="resetView()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                            重置视图
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="toggleGrid()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/></svg>
+                            显示/隐藏网格
+                        </div>
+                        <div class="cad-toolbar-dropdown-item" onclick="toggleWireframe()">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+                            线框模式
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="cad-toolbar-group">
+                <button class="cad-toolbar-btn" onclick="setTool('select')" title="选择工具" id="tool-select">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="setTool('move')" title="移动工具" id="tool-move">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="setTool('rotate')" title="旋转工具" id="tool-rotate">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="setTool('scale')" title="缩放工具" id="tool-scale">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                </button>
+            </div>
+            
+            <div class="cad-toolbar-group">
+                <button class="cad-toolbar-btn" onclick="addPrimitive('cube')" title="添加立方体">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="addPrimitive('sphere')" title="添加球体">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="addPrimitive('cylinder')" title="添加圆柱">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14a9 3 0 0 1-18 0V5"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="addPrimitive('cone')" title="添加圆锥">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 20h18L12 2z"/><ellipse cx="12" cy="20" rx="9" ry="2"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="addPrimitive('plane')" title="添加平面">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                </button>
+            </div>
+            
+            <div class="cad-toolbar-group" style="flex:1; justify-content:flex-end;">
+                <button class="cad-toolbar-btn" onclick="openModelLibrary()" title="模型库">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                </button>
+                <button class="cad-toolbar-btn" onclick="openSettings()" title="设置">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 主内容区域 -->
+        <div class="cad-main">
+            <!-- 左侧边栏 -->
+            <div class="cad-sidebar">
+                <div class="cad-sidebar-header">
+                    <span>场景结构</span>
+                    <button class="cad-btn cad-btn-sm" onclick="addPrimitive('cube')">+ 添加</button>
+                </div>
+                <div class="cad-sidebar-content">
+                    <div class="cad-search">
+                        <span class="cad-search-icon">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                        </span>
+                        <input type="text" class="cad-search-input" placeholder="搜索对象..." id="search-input">
+                    </div>
+                    <div class="cad-tree" id="scene-tree">
+                        <!-- 场景树将动态生成 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 视图区域 -->
+            <div class="cad-viewport">
+                <div class="cad-viewport-tabs">
+                    <div class="cad-viewport-tab active" data-view="perspective">透视视图</div>
+                    <div class="cad-viewport-tab" data-view="top">顶视图</div>
+                    <div class="cad-viewport-tab" data-view="front">前视图</div>
+                    <div class="cad-viewport-tab" data-view="right">右视图</div>
+                </div>
+                <div class="cad-viewport-canvas cad-grid-bg" id="viewport">
+                    <canvas id="canvas"></canvas>
+                    <!-- 视图控制按钮 -->
+                    <div class="cad-view-controls">
+                        <button class="cad-view-btn" onclick="zoomIn()" title="放大">+</button>
+                        <button class="cad-view-btn" onclick="zoomOut()" title="缩小">-</button>
+                        <button class="cad-view-btn" onclick="resetView()" title="重置视图">R</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 右侧属性面板 -->
+            <div class="cad-properties">
+                <div class="cad-properties-header">属性</div>
+                <div class="cad-properties-content" id="properties-panel">
+                    <div class="cad-empty">
+                        <div class="cad-empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <div class="cad-empty-text">选择对象查看属性</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态栏 -->
+        <div class="cad-statusbar">
+            <div class="cad-status-item">
+                <span id="status-tool">工具: 选择</span>
+            </div>
+            <div class="cad-status-item">
+                <span id="status-objects">对象: 0</span>
+            </div>
+            <div class="cad-status-item">
+                <span id="status-selected">已选: 0</span>
+            </div>
+            <div class="cad-status-item" style="flex:1; justify-content:flex-end;">
+                <span id="status-position">X: 0 Y: 0 Z: 0</span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 右键菜单 -->
+    <div class="cad-context-menu" id="context-menu">
+        <div class="cad-context-menu-item" onclick="copySelected()">复制</div>
+        <div class="cad-context-menu-item" onclick="pasteSelected()">粘贴</div>
+        <div class="cad-context-menu-divider"></div>
+        <div class="cad-context-menu-item" onclick="deleteSelected()">删除</div>
+        <div class="cad-context-menu-divider"></div>
+        <div class="cad-context-menu-item" onclick="focusSelected()">聚焦</div>
+        <div class="cad-context-menu-item" onclick="hideSelected()">隐藏</div>
+        <div class="cad-context-menu-item" onclick="lockSelected()">锁定</div>
+    </div>
+    
+    <!-- 新建项目模态框 -->
+    <div class="cad-modal" id="new-project-modal" style="display:none;">
+        <div class="cad-modal-content">
+            <div class="cad-modal-header">
+                <span class="cad-modal-title">新建项目</span>
+                <button class="cad-modal-close" onclick="closeModal('new-project-modal')">×</button>
+            </div>
+            <div class="cad-modal-body">
+                <div class="cad-form-row">
+                    <label class="cad-form-label">项目名称</label>
+                    <input type="text" class="cad-input cad-input-full cad-form-input" id="new-project-name" placeholder="输入项目名称">
+                </div>
+                <div class="cad-form-row">
+                    <label class="cad-form-label">描述</label>
+                    <input type="text" class="cad-input cad-input-full cad-form-input" id="new-project-desc" placeholder="项目描述（可选）">
+                </div>
+            </div>
+            <div class="cad-modal-footer">
+                <button class="cad-btn" onclick="closeModal('new-project-modal')">取消</button>
+                <button class="cad-btn cad-btn-primary" onclick="createNewProject()">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { cadDB } from './cad-database.js';
+        
+        // 全局状态
+        let currentProject = null;
+        let currentTool = 'select';
+        let selectedObjects = [];
+        let sceneObjects = [];
+        let gl = null;
+        let gridVisible = true;
+        let wireframeMode = false;
+        
+        // 初始化
+        async function init() {
+            // 初始化数据库
+            await cadDB.init();
+            console.log('CAD数据库初始化完成');
+            
+            // 初始化WebGL
+            initWebGL();
+            
+            // 加载最近项目或创建默认项目
+            const projects = await cadDB.getAllProjects();
+            if (projects.length > 0) {
+                currentProject = projects[0];
+                loadProject(currentProject.id);
+            } else {
+                // 创建默认项目
+                const projectId = await cadDB.createProject({
+                    name: '默认项目',
+                    description: '自动创建的默认项目'
+                });
+                currentProject = await cadDB.getProject(projectId);
+            }
+            
+            // 绑定事件
+            bindEvents();
+            
+            // 开始渲染循环
+            renderLoop();
+        }
+        
+        // 初始化WebGL
+        function initWebGL() {
+            const canvas = document.getElementById('canvas');
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            
+            gl = canvas.getContext('webgl2');
+            if (!gl) {
+                gl = canvas.getContext('webgl');
+            }
+            
+            if (!gl) {
+                alert('您的浏览器不支持WebGL');
+                return;
+            }
+            
+            gl.clearColor(0.1, 0.12, 0.15, 1.0);
+            gl.enable(gl.DEPTH_TEST);
+        }
+        
+        // 绑定事件
+        function bindEvents() {
+            const canvas = document.getElementById('canvas');
+            
+            // 鼠标事件
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('wheel', onWheel);
+            canvas.addEventListener('contextmenu', onContextMenu);
+            
+            // 键盘事件
+            document.addEventListener('keydown', onKeyDown);
+            
+            // 窗口大小变化
+            window.addEventListener('resize', onResize);
+            
+            // 视图标签切换
+            document.querySelectorAll('.cad-viewport-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.cad-viewport-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    switchView(tab.dataset.view);
+                });
+            });
+        }
+        
+        // 渲染循环
+        function renderLoop() {
+            if (!gl) return;
+            
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            
+            // 绘制网格
+            if (gridVisible) {
+                drawGrid();
+            }
+            
+            // 绘制场景对象
+            drawSceneObjects();
+            
+            requestAnimationFrame(renderLoop);
+        }
+        
+        // 绘制网格（简化版）
+        function drawGrid() {
+            // 网格绘制逻辑（使用WebGL绘制简单的网格线）
+        }
+        
+        // 绘制场景对象
+        function drawSceneObjects() {
+            // 对象绘制逻辑
+        }
+        
+        // 鼠标事件处理
+        function onMouseDown(e) {
+            if (e.button === 0) { // 左键
+                // 选择或操作逻辑
+            }
+        }
+        
+        function onMouseMove(e) {
+            // 更新鼠标位置显示
+            updateStatusPosition(e);
+        }
+        
+        function onMouseUp(e) {
+            // 完成操作
+        }
+        
+        function onWheel(e) {
+            // 缩放视图
+        }
+        
+        function onContextMenu(e) {
+            e.preventDefault();
+            const menu = document.getElementById('context-menu');
+            menu.style.display = 'block';
+            menu.style.left = e.clientX + 'px';
+            menu.style.top = e.clientY + 'px';
+        }
+        
+        function onKeyDown(e) {
+            if (e.key === 'Delete') {
+                deleteSelected();
+            } else if (e.ctrlKey && e.key === 'z') {
+                undo();
+            } else if (e.ctrlKey && e.key === 'y') {
+                redo();
+            } else if (e.ctrlKey && e.key === 'c') {
+                copySelected();
+            } else if (e.ctrlKey && e.key === 'v') {
+                pasteSelected();
+            }
+        }
+        
+        function onResize() {
+            const canvas = document.getElementById('canvas');
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            if (gl) {
+                gl.viewport(0, 0, canvas.width, canvas.height);
+            }
+        }
+        
+        // 更新状态栏位置
+        function updateStatusPosition(e) {
+            const rect = e.target.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            document.getElementById('status-position').textContent = `X: ${x.toFixed(0)} Y: ${y.toFixed(0)} Z: 0`;
+        }
+        
+        // 工具函数
+        function setTool(tool) {
+            currentTool = tool;
+            document.querySelectorAll('.cad-toolbar-btn').forEach(btn => btn.classList.remove('active'));
+            const toolBtn = document.getElementById('tool-' + tool);
+            if (toolBtn) toolBtn.classList.add('active');
+            document.getElementById('status-tool').textContent = '工具: ' + getToolName(tool);
+        }
+        
+        function getToolName(tool) {
+            const names = {
+                'select': '选择',
+                'move': '移动',
+                'rotate': '旋转',
+                'scale': '缩放'
+            };
+            return names[tool] || tool;
+        }
+        
+        // 添加基本体
+        async function addPrimitive(type) {
+            if (!currentProject) return;
+            
+            const names = {
+                'cube': '立方体',
+                'sphere': '球体',
+                'cylinder': '圆柱',
+                'cone': '圆锥',
+                'plane': '平面'
+            };
+            
+            const modelId = await cadDB.createModel({
+                projectId: currentProject.id,
+                name: names[type] + '_' + (sceneObjects.length + 1),
+                type: type,
+                geometry: { type: type },
+                transform: {
+                    position: [0, 0, 0],
+                    rotation: [0, 0, 0],
+                    scale: [1, 1, 1]
+                }
+            });
+            
+            const model = await cadDB.getModel(modelId);
+            sceneObjects.push(model);
+            updateSceneTree();
+            updateStatusObjects();
+            
+            showToast('已添加 ' + names[type]);
+        }
+        
+        // 更新场景树
+        function updateSceneTree() {
+            const tree = document.getElementById('scene-tree');
+            tree.innerHTML = '';
+            
+            sceneObjects.forEach(obj => {
+                const item = document.createElement('div');
+                item.className = 'cad-tree-item';
+                item.dataset.id = obj.id;
+                item.innerHTML = `
+                    <div class="cad-tree-icon">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                        </svg>
+                    </div>
+                    <span class="cad-tree-name">${obj.name}</span>
+                `;
+                item.onclick = () => selectObject(obj.id);
+                tree.appendChild(item);
+            });
+        }
+        
+        // 选择对象
+        function selectObject(id) {
+            selectedObjects = sceneObjects.filter(obj => obj.id === id);
+            document.querySelectorAll('.cad-tree-item').forEach(item => {
+                item.classList.toggle('selected', item.dataset.id == id);
+            });
+            updatePropertiesPanel();
+            updateStatusSelected();
+        }
+        
+        // 更新属性面板
+        function updatePropertiesPanel() {
+            const panel = document.getElementById('properties-panel');
+            
+            if (selectedObjects.length === 0) {
+                panel.innerHTML = `
+                    <div class="cad-empty">
+                        <div class="cad-empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                        </div>
+                        <div class="cad-empty-text">选择对象查看属性</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            const obj = selectedObjects[0];
+            panel.innerHTML = `
+                <div class="cad-prop-group">
+                    <div class="cad-prop-group-title">基本信息</div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">名称</span>
+                        <input type="text" class="cad-prop-input" value="${obj.name}" onchange="updateObjectProperty(${obj.id}, 'name', this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">类型</span>
+                        <span class="cad-prop-input" style="background:transparent;border:none;">${obj.type}</span>
+                    </div>
+                </div>
+                <div class="cad-prop-group">
+                    <div class="cad-prop-group-title">变换</div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">位置 X</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.position[0]}" step="0.1" onchange="updateTransform(${obj.id}, 'position', 0, this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">位置 Y</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.position[1]}" step="0.1" onchange="updateTransform(${obj.id}, 'position', 1, this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">位置 Z</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.position[2]}" step="0.1" onchange="updateTransform(${obj.id}, 'position', 2, this.value)">
+                    </div>
+                    <div class="cad-divider"></div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">缩放 X</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.scale[0]}" step="0.1" onchange="updateTransform(${obj.id}, 'scale', 0, this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">缩放 Y</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.scale[1]}" step="0.1" onchange="updateTransform(${obj.id}, 'scale', 1, this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">缩放 Z</span>
+                        <input type="number" class="cad-prop-input" value="${obj.transform.scale[2]}" step="0.1" onchange="updateTransform(${obj.id}, 'scale', 2, this.value)">
+                    </div>
+                </div>
+                <div class="cad-prop-group">
+                    <div class="cad-prop-group-title">材质</div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">颜色</span>
+                        <input type="color" class="cad-prop-input" value="${obj.material.color}" onchange="updateMaterial(${obj.id}, 'color', this.value)">
+                    </div>
+                    <div class="cad-prop-row">
+                        <span class="cad-prop-label">透明度</span>
+                        <input type="number" class="cad-prop-input" value="${obj.material.opacity}" min="0" max="1" step="0.1" onchange="updateMaterial(${obj.id}, 'opacity', this.value)">
+                    </div>
+                </div>
+            `;
+        }
+        
+        // 更新状态栏
+        function updateStatusObjects() {
+            document.getElementById('status-objects').textContent = '对象: ' + sceneObjects.length;
+        }
+        
+        function updateStatusSelected() {
+            document.getElementById('status-selected').textContent = '已选: ' + selectedObjects.length;
+        }
+        
+        // 项目操作
+        async function loadProject(projectId) {
+            const models = await cadDB.getProjectModels(projectId);
+            sceneObjects = models;
+            updateSceneTree();
+            updateStatusObjects();
+            showToast('项目已加载');
+        }
+        
+        // 全局函数
+        window.newProject = function() {
+            document.getElementById('new-project-modal').style.display = 'flex';
+        };
+        
+        window.openProject = function() {
+            window.location.href = '项目管理.html';
+        };
+        
+        window.saveProject = async function() {
+            if (currentProject) {
+                await cadDB.updateProject(currentProject.id, { updatedAt: Date.now() });
+                showToast('项目已保存');
+            }
+        };
+        
+        window.exportProject = async function() {
+            if (currentProject) {
+                const data = await cadDB.exportProject(currentProject.id);
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = currentProject.name + '.json';
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast('项目已导出');
+            }
+        };
+        
+        window.closeModal = function(id) {
+            document.getElementById(id).style.display = 'none';
+        };
+        
+        window.createNewProject = async function() {
+            const name = document.getElementById('new-project-name').value || '新项目';
+            const desc = document.getElementById('new-project-desc').value;
+            
+            const projectId = await cadDB.createProject({
+                name: name,
+                description: desc
+            });
+            
+            currentProject = await cadDB.getProject(projectId);
+            sceneObjects = [];
+            updateSceneTree();
+            closeModal('new-project-modal');
+            showToast('项目创建成功');
+        };
+        
+        window.addPrimitive = addPrimitive;
+        window.setTool = setTool;
+        
+        window.deleteSelected = async function() {
+            if (selectedObjects.length > 0) {
+                for (const obj of selectedObjects) {
+                    await cadDB.deleteModel(obj.id);
+                    sceneObjects = sceneObjects.filter(o => o.id !== obj.id);
+                }
+                selectedObjects = [];
+                updateSceneTree();
+                updatePropertiesPanel();
+                updateStatusObjects();
+                updateStatusSelected();
+                showToast('已删除');
+            }
+        };
+        
+        window.copySelected = function() {
+            if (selectedObjects.length > 0) {
+                window.clipboardData = JSON.stringify(selectedObjects);
+                showToast('已复制');
+            }
+        };
+        
+        window.pasteSelected = async function() {
+            if (window.clipboardData) {
+                const objects = JSON.parse(window.clipboardData);
+                for (const obj of objects) {
+                    await cadDB.createModel({
+                        ...obj,
+                        projectId: currentProject.id,
+                        name: obj.name + '_副本'
+                    });
+                }
+                loadProject(currentProject.id);
+                showToast('已粘贴');
+            }
+        };
+        
+        window.undo = function() {
+            showToast('撤销功能开发中');
+        };
+        
+        window.redo = function() {
+            showToast('重做功能开发中');
+        };
+        
+        window.resetView = function() {
+            showToast('视图已重置');
+        };
+        
+        window.toggleGrid = function() {
+            gridVisible = !gridVisible;
+            showToast(gridVisible ? '网格已显示' : '网格已隐藏');
+        };
+        
+        window.toggleWireframe = function() {
+            wireframeMode = !wireframeMode;
+            showToast(wireframeMode ? '线框模式已开启' : '线框模式已关闭');
+        };
+        
+        window.zoomIn = function() {
+            showToast('放大');
+        };
+        
+        window.zoomOut = function() {
+            showToast('缩小');
+        };
+        
+        window.openModelLibrary = function() {
+            window.location.href = '模型库.html';
+        };
+        
+        window.openSettings = function() {
+            showToast('设置功能开发中');
+        };
+        
+        window.focusSelected = function() {
+            showToast('聚焦到选中对象');
+        };
+        
+        window.hideSelected = async function() {
+            if (selectedObjects.length > 0) {
+                for (const obj of selectedObjects) {
+                    await cadDB.updateModel(obj.id, { visible: false });
+                }
+                loadProject(currentProject.id);
+                showToast('已隐藏');
+            }
+        };
+        
+        window.lockSelected = async function() {
+            if (selectedObjects.length > 0) {
+                for (const obj of selectedObjects) {
+                    await cadDB.updateModel(obj.id, { locked: true });
+                }
+                showToast('已锁定');
+            }
+        };
+        
+        window.switchView = function(view) {
+            showToast('切换到 ' + view + ' 视图');
+        };
+        
+        window.updateObjectProperty = async function(id, prop, value) {
+            await cadDB.updateModel(id, { [prop]: value });
+            loadProject(currentProject.id);
+        };
+        
+        window.updateTransform = async function(id, type, index, value) {
+            const obj = sceneObjects.find(o => o.id === id);
+            if (obj) {
+                obj.transform[type][index] = parseFloat(value);
+                await cadDB.updateModel(id, { transform: obj.transform });
+            }
+        };
+        
+        window.updateMaterial = async function(id, prop, value) {
+            const obj = sceneObjects.find(o => o.id === id);
+            if (obj) {
+                obj.material[prop] = value;
+                await cadDB.updateModel(id, { material: obj.material });
+            }
+        };
+        
+        // 提示消息
+        function showToast(message) {
+            const existing = document.querySelector('.cad-toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'cad-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        // 隐藏右键菜单
+        document.addEventListener('click', () => {
+            document.getElementById('context-menu').style.display = 'none';
+        });
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>

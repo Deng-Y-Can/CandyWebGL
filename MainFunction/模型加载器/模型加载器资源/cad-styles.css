@@ -1,0 +1,879 @@
+/* CandyCAD 完整样式表 */
+
+:root {
+    /* 颜色变量 */
+    --cad-bg-primary: #1a1a2e;
+    --cad-bg-secondary: #16213e;
+    --cad-bg-panel: #1f2937;
+    --cad-bg-input: #374151;
+    --cad-bg-hover: #4b5563;
+    
+    --cad-text: #f3f4f6;
+    --cad-text-secondary: #9ca3af;
+    --cad-text-muted: #6b7280;
+    
+    --cad-border: #4b5563;
+    --cad-accent: #3b82f6;
+    --cad-accent-hover: #2563eb;
+    --cad-success: #10b981;
+    --cad-warning: #f59e0b;
+    --cad-danger: #ef4444;
+    
+    --cad-shadow: rgba(0, 0, 0, 0.3);
+    --cad-radius: 8px;
+    --cad-radius-sm: 4px;
+}
+
+/* 重置样式 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+    background: var(--cad-bg-primary);
+    color: var(--cad-text);
+    overflow: hidden;
+}
+
+/* CAD 主容器 */
+.cad-container {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    width: 100vw;
+}
+
+/* 顶部工具栏 */
+.cad-toolbar {
+    display: flex;
+    align-items: center;
+    height: 48px;
+    background: var(--cad-bg-panel);
+    border-bottom: 1px solid var(--cad-border);
+    padding: 0 12px;
+    gap: 8px;
+}
+
+.cad-toolbar-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--cad-accent);
+    margin-right: 16px;
+}
+
+.cad-toolbar-group {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cad-toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--cad-radius-sm);
+    cursor: pointer;
+    color: var(--cad-text);
+    transition: all 0.2s;
+}
+
+.cad-toolbar-btn:hover {
+    background: var(--cad-bg-input);
+    border-color: var(--cad-border);
+}
+
+.cad-toolbar-btn.active {
+    background: var(--cad-accent);
+    border-color: var(--cad-accent);
+    color: white;
+}
+
+.cad-toolbar-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* 下拉菜单 */
+.cad-toolbar-dropdown {
+    position: relative;
+}
+
+.cad-toolbar-menu {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.cad-toolbar-menu-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+    background: transparent;
+    border: none;
+    color: var(--cad-text);
+    cursor: pointer;
+    border-radius: var(--cad-radius-sm);
+}
+
+.cad-toolbar-menu-btn:hover {
+    background: var(--cad-bg-input);
+}
+
+.cad-toolbar-dropdown-content {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    padding: 8px;
+    min-width: 180px;
+    display: none;
+    z-index: 100;
+    box-shadow: 0 4px 12px var(--cad-shadow);
+}
+
+.cad-toolbar-dropdown:hover .cad-toolbar-dropdown-content {
+    display: block;
+}
+
+.cad-toolbar-dropdown-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: var(--cad-radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cad-text);
+}
+
+.cad-toolbar-dropdown-item:hover {
+    background: var(--cad-bg-input);
+}
+
+.cad-toolbar-dropdown-item svg {
+    width: 16px;
+    height: 16px;
+    opacity: 0.7;
+}
+
+/* 主内容区域 */
+.cad-main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+/* 左侧边栏 */
+.cad-sidebar {
+    width: 260px;
+    background: var(--cad-bg-secondary);
+    border-right: 1px solid var(--cad-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.cad-sidebar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cad-text-secondary);
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-sidebar-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+/* 搜索框 */
+.cad-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    padding: 6px 10px;
+    margin-bottom: 12px;
+}
+
+.cad-search-icon {
+    color: var(--cad-text-muted);
+    display: flex;
+    align-items: center;
+}
+
+.cad-search-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.cad-search-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: var(--cad-text);
+    font-size: 13px;
+}
+
+.cad-search-input::placeholder {
+    color: var(--cad-text-muted);
+}
+
+/* 场景树 */
+.cad-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cad-tree-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: var(--cad-radius-sm);
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+}
+
+.cad-tree-item:hover {
+    background: var(--cad-bg-input);
+}
+
+.cad-tree-item.selected {
+    background: var(--cad-accent);
+    color: white;
+}
+
+.cad-tree-icon {
+    display: flex;
+    align-items: center;
+    opacity: 0.7;
+}
+
+.cad-tree-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.cad-tree-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 视口区域 */
+.cad-viewport {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: var(--cad-bg-primary);
+    position: relative;
+}
+
+.cad-viewport-tabs {
+    display: flex;
+    gap: 4px;
+    padding: 8px 12px;
+    background: var(--cad-bg-panel);
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-viewport-tab {
+    padding: 6px 14px;
+    font-size: 12px;
+    color: var(--cad-text-secondary);
+    border-radius: var(--cad-radius-sm);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cad-viewport-tab:hover {
+    background: var(--cad-bg-input);
+    color: var(--cad-text);
+}
+
+.cad-viewport-tab.active {
+    background: var(--cad-accent);
+    color: white;
+}
+
+.cad-viewport-canvas {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+}
+
+.cad-grid-bg {
+    background: 
+        linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px),
+        linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+    background-size: 20px 20px, 20px 20px, 100px 100px, 100px 100px;
+    background-position: -1px -1px, -1px -1px, -1px -1px, -1px -1px;
+}
+
+.cad-viewport-canvas canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+/* 视图控制按钮 */
+.cad-view-controls {
+    position: absolute;
+    right: 16px;
+    top: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    z-index: 10;
+}
+
+.cad-view-btn {
+    width: 32px;
+    height: 32px;
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--cad-text);
+    font-size: 14px;
+    font-weight: 600;
+    transition: all 0.15s;
+}
+
+.cad-view-btn:hover {
+    background: var(--cad-bg-input);
+    border-color: var(--cad-accent);
+}
+
+/* 右侧属性面板 */
+.cad-properties {
+    width: 280px;
+    background: var(--cad-bg-secondary);
+    border-left: 1px solid var(--cad-border);
+    display: flex;
+    flex-direction: column;
+}
+
+.cad-properties-header {
+    padding: 12px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--cad-text-secondary);
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-properties-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+}
+
+/* 属性面板 - 空状态 */
+.cad-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px 20px;
+    color: var(--cad-text-muted);
+}
+
+.cad-empty-icon {
+    opacity: 0.3;
+    margin-bottom: 12px;
+}
+
+.cad-empty-icon svg {
+    width: 48px;
+    height: 48px;
+}
+
+.cad-empty-text {
+    font-size: 13px;
+    text-align: center;
+}
+
+/* 属性组 */
+.cad-prop-group {
+    margin-bottom: 16px;
+}
+
+.cad-prop-group-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cad-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 10px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-prop-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.cad-prop-label {
+    font-size: 12px;
+    color: var(--cad-text-secondary);
+}
+
+.cad-prop-input {
+    width: 120px;
+    padding: 5px 8px;
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    color: var(--cad-text);
+    font-size: 12px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.cad-prop-input:focus {
+    border-color: var(--cad-accent);
+}
+
+.cad-prop-input[type="color"] {
+    width: 60px;
+    height: 28px;
+    padding: 2px;
+    cursor: pointer;
+}
+
+.cad-divider {
+    height: 1px;
+    background: var(--cad-border);
+    margin: 12px 0;
+}
+
+/* 状态栏 */
+.cad-statusbar {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    background: var(--cad-bg-panel);
+    border-top: 1px solid var(--cad-border);
+    padding: 0 12px;
+    gap: 16px;
+    font-size: 11px;
+    color: var(--cad-text-secondary);
+}
+
+.cad-status-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* 按钮样式 */
+.cad-btn {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 500;
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    color: var(--cad-text);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.cad-btn:hover {
+    background: var(--cad-bg-hover);
+    border-color: var(--cad-text-muted);
+}
+
+.cad-btn-primary {
+    background: var(--cad-accent);
+    border-color: var(--cad-accent);
+    color: white;
+}
+
+.cad-btn-primary:hover {
+    background: var(--cad-accent-hover);
+    border-color: var(--cad-accent-hover);
+}
+
+.cad-btn-sm {
+    padding: 4px 10px;
+    font-size: 11px;
+}
+
+.cad-btn-danger {
+    background: var(--cad-danger);
+    border-color: var(--cad-danger);
+    color: white;
+}
+
+.cad-btn-danger:hover {
+    background: #dc2626;
+    border-color: #dc2626;
+}
+
+/* 输入框 */
+.cad-input {
+    padding: 8px 12px;
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    color: var(--cad-text);
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.15s;
+}
+
+.cad-input:focus {
+    border-color: var(--cad-accent);
+}
+
+.cad-input-full {
+    width: 100%;
+}
+
+.cad-form-row {
+    margin-bottom: 12px;
+}
+
+.cad-form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--cad-text-secondary);
+    margin-bottom: 4px;
+}
+
+.cad-form-input {
+    width: 100%;
+}
+
+/* 模态框 */
+.cad-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.cad-modal-content {
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    min-width: 400px;
+    max-width: 90vw;
+    box-shadow: 0 10px 40px var(--cad-shadow);
+}
+
+.cad-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-modal-title {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.cad-modal-close {
+    width: 28px;
+    height: 28px;
+    background: transparent;
+    border: none;
+    font-size: 20px;
+    color: var(--cad-text-muted);
+    cursor: pointer;
+    border-radius: var(--cad-radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cad-modal-close:hover {
+    background: var(--cad-bg-input);
+    color: var(--cad-text);
+}
+
+.cad-modal-body {
+    padding: 20px;
+}
+
+.cad-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 16px 20px;
+    border-top: 1px solid var(--cad-border);
+}
+
+/* 右键菜单 */
+.cad-context-menu {
+    position: fixed;
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    padding: 8px;
+    min-width: 160px;
+    z-index: 1000;
+    display: none;
+    box-shadow: 0 4px 12px var(--cad-shadow);
+}
+
+.cad-context-menu-item {
+    padding: 8px 12px;
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: var(--cad-radius-sm);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--cad-text);
+}
+
+.cad-context-menu-item:hover {
+    background: var(--cad-bg-input);
+}
+
+.cad-context-menu-divider {
+    height: 1px;
+    background: var(--cad-border);
+    margin: 4px 0;
+}
+
+/* Toast 提示 */
+.cad-toast {
+    position: fixed;
+    bottom: 50px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    padding: 10px 20px;
+    font-size: 13px;
+    color: var(--cad-text);
+    box-shadow: 0 4px 12px var(--cad-shadow);
+    z-index: 2000;
+    animation: toast-in 0.2s ease-out;
+}
+
+@keyframes toast-in {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* 工具面板 */
+.cad-tools-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.cad-tool-btn {
+    display: flex;
+    align-items: center;
+    padding: 10px 12px;
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    cursor: pointer;
+    transition: all 0.2s;
+    color: var(--cad-text);
+}
+
+.cad-tool-btn:hover {
+    background: var(--cad-bg-hover);
+    border-color: var(--cad-text-muted);
+}
+
+.cad-tool-btn.active {
+    background: var(--cad-accent);
+    border-color: var(--cad-accent);
+    color: white;
+}
+
+.cad-tool-icon {
+    width: 24px;
+    height: 24px;
+    margin-right: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cad-tool-icon svg {
+    width: 18px;
+    height: 18px;
+}
+
+.cad-tool-name {
+    font-size: 13px;
+}
+
+/* 坐标轴指示器 */
+.cad-axis-indicator {
+    position: absolute;
+    left: 16px;
+    bottom: 16px;
+    width: 60px;
+    height: 60px;
+    background: rgba(0, 0, 0, 0.5);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    z-index: 10;
+}
+
+/* 项目管理表格 */
+.cad-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cad-table th,
+.cad-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--cad-border);
+}
+
+.cad-table th {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--cad-text-muted);
+    text-transform: uppercase;
+}
+
+.cad-table td {
+    font-size: 13px;
+}
+
+.cad-table tr:hover td {
+    background: var(--cad-bg-input);
+}
+
+/* 模型卡片 */
+.cad-model-card {
+    background: var(--cad-bg-input);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius);
+    padding: 16px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.cad-model-card:hover {
+    border-color: var(--cad-accent);
+    transform: translateY(-2px);
+}
+
+.cad-model-card.selected {
+    border-color: var(--cad-accent);
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.cad-model-preview {
+    width: 100%;
+    aspect-ratio: 1;
+    background: var(--cad-bg-primary);
+    border-radius: var(--cad-radius-sm);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.cad-model-preview svg {
+    width: 48px;
+    height: 48px;
+    opacity: 0.3;
+}
+
+.cad-model-name {
+    font-size: 13px;
+    font-weight: 500;
+    text-align: center;
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--cad-bg-primary);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--cad-bg-hover);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--cad-border);
+}
+
+/* 工具提示 */
+.cad-tooltip {
+    position: relative;
+}
+
+.cad-tooltip::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    background: var(--cad-bg-panel);
+    border: 1px solid var(--cad-border);
+    border-radius: var(--cad-radius-sm);
+    font-size: 11px;
+    white-space: nowrap;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+}
+
+.cad-tooltip:hover::after {
+    opacity: 1;
+}

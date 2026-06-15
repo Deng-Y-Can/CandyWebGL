@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CandyCAD - 模型库</title>
+    <link rel="stylesheet" href="cad-styles.css">
+    <style>
+        .cad-models-header {
+            padding: 24px;
+            background: var(--cad-bg-panel);
+            border-bottom: 1px solid var(--cad-border);
+        }
+        
+        .cad-models-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+        
+        .cad-models-tab {
+            padding: 10px 20px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 6px;
+            font-size: 13px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .cad-models-tab:hover {
+            background: var(--cad-border);
+        }
+        
+        .cad-models-tab.active {
+            background: var(--cad-accent);
+            border-color: var(--cad-accent);
+            color: white;
+        }
+        
+        .cad-models-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            padding: 24px;
+        }
+        
+        .cad-model-card {
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 12px;
+            overflow: hidden;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .cad-model-card:hover {
+            border-color: var(--cad-accent);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        
+        .cad-model-preview {
+            height: 140px;
+            background: var(--cad-bg-dark);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+        
+        .cad-model-preview-icon {
+            width: 64px;
+            height: 64px;
+            color: var(--cad-accent);
+        }
+        
+        .cad-model-preview-badge {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            padding: 4px 8px;
+            background: var(--cad-accent);
+            border-radius: 4px;
+            font-size: 11px;
+            color: white;
+        }
+        
+        .cad-model-info {
+            padding: 12px;
+        }
+        
+        .cad-model-name {
+            font-size: 14px;
+            font-weight: 500;
+            margin-bottom: 4px;
+        }
+        
+        .cad-model-meta {
+            font-size: 12px;
+            color: var(--cad-text-muted);
+        }
+        
+        .cad-model-actions {
+            display: flex;
+            padding: 8px 12px;
+            gap: 8px;
+            border-top: 1px solid var(--cad-border);
+        }
+        
+        .cad-model-btn {
+            flex: 1;
+            padding: 6px;
+            font-size: 12px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 4px;
+            color: var(--cad-text);
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .cad-model-btn:hover {
+            background: var(--cad-border);
+        }
+        
+        .cad-model-btn.primary {
+            background: var(--cad-accent);
+            border-color: var(--cad-accent);
+        }
+        
+        /* 基本体分类 */
+        .cad-primitives-section {
+            padding: 24px;
+        }
+        
+        .cad-section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .cad-primitives-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+        
+        .cad-primitive-item {
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .cad-primitive-item:hover {
+            border-color: var(--cad-accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        .cad-primitive-icon {
+            width: 48px;
+            height: 48px;
+            margin-bottom: 8px;
+            color: var(--cad-accent);
+        }
+        
+        .cad-primitive-name {
+            font-size: 13px;
+        }
+        
+        /* 材质面板 */
+        .cad-materials-panel {
+            padding: 24px;
+        }
+        
+        .cad-material-card {
+            background: var(--cad-bg-panel);
+            border: 1px solid var(--cad-border);
+            border-radius: 8px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .cad-material-card:hover {
+            border-color: var(--cad-accent);
+        }
+        
+        .cad-material-preview {
+            width: 48px;
+            height: 48px;
+            border-radius: 4px;
+        }
+        
+        .cad-material-info {
+            flex: 1;
+        }
+        
+        .cad-material-name {
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .cad-material-type {
+            font-size: 12px;
+            color: var(--cad-text-muted);
+        }
+        
+        /* 上传区域 */
+        .cad-upload-area {
+            border: 2px dashed var(--cad-border);
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            margin: 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .cad-upload-area:hover {
+            border-color: var(--cad-accent);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        
+        /* 搜索和筛选 */
+        .cad-filter-bar {
+            display: flex;
+            gap: 12px;
+            padding: 16px 24px;
+            background: var(--cad-bg-panel);
+            border-bottom: 1px solid var(--cad-border);
+        }
+        
+        .cad-filter-search {
+            flex: 1;
+            position: relative;
+        }
+        
+        .cad-filter-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: var(--cad-text-muted);
+        }
+        
+        .cad-filter-search-input {
+            width: 100%;
+            height: 36px;
+            padding-left: 36px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 6px;
+            font-size: 14px;
+            color: var(--cad-text);
+        }
+        
+        .cad-filter-select {
+            height: 36px;
+            padding: 0 12px;
+            background: var(--cad-bg-input);
+            border: 1px solid var(--cad-border);
+            border-radius: 6px;
+            font-size: 14px;
+            color: var(--cad-text);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="cad-container">
+        <!-- 顶部导航 -->
+        <div class="cad-toolbar">
+            <div class="cad-toolbar-title">CandyCAD</div>
+            <div class="cad-toolbar-group">
+                <button class="cad-toolbar-btn" onclick="goBack()" title="返回">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><polyline points="15 18 9 12 15 6"/></svg>
+                </button>
+            </div>
+            <div class="cad-toolbar-group" style="flex:1;">
+                <span style="font-size:14px;">模型库</span>
+            </div>
+            <div class="cad-toolbar-group" style="justify-content:flex-end;">
+                <button class="cad-toolbar-btn" onclick="goToEditor()" title="CAD编辑器">
+                    <svg viewBox="0 0 24 24" fill="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 筛选栏 -->
+        <div class="cad-filter-bar">
+            <div class="cad-filter-search">
+                <span class="cad-filter-search-icon">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                </span>
+                <input type="text" class="cad-filter-search-input" placeholder="搜索模型..." id="search-input">
+            </div>
+            <select class="cad-filter-select" id="type-filter">
+                <option value="all">全部类型</option>
+                <option value="primitive">基本体</option>
+                <option value="mesh">网格模型</option>
+                <option value="imported">导入模型</option>
+            </select>
+            <select class="cad-filter-select" id="sort-filter">
+                <option value="recent">最近使用</option>
+                <option value="name">名称排序</option>
+                <option value="type">类型排序</option>
+            </select>
+        </div>
+        
+        <!-- 主内容 -->
+        <div class="cad-main">
+            <!-- 分类标签 -->
+            <div class="cad-models-header">
+                <div class="cad-models-tabs">
+                    <div class="cad-models-tab active" data-tab="primitives">基本体</div>
+                    <div class="cad-models-tab" data-tab="models">我的模型</div>
+                    <div class="cad-models-tab" data-tab="materials">材质库</div>
+                    <div class="cad-models-tab" data-tab="import">导入模型</div>
+                </div>
+            </div>
+            
+            <!-- 内容区域 -->
+            <div class="cad-viewport" style="flex:1; overflow-y:auto;">
+                <!-- 基本体 -->
+                <div class="cad-primitives-section" id="tab-primitives">
+                    <div class="cad-section-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        基本几何体
+                    </div>
+                    <div class="cad-primitives-grid">
+                        <div class="cad-primitive-item" onclick="addPrimitive('cube')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">立方体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('sphere')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">球体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('cylinder')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 5v14a9 3 0 0 1-18 0V5"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">圆柱体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('cone')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L3 20h18L12 2z"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">圆锥体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('torus')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="4"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">圆环</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('plane')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">平面</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('capsule')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><rect x="8" y="4" width="8" height="16" rx="4"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">胶囊体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('tetrahedron')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 22h20L12 2z"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">四面体</div>
+                        </div>
+                    </div>
+                    
+                    <div class="cad-divider" style="margin:24px 0;"></div>
+                    
+                    <div class="cad-section-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                        特殊形状
+                    </div>
+                    <div class="cad-primitives-grid">
+                        <div class="cad-primitive-item" onclick="addPrimitive('pyramid')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L4 20h16L12 2z"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">金字塔</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('octahedron')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2L2 12l10 10 10-10L12 2z"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">八面体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('dodecahedron')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12,2 22,8 22,16 12,22 2,16 2,8"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">十二面体</div>
+                        </div>
+                        <div class="cad-primitive-item" onclick="addPrimitive('icosahedron')">
+                            <div class="cad-primitive-icon">
+                                <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="12,2 4,8 4,16 12,22 20,16 20,8"/></svg>
+                            </div>
+                            <div class="cad-primitive-name">二十面体</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 我的模型 -->
+                <div class="cad-models-grid" id="tab-models" style="display:none;">
+                    <!-- 动态生成 -->
+                </div>
+                
+                <!-- 材质库 -->
+                <div class="cad-materials-panel" id="tab-materials" style="display:none;">
+                    <div class="cad-section-title">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="12" r="10"/></svg>
+                        预设材质
+                    </div>
+                    <div class="cad-models-grid" id="materials-grid">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+                
+                <!-- 导入模型 -->
+                <div id="tab-import" style="display:none;">
+                    <div class="cad-upload-area" onclick="uploadModel()" id="upload-area">
+                        <div class="cad-import-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <div class="cad-import-text">点击或拖拽文件到此处导入模型</div>
+                        <div style="font-size:12px;color:var(--cad-text-muted);margin-top:8px;">支持格式: OBJ, STL, PLY, PCD, GLTF</div>
+                        <input type="file" id="upload-input" accept=".obj,.stl,.ply,.pcd,.gltf,.glb" style="display:none;">
+                    </div>
+                    <div class="cad-models-grid" id="imported-models-grid">
+                        <!-- 动态生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态栏 -->
+        <div class="cad-statusbar">
+            <div class="cad-status-item">
+                <span>模型库</span>
+            </div>
+            <div class="cad-status-item" style="flex:1; justify-content:flex-end;">
+                <span id="status-message">就绪</span>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { cadDB } from './cad-database.js';
+        
+        let currentTab = 'primitives';
+        let materials = [];
+        let importedModels = [];
+        
+        // 初始化
+        async function init() {
+            await cadDB.init();
+            await loadMaterials();
+            await loadImportedModels();
+            setupTabs();
+            setupUpload();
+        }
+        
+        // 设置标签切换
+        function setupTabs() {
+            document.querySelectorAll('.cad-models-tab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelectorAll('.cad-models-tab').forEach(t => t.classList.remove('active'));
+                    tab.classList.add('active');
+                    currentTab = tab.dataset.tab;
+                    showTab(currentTab);
+                });
+            });
+        }
+        
+        // 显示标签内容
+        function showTab(tab) {
+            document.getElementById('tab-primitives').style.display = tab === 'primitives' ? 'block' : 'none';
+            document.getElementById('tab-models').style.display = tab === 'models' ? 'grid' : 'none';
+            document.getElementById('tab-materials').style.display = tab === 'materials' ? 'block' : 'none';
+            document.getElementById('tab-import').style.display = tab === 'import' ? 'block' : 'none';
+        }
+        
+        // 加载材质
+        async function loadMaterials() {
+            materials = await cadDB.getAllMaterials();
+            
+            // 如果没有材质，创建预设材质
+            if (materials.length === 0) {
+                const presets = [
+                    { name: '默认蓝色', color: '#3b82f6', type: 'standard' },
+                    { name: '金属银', color: '#c0c0c0', type: 'metallic', metalness: 0.8 },
+                    { name: '金属金', color: '#ffd700', type: 'metallic', metalness: 0.9 },
+                    { name: '塑料红', color: '#ef4444', type: 'plastic' },
+                    { name: '玻璃', color: '#88ccff', type: 'glass', opacity: 0.5 },
+                    { name: '木材', color: '#8b4513', type: 'standard', roughness: 0.8 },
+                    { name: '混凝土', color: '#808080', type: 'standard', roughness: 0.9 },
+                    { name: '发光材质', color: '#00ff00', type: 'emissive', emissive: '#00ff00' }
+                ];
+                
+                for (const preset of presets) {
+                    await cadDB.createMaterial(preset);
+                }
+                materials = await cadDB.getAllMaterials();
+            }
+            
+            renderMaterials();
+        }
+        
+        // 渲染材质
+        function renderMaterials() {
+            const grid = document.getElementById('materials-grid');
+            grid.innerHTML = '';
+            
+            materials.forEach(mat => {
+                const card = document.createElement('div');
+                card.className = 'cad-material-card';
+                card.onclick = () => selectMaterial(mat.id);
+                
+                card.innerHTML = `
+                    <div class="cad-material-preview" style="background:${mat.color};"></div>
+                    <div class="cad-material-info">
+                        <div class="cad-material-name">${mat.name}</div>
+                        <div class="cad-material-type">${mat.type}</div>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        // 加载导入的模型
+        async function loadImportedModels() {
+            // 从数据库获取导入的模型（这里简化处理）
+            renderImportedModels();
+        }
+        
+        // 渲染导入的模型
+        function renderImportedModels() {
+            const grid = document.getElementById('imported-models-grid');
+            grid.innerHTML = '';
+            
+            if (importedModels.length === 0) {
+                grid.innerHTML = `
+                    <div class="cad-empty" style="grid-column: 1 / -1;">
+                        <div class="cad-empty-icon">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                        </div>
+                        <div class="cad-empty-text">暂无导入的模型</div>
+                    </div>
+                `;
+                return;
+            }
+            
+            importedModels.forEach(model => {
+                const card = document.createElement('div');
+                card.className = 'cad-model-card';
+                
+                card.innerHTML = `
+                    <div class="cad-model-preview">
+                        <div class="cad-model-preview-icon">
+                            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+                        </div>
+                        <div class="cad-model-preview-badge">${model.format}</div>
+                    </div>
+                    <div class="cad-model-info">
+                        <div class="cad-model-name">${model.name}</div>
+                        <div class="cad-model-meta">${model.vertices || 0} 顶点</div>
+                    </div>
+                    <div class="cad-model-actions">
+                        <div class="cad-model-btn primary" onclick="addToScene('${model.id}')">添加到场景</div>
+                        <div class="cad-model-btn" onclick="deleteModel('${model.id}')">删除</div>
+                    </div>
+                `;
+                
+                grid.appendChild(card);
+            });
+        }
+        
+        // 设置上传
+        function setupUpload() {
+            const area = document.getElementById('upload-area');
+            const input = document.getElementById('upload-input');
+            
+            area.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                area.style.borderColor = 'var(--cad-accent)';
+                area.style.background = 'rgba(59, 130, 246, 0.1)';
+            });
+            
+            area.addEventListener('dragleave', () => {
+                area.style.borderColor = 'var(--cad-border)';
+                area.style.background = 'transparent';
+            });
+            
+            area.addEventListener('drop', (e) => {
+                e.preventDefault();
+                area.style.borderColor = 'var(--cad-border)';
+                area.style.background = 'transparent';
+                
+                const file = e.dataTransfer.files[0];
+                if (file) {
+                    handleUpload(file);
+                }
+            });
+            
+            input.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleUpload(file);
+                }
+            });
+        }
+        
+        // 处理上传
+        async function handleUpload(file) {
+            const ext = file.name.split('.').pop().toLowerCase();
+            const validFormats = ['obj', 'stl', 'ply', 'pcd', 'gltf', 'glb'];
+            
+            if (!validFormats.includes(ext)) {
+                showToast('不支持的文件格式');
+                return;
+            }
+            
+            // 这里简化处理，实际需要解析模型文件
+            const model = {
+                id: Date.now(),
+                name: file.name,
+                format: ext.toUpperCase(),
+                size: file.size,
+                vertices: 0
+            };
+            
+            importedModels.push(model);
+            renderImportedModels();
+            showToast('模型已导入: ' + file.name);
+        }
+        
+        // 全局函数
+        window.goBack = function() {
+            window.location.href = 'CAD编辑器.html';
+        };
+        
+        window.goToEditor = function() {
+            window.location.href = 'CAD编辑器.html';
+        };
+        
+        window.addPrimitive = function(type) {
+            // 保存到localStorage，编辑器页面会读取
+            const primitives = JSON.parse(localStorage.getItem('cad-primitives-to-add') || '[]');
+            primitives.push({
+                type: type,
+                timestamp: Date.now()
+            });
+            localStorage.setItem('cad-primitives-to-add', JSON.stringify(primitives));
+            showToast('已添加 ' + type + '，返回编辑器查看');
+        };
+        
+        window.uploadModel = function() {
+            document.getElementById('upload-input').click();
+        };
+        
+        window.selectMaterial = function(id) {
+            localStorage.setItem('cad-selected-material', id);
+            showToast('材质已选择，返回编辑器应用');
+        };
+        
+        window.addToScene = function(id) {
+            showToast('模型已添加到场景');
+        };
+        
+        window.deleteModel = function(id) {
+            importedModels = importedModels.filter(m => m.id != id);
+            renderImportedModels();
+            showToast('模型已删除');
+        };
+        
+        // 提示消息
+        function showToast(message) {
+            const existing = document.querySelector('.cad-toast');
+            if (existing) existing.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'cad-toast';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.remove(), 2000);
+        }
+        
+        // 启动
+        init();
+    </script>
+</body>
+</html>
