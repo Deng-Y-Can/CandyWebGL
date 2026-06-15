@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程7: 模型加载</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #e74c3c, #f39c12);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(231, 76, 60, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas { width: 100%; height: 450px; display: block; border-radius: 8px; background: #000; }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #e74c3c; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #e74c3c;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #e74c3c;
+        }
+        .step h3 { color: #e74c3c; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+        .model-info {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.8rem;
+            color: #bdc3c7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏠 WebGPU 教程7: 模型加载</h1>
+            <p class="subtitle">加载和渲染 3D 模型：几何体数据解析和渲染</p>
+            <div class="nav-links">
+                <a href="

@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程2: 3D立方体</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #9b59b6, #e74c3c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(155, 89, 182, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas { width: 100%; height: 450px; display: block; border-radius: 8px; background: #000; }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #9b59b6; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #9b59b6;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #9b59b6;
+        }
+        .step h3 { color: #9b59b6; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+        .controls {
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .controls label { color: #bdc3c7; font-size: 0.9rem; }
+        .controls input[type="range"] { width: 100%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📦 WebGPU 教程2: 3D立方体</h1>
+            <p class="subtitle">深入 3D 变换：模型矩阵、视图矩阵、投影矩阵</p>
+            <div class="nav-links">
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="tutorial-01.html">⬅️ 上一章</a>
+                <a href="tutorial-03.html">➡️ 下一章</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. MVP 变换链</h3>
+                    <p>3D 渲染的核心是坐标变换。MVP 代表：</p>
+                    <ul>
+                        <li><strong>Model（模型矩阵）</strong>: 将模型从局部空间转换到世界空间</li>
+                        <li><strong>View（视图矩阵）</strong>: 将世界空间转换到相机空间</li>
+                        <li><strong>Projection（投影矩阵）</strong>: 将相机空间转换到裁剪空间</li>
+                    </ul>
+                    <p>最终变换: <code>clipPos = projection * view * model * localPos</code></p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 创建透视投影矩阵
+function createPerspective(fov, aspect, near, far) {
+    const f = 1.0 / Math.tan(fov / 2);
+    const nf = 1.0 / (near - far);
+    return new Float32Array([
+        f / aspect, 0, 0, 0,
+        0, f, 0, 0,
+        0, 0, (far + near) * nf, -1,
+        0, 0, 2 * far * near * nf, 0
+    ]);
+}
+
+// 创建视图矩阵（相机位置和朝向）
+function createViewMatrix(eye, center, up) {
+    const z = normalize(subtract(eye, center));
+    const x = normalize(cross(up, z));
+    const y = cross(z, x);
+    return new Float32Array([
+        x[0], y[0], z[0], 0,
+        x[1], y[1], z[1], 0,
+        x[2], y[2], z[2], 0,
+        -dot(x, eye), -dot(y, eye), -dot(z, eye), 1
+    ]);
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>2. 模型矩阵的组成</h3>
+                    <p>模型矩阵通常由平移、旋转、缩放三个变换组合而成：</p>
+                    <p><code>model = translate * rotateX * rotateY * rotateZ * scale</code></p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 创建绕Y轴旋转的模型矩阵
+function createModelMatrix(rotationY, rotationX) {
+    const c1 = Math.cos(rotationY), s1 = Math.sin(rotationY);
+    const c2 = Math.cos(rotationX), s2 = Math.sin(rotationX);
+    
+    return new Float32Array([
+        c1,   0,   s1,   0,
+        s1*s2, c2, -c1*s2, 0,
+        -c1*s2, s2,  c1*c2, 0,
+        0,   0,   0,   1
+    ]);
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 着色器中的 MVP 变换</h3>
+                    <p>在顶点着色器中应用完整的 MVP 变换链，将局部坐标转换为裁剪坐标。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 顶点着色器中的 MVP 变换
+struct Uniforms {
+    model: mat4x4<f32>,
+    view: mat4x4<f32>,
+    projection: mat4x4<f32>,
+};
+
+@group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    
+    // MVP 变换链
+    let modelPos = uniforms.model * vec4<f32>(input.position, 1.0);
+    let viewPos = uniforms.view * modelPos;
+    output.position = uniforms.projection * viewPos;
+    
+    output.color = input.color;
+    return output;
+}</code>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解 MVP 变换链的概念</li>
+                    <li>掌握矩阵变换的组合</li>
+                    <li>学习透视投影矩阵的构造</li>
+                    <li>理解相机视图的定义</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>模型空间:</strong> 模型自身的局部坐标系</p>
+                <p><strong>世界空间:</strong> 所有对象共享的全局坐标系</p>
+                <p><strong>相机空间:</strong> 以相机为原点的坐标系</p>
+                <p><strong>裁剪空间:</strong> 标准化设备坐标系</p>
+
+                <h2>🎛️ 控制参数</h2>
+                <div class="controls">
+                    <label>旋转速度: <span id="speedVal">1.0</span></label>
+                    <input type="range" id="speedSlider" min="0" max="3" step="0.1" value="1">
+                </div>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+        const speedSlider = document.getElementById('speedSlider');
+        const speedVal = document.getElementById('speedVal');
+
+        let device, context, pipeline, vertexBuffer, indexBuffer;
+        let rotationY = 0, rotationX = 0;
+        let speed = 1;
+
+        const vertices = new Float32Array([
+            // 前面 (红色)
+            -0.5, -0.5,  0.5,  1.0, 0.0, 0.0,
+             0.5, -0.5,  0.5,  1.0, 0.0, 0.0,
+             0.5,  0.5,  0.5,  1.0, 0.0, 0.0,
+            -0.5,  0.5,  0.5,  1.0, 0.0, 0.0,
+            // 后面 (绿色)
+            -0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+             0.5, -0.5, -0.5,  0.0, 1.0, 0.0,
+             0.5,  0.5, -0.5,  0.0, 1.0, 0.0,
+            -0.5,  0.5, -0.5,  0.0, 1.0, 0.0,
+            // 右面 (蓝色)
+             0.5, -0.5, -0.5,  0.0, 0.0, 1.0,
+             0.5, -0.5,  0.5,  0.0, 0.0, 1.0,
+             0.5,  0.5,  0.5,  0.0, 0.0, 1.0,
+             0.5,  0.5, -0.5,  0.0, 0.0, 1.0,
+            // 左面 (黄色)
+            -0.5, -0.5, -0.5,  1.0, 1.0, 0.0,
+            -0.5, -0.5,  0.5,  1.0, 1.0, 0.0,
+            -0.5,  0.5,  0.5,  1.0, 1.0, 0.0,
+            -0.5,  0.5, -0.5,  1.0, 1.0, 0.0,
+            // 上面 (紫色)
+            -0.5,  0.5, -0.5,  0.5, 0.0, 0.5,
+             0.5,  0.5, -0.5,  0.5, 0.0, 0.5,
+             0.5,  0.5,  0.5,  0.5, 0.0, 0.5,
+            -0.5,  0.5,  0.5,  0.5, 0.0, 0.5,
+            // 下面 (青色)
+            -0.5, -0.5, -0.5,  0.0, 1.0, 1.0,
+             0.5, -0.5, -0.5,  0.0, 1.0, 1.0,
+             0.5, -0.5,  0.5,  0.0, 1.0, 1.0,
+            -0.5, -0.5,  0.5,  0.0, 1.0, 1.0,
+        ]);
+
+        const indices = new Uint16Array([
+            0,  1,  2,    0,  2,  3,   // 前面
+            4,  6,  5,    4,  7,  6,   // 后面
+            8,  9, 10,    8, 10, 11,   // 右面
+            12, 14, 13,   12, 15, 14,  // 左面
+            16, 17, 18,   16, 18, 19,  // 上面
+            20, 22, 21,   20, 23, 22   // 下面
+        ]);
+
+        function createPerspective(fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const nf = 1.0 / (near - far);
+            return new Float32Array([
+                f / aspect, 0, 0, 0,
+                0, f, 0, 0,
+                0, 0, (far + near) * nf, -1,
+                0, 0, 2 * far * near * nf, 0
+            ]);
+        }
+
+        function createViewMatrix() {
+            const eye = [2, 2, 3];
+            const center = [0, 0, 0];
+            const up = [0, 1, 0];
+            const z = [eye[0] - center[0], eye[1] - center[1], eye[2] - center[2]];
+            const len = Math.hypot(...z);
+            const zn = [z[0]/len, z[1]/len, z[2]/len];
+            const x = [up[1]*zn[2]-up[2]*zn[1], up[2]*zn[0]-up[0]*zn[2], up[0]*zn[1]-up[1]*zn[0]];
+            const xlen = Math.hypot(...x);
+            const xn = [x[0]/xlen, x[1]/xlen, x[2]/xlen];
+            const y = [zn[1]*xn[2]-zn[2]*xn[1], zn[2]*xn[0]-zn[0]*xn[2], zn[0]*xn[1]-zn[1]*xn[0]];
+            return new Float32Array([
+                xn[0], y[0], zn[0], 0,
+                xn[1], y[1], zn[1], 0,
+                xn[2], y[2], zn[2], 0,
+                -(xn[0]*eye[0]+xn[1]*eye[1]+xn[2]*eye[2]),
+                -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+                -(zn[0]*eye[0]+zn[1]*eye[1]+zn[2]*eye[2]), 1
+            ]);
+        }
+
+        function createModelMatrix(ry, rx) {
+            const c1 = Math.cos(ry), s1 = Math.sin(ry);
+            const c2 = Math.cos(rx), s2 = Math.sin(rx);
+            return new Float32Array([
+                c1,    0,   s1,   0,
+                s1*s2, c2, -c1*s2, 0,
+                -c1*s2, s2,  c1*c2, 0,
+                0,    0,    0,    1
+            ]);
+        }
+
+        const vertexShader = `
+            struct VertexInput {
+                @location(0) position: vec3<f32>,
+                @location(1) color: vec3<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) color: vec3<f32>,
+            };
+
+            struct Uniforms {
+                model: mat4x4<f32>,
+                view: mat4x4<f32>,
+                projection: mat4x4<f32>,
+            };
+
+            @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                let modelPos = uniforms.model * vec4<f32>(input.position, 1.0);
+                let viewPos = uniforms.view * modelPos;
+                output.position = uniforms.projection * viewPos;
+                output.color = input.color;
+                return output;
+            }
+        `;
+
+        const fragmentShader = `
+            @fragment
+            fn main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+                return vec4<f32>(color, 1.0);
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) throw new Error("不支持 WebGPU");
+                
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({ device, format });
+
+                vertexBuffer = device.createBuffer({
+                    size: vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+                vertexBuffer.unmap();
+
+                indexBuffer = device.createBuffer({
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(indexBuffer.getMappedRange()).set(indices);
+                indexBuffer.unmap();
+
+                pipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: vertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 6 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                                { shaderLocation: 1, offset: 3 * 4, format: 'float32x3' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: fragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list', cullMode: 'back' },
+                    depthStencil: {
+                        format: 'depth24plus',
+                        depthWriteEnabled: true,
+                        depthCompare: 'less'
+                    }
+                });
+
+                const depthTexture = device.createTexture({
+                    size: [canvas.width, canvas.height],
+                    format: 'depth24plus',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT
+                });
+
+                const uniformBuffer = device.createBuffer({
+                    size: 3 * 16 * 4,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+                });
+
+                const bindGroup = device.createBindGroup({
+                    layout: pipeline.getBindGroupLayout(0),
+                    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
+                });
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+
+                render(uniformBuffer, bindGroup, depthTexture);
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        function render(uniformBuffer, bindGroup, depthTexture) {
+            const projection = createPerspective(Math.PI / 3, canvas.width / canvas.height, 0.1, 100);
+            const view = createViewMatrix();
+
+            function frame() {
+                rotationY += 0.01 * speed;
+                rotationX += 0.005 * speed;
+                
+                const model = createModelMatrix(rotationY, rotationX);
+                
+                const uniformData = new Float32Array([...model, ...view, ...projection]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                        clearValue: [0.05, 0.05, 0.08, 1.0]
+                    }],
+                    depthStencilAttachment: {
+                        view: depthTexture.createView(),
+                        depthLoadOp: 'clear',
+                        depthStoreOp: 'store',
+                        depthClearValue: 1.0
+                    }
+                });
+
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.setIndexBuffer(indexBuffer, 'uint16');
+                pass.setBindGroup(0, bindGroup);
+                pass.drawIndexed(36);
+                pass.end();
+
+                device.queue.submit([encoder.finish()]);
+                requestAnimationFrame(frame);
+            }
+
+            frame();
+        }
+
+        speedSlider.addEventListener('input', (e) => {
+            speed = parseFloat(e.target.value);
+            speedVal.textContent = speed.toFixed(1);
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>

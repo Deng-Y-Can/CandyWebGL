@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程系列</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 3rem;
+            background: linear-gradient(90deg, #3498db, #9b59b6, #e74c3c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.2rem; color: #95a5a6; }
+        .tutorial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+        }
+        .tutorial-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .tutorial-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.2);
+            border-color: rgba(52, 152, 219, 0.3);
+        }
+        .tutorial-card .icon {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        .tutorial-card h2 {
+            color: #3498db;
+            margin-bottom: 0.5rem;
+            font-size: 1.3rem;
+        }
+        .tutorial-card p {
+            color: #95a5a6;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+        .tutorial-card .level {
+            display: inline-block;
+            margin-top: 1rem;
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .level.basic { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+        .level.intermediate { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
+        .level.advanced { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(52, 152, 219, 0.3);
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚀 WebGPU 教程系列</h1>
+            <p class="subtitle">从零开始学习现代 Web 图形 API</p>
+            <div class="nav-links">
+                <a href="index.html">示例1: 彩色三角形</a>
+                <a href="index2.html">示例2</a>
+                <a href="tutorials.html">教程导航</a>
+            </div>
+        </header>
+
+        <div class="tutorial-grid">
+            <div class="tutorial-card" onclick="location.href='tutorial-01.html'">
+                <div class="icon">🔺</div>
+                <h2>教程1: 基础三角形</h2>
+                <p>学习 WebGPU 的基本概念：设备初始化、渲染管线、着色器编写、命令提交</p>
+                <span class="level basic">入门</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-02.html'">
+                <div class="icon">📦</div>
+                <h2>教程2: 3D立方体</h2>
+                <p>深入 3D 变换：模型矩阵、视图矩阵、投影矩阵、MVP 变换链</p>
+                <span class="level basic">入门</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-03.html'">
+                <div class="icon">🎨</div>
+                <h2>教程3: 纹理映射</h2>
+                <p>学习纹理加载、采样器配置、UV 坐标、纹理绑定到着色器</p>
+                <span class="level intermediate">进阶</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-04.html'">
+                <div class="icon">💡</div>
+                <h2>教程4: 光照效果</h2>
+                <p>实现 Phong 光照模型：环境光、漫反射、镜面反射、法线计算</p>
+                <span class="level intermediate">进阶</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-05.html'">
+                <div class="icon">✨</div>
+                <h2>教程5: 粒子系统</h2>
+                <p>使用计算着色器模拟粒子：发射、更新、渲染大量粒子</p>
+                <span class="level intermediate">进阶</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-06.html'">
+                <div class="icon">📊</div>
+                <h2>教程6: 计算着色器</h2>
+                <p>探索 GPU 通用计算：并行计算、缓冲区读写、数据处理</p>
+                <span class="level advanced">高级</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-07.html'">
+                <div class="icon">🏠</div>
+                <h2>教程7: 模型加载</h2>
+                <p>加载和渲染 GLB/GLTF 3D 模型：解析二进制格式、材质处理</p>
+                <span class="level advanced">高级</span>
+            </div>
+
+            <div class="tutorial-card" onclick="location.href='tutorial-08.html'">
+                <div class="icon">🔄</div>
+                <h2>教程8: 帧缓冲与后处理</h2>
+                <p>实现屏幕后处理效果：高斯模糊、色调映射、颜色校正</p>
+                <span class="level advanced">高级</span>
+            </div>
+        </div>
+
+        <footer>
+            <p>WebGPU 教程系列 | 需要 Chrome/Edge 113+ 或 Safari 17+</p>
+        </footer>
+    </div>
+</body>
+</html>

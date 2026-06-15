@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程1: 基础三角形</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #3498db, #9b59b6);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(52, 152, 219, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) {
+            .content { grid-template-columns: 1fr; }
+        }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas {
+            width: 100%;
+            height: 400px;
+            display: block;
+            border-radius: 8px;
+            background: #000;
+        }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #3498db; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #3498db;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #3498db;
+        }
+        .step h3 { color: #3498db; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔺 WebGPU 教程1: 基础三角形</h1>
+            <p class="subtitle">学习 WebGPU 的基本概念和核心工作流程</p>
+            <div class="nav-links">
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="index.html">🎨 示例1</a>
+                <a href="tutorial-02.html">➡️ 下一章</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. WebGPU 架构概览</h3>
+                    <p>WebGPU 是新一代 Web 图形 API，提供了更底层的 GPU 控制能力。核心组件包括：<strong>Adapter（适配器）</strong>、<strong>Device（设备）</strong>、<strong>Render Pipeline（渲染管线）</strong>、<strong>Command Buffer（命令缓冲区）</strong>。</p>
+                </div>
+
+                <div class="step">
+                    <h3>2. 初始化流程</h3>
+                    <p>WebGPU 应用的标准初始化流程：</p>
+                    <ul>
+                        <li>检查浏览器支持: <code>navigator.gpu</code></li>
+                        <li>获取适配器: <code>requestAdapter()</code></li>
+                        <li>获取设备: <code>requestDevice()</code></li>
+                        <li>配置 Canvas 上下文</li>
+                    </ul>
+                </div>
+
+                <div class="code-block">
+                    <code>// WebGPU 初始化核心代码
+async function initWebGPU() {
+    // 检查支持
+    if (!navigator.gpu) throw new Error("不支持 WebGPU");
+    
+    // 获取适配器（GPU硬件）
+    const adapter = await navigator.gpu.requestAdapter();
+    const device = await adapter.requestDevice();
+    
+    // 获取 Canvas 上下文
+    const context = canvas.getContext('webgpu');
+    const format = navigator.gpu.getPreferredCanvasFormat();
+    
+    // 配置上下文
+    context.configure({ device, format });
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 渲染管线与着色器</h3>
+                    <p>渲染管线定义了图形渲染的完整流程，包含顶点着色器和片段着色器。使用 <strong>WGSL</strong>（WebGPU Shading Language）编写。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 顶点着色器 - 处理顶点位置
+const vertexShader = `
+struct VertexInput {
+    @location(0) position: vec2<f32>,
+    @location(1) color: vec3<f32>,
+};
+
+struct VertexOutput {
+    @builtin(position) position: vec4<f32>,
+    @location(0) color: vec3<f32>,
+};
+
+@vertex
+fn main(input: VertexInput) -> VertexOutput {
+    var output: VertexOutput;
+    output.position = vec4<f32>(input.position, 0.0, 1.0);
+    output.color = input.color;
+    return output;
+}
+`;
+
+// 片段着色器 - 处理像素颜色
+const fragmentShader = `
+@fragment
+fn main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+    return vec4<f32>(color, 1.0);
+}
+`;</code>
+                </div>
+
+                <div class="step">
+                    <h3>4. 命令提交流程</h3>
+                    <p>WebGPU 采用异步命令提交模式：创建命令编码器 → 记录渲染命令 → 完成命令缓冲区 → 提交到 GPU 队列执行。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 渲染循环核心代码
+function render() {
+    // 创建命令编码器
+    const encoder = device.createCommandEncoder();
+    
+    // 开始渲染通道
+    const pass = encoder.beginRenderPass({
+        colorAttachments: [{
+            view: context.getCurrentTexture().createView(),
+            loadOp: 'clear',
+            storeOp: 'store',
+            clearValue: [0.05, 0.05, 0.08, 1.0]
+        }]
+    });
+    
+    // 设置管线和缓冲区
+    pass.setPipeline(pipeline);
+    pass.setVertexBuffer(0, vertexBuffer);
+    pass.draw(3); // 绘制3个顶点
+    
+    // 结束并提交
+    pass.end();
+    device.queue.submit([encoder.finish()]);
+}
+</code>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解 GPU 适配器和设备的关系</li>
+                    <li>掌握渲染管线的配置</li>
+                    <li>学习 WGSL 着色器语法</li>
+                    <li>理解命令提交机制</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>Adapter:</strong> 代表 GPU 硬件适配器</p>
+                <p><strong>Device:</strong> GPU 逻辑设备，用于创建资源</p>
+                <p><strong>Pipeline:</strong> 渲染管线，定义渲染流程</p>
+                <p><strong>Command Queue:</strong> 命令队列，异步执行 GPU 命令</p>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+
+        let device, context, pipeline, vertexBuffer;
+
+        const vertices = new Float32Array([
+            0.0,  0.5,  1.0, 0.0, 0.0,  // 顶部 - 红色
+            -0.5, -0.5,  0.0, 1.0, 0.0,  // 左下 - 绿色
+            0.5,  -0.5,  0.0, 0.0, 1.0   // 右下 - 蓝色
+        ]);
+
+        const vertexShader = `
+            struct VertexInput {
+                @location(0) position: vec2<f32>,
+                @location(1) color: vec3<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) color: vec3<f32>,
+            };
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                output.position = vec4<f32>(input.position, 0.0, 1.0);
+                output.color = input.color;
+                return output;
+            }
+        `;
+
+        const fragmentShader = `
+            @fragment
+            fn main(@location(0) color: vec3<f32>) -> @location(0) vec4<f32> {
+                return vec4<f32>(color, 1.0);
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) {
+                    throw new Error("您的浏览器不支持 WebGPU");
+                }
+
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                
+                const canvasFormat = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({
+                    device: device,
+                    format: canvasFormat
+                });
+
+                vertexBuffer = device.createBuffer({
+                    size: vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+                vertexBuffer.unmap();
+
+                pipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: vertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 5 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x2' },
+                                { shaderLocation: 1, offset: 2 * 4, format: 'float32x3' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: fragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format: canvasFormat }]
+                    },
+                    primitive: { topology: 'triangle-list' }
+                });
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+                
+                render();
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        function render() {
+            const encoder = device.createCommandEncoder();
+            const pass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    view: context.getCurrentTexture().createView(),
+                    loadOp: 'clear',
+                    storeOp: 'store',
+                    clearValue: [0.05, 0.05, 0.08, 1.0]
+                }]
+            });
+            
+            pass.setPipeline(pipeline);
+            pass.setVertexBuffer(0, vertexBuffer);
+            pass.draw(3);
+            pass.end();
+            
+            device.queue.submit([encoder.finish()]);
+            requestAnimationFrame(render);
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 400 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 400 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>

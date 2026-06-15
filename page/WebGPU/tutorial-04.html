@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程4: 光照效果</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #f39c12, #2ecc71);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(46, 204, 113, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas { width: 100%; height: 450px; display: block; border-radius: 8px; background: #000; }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #2ecc71; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #2ecc71;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #2ecc71;
+        }
+        .step h3 { color: #2ecc71; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+        .controls {
+            margin-top: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+        .controls label { color: #bdc3c7; font-size: 0.9rem; }
+        .controls input[type="range"] { width: 100%; }
+        .controls select {
+            width: 100%;
+            padding: 0.5rem;
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>💡 WebGPU 教程4: 光照效果</h1>
+            <p class="subtitle">实现 Phong 光照模型：环境光、漫反射、镜面反射</p>
+            <div class="nav-links">
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="tutorial-03.html">⬅️ 上一章</a>
+                <a href="tutorial-05.html">➡️ 下一章</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. Phong 光照模型</h3>
+                    <p>Phong 光照模型是计算机图形学中经典的光照模型，包含三个组成部分：</p>
+                    <ul>
+                        <li><strong>环境光 (Ambient):</strong> 均匀照亮物体的背景光</li>
+                        <li><strong>漫反射 (Diffuse):</strong> 粗糙表面的散射光</li>
+                        <li><strong>镜面反射 (Specular):</strong> 光滑表面的高光反射</li>
+                    </ul>
+                    <p>总光照 = 环境光 + 漫反射 + 镜面反射</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// Phong 光照公式
+// 环境光: I_ambient = k_a * I_a
+// 漫反射: I_diffuse = k_d * I_l * max(0, n · l)
+// 镜面反射: I_specular = k_s * I_l * max(0, r · v)^shininess
+
+// 其中:
+// k_a, k_d, k_s = 材质系数
+// I_a, I_l = 环境光和光源强度
+// n = 法线向量
+// l = 光源方向
+// r = 反射方向
+// v = 视角方向</code>
+                </div>
+
+                <div class="step">
+                    <h3>2. 法线向量的重要性</h3>
+                    <p>法线向量决定了表面的朝向，是计算光照的关键。对于平滑着色，需要为每个顶点计算法线；对于平面着色，可以使用面法线。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 片段着色器中的 Phong 光照计算
+@fragment
+fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+    // 归一化法线
+    let normal = normalize(input.normal);
+    
+    // 光源方向（从表面指向光源）
+    let lightDir = normalize(uniforms.lightPos - input.position);
+    
+    // 视角方向
+    let viewDir = normalize(-input.position);
+    
+    // 反射方向
+    let reflectDir = reflect(-lightDir, normal);
+    
+    // 环境光
+    let ambient = uniforms.ambientColor * 0.3;
+    
+    // 漫反射
+    let diffuse = max(dot(normal, lightDir), 0.0);
+    let diffuseColor = uniforms.diffuseColor * diffuse;
+    
+    // 镜面反射
+    let specular = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+    let specularColor = uniforms.specularColor * specular;
+    
+    // 最终颜色
+    let finalColor = ambient + diffuseColor + specularColor;
+    return vec4<f32>(finalColor, 1.0);
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 着色方式对比</h3>
+                    <p><strong>平滑着色 (Gouraud):</strong> 在顶点着色器中计算光照，然后插值到片段</p>
+                    <p><strong>Phong 着色:</strong> 在片段着色器中计算光照，效果更好但性能开销更大</p>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解 Phong 光照模型的三个组成部分</li>
+                    <li>掌握法线向量的计算和使用</li>
+                    <li>学习在着色器中实现光照</li>
+                    <li>理解不同着色方式的区别</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>法线向量:</strong> 垂直于表面的单位向量</p>
+                <p><strong>光照方向:</strong> 从表面指向光源</p>
+                <p><strong>反射方向:</strong> 光线反射后的方向</p>
+                <p><strong>高光指数:</strong> 控制高光的锐利程度</p>
+
+                <h2>🎛️ 光照控制</h2>
+                <div class="controls">
+                    <label>光照类型:</label>
+                    <select id="lightType">
+                        <option value="phong">Phong 着色</option>
+                        <option value="gouraud">Gouraud 着色</option>
+                    </select>
+                    <label>环境光强度: <span id="ambientVal">0.3</span></label>
+                    <input type="range" id="ambientSlider" min="0" max="1" step="0.1" value="0.3">
+                    <label>镜面高光: <span id="specularVal">32</span></label>
+                    <input type="range" id="specularSlider" min="1" max="128" step="1" value="32">
+                </div>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+        const lightType = document.getElementById('lightType');
+        const ambientSlider = document.getElementById('ambientSlider');
+        const ambientVal = document.getElementById('ambientVal');
+        const specularSlider = document.getElementById('specularSlider');
+        const specularVal = document.getElementById('specularVal');
+
+        let device, context, pipeline, vertexBuffer, indexBuffer;
+        let rotationY = 0, rotationX = 0;
+        let ambientIntensity = 0.3;
+        let shininess = 32;
+
+        const vertices = new Float32Array([
+            // 前面
+            -0.5, -0.5,  0.5,   0, 0, 1,  1, 0, 0,
+             0.5, -0.5,  0.5,   0, 0, 1,  0, 1, 0,
+             0.5,  0.5,  0.5,   0, 0, 1,  0, 0, 1,
+            -0.5,  0.5,  0.5,   0, 0, 1,  1, 1, 0,
+            // 后面
+            -0.5, -0.5, -0.5,   0, 0, -1, 0, 1, 0,
+             0.5, -0.5, -0.5,   0, 0, -1, 1, 0, 0,
+             0.5,  0.5, -0.5,   0, 0, -1, 1, 1, 0,
+            -0.5,  0.5, -0.5,   0, 0, -1, 0, 0, 1,
+            // 右面
+             0.5, -0.5, -0.5,   1, 0, 0,  1, 0, 0,
+             0.5, -0.5,  0.5,   1, 0, 0,  0, 1, 0,
+             0.5,  0.5,  0.5,   1, 0, 0,  0, 0, 1,
+             0.5,  0.5, -0.5,   1, 0, 0,  1, 1, 0,
+            // 左面
+            -0.5, -0.5, -0.5,  -1, 0, 0,  0, 1, 0,
+            -0.5, -0.5,  0.5,  -1, 0, 0,  1, 0, 0,
+            -0.5,  0.5,  0.5,  -1, 0, 0,  1, 1, 0,
+            -0.5,  0.5, -0.5,  -1, 0, 0,  0, 0, 1,
+            // 上面
+            -0.5,  0.5, -0.5,   0, 1, 0,  1, 0, 0,
+             0.5,  0.5, -0.5,   0, 1, 0,  0, 1, 0,
+             0.5,  0.5,  0.5,   0, 1, 0,  0, 0, 1,
+            -0.5,  0.5,  0.5,   0, 1, 0,  1, 1, 0,
+            // 下面
+            -0.5, -0.5, -0.5,   0, -1, 0, 0, 1, 0,
+             0.5, -0.5, -0.5,   0, -1, 0, 1, 0, 0,
+             0.5, -0.5,  0.5,   0, -1, 0, 1, 1, 0,
+            -0.5, -0.5,  0.5,   0, -1, 0, 0, 0, 1,
+        ]);
+
+        const indices = new Uint16Array([
+            0, 1, 2, 0, 2, 3, 4, 6, 5, 4, 7, 6, 8, 9, 10, 8, 10, 11,
+            12, 14, 13, 12, 15, 14, 16, 17, 18, 16, 18, 19, 20, 22, 21, 20, 23, 22
+        ]);
+
+        function createPerspective(fov, aspect, near, far) {
+            const f = 1.0 / Math.tan(fov / 2);
+            const nf = 1.0 / (near - far);
+            return new Float32Array([f/aspect, 0, 0, 0, 0, f, 0, 0, 0, 0, (far+near)*nf, -1, 0, 0, 2*far*near*nf, 0]);
+        }
+
+        function createViewMatrix() {
+            const eye = [2, 2, 3], center = [0, 0, 0], up = [0, 1, 0];
+            const z = [eye[0]-center[0], eye[1]-center[1], eye[2]-center[2]];
+            const zn = z.map(v => v / Math.hypot(...z));
+            const x = [up[1]*zn[2]-up[2]*zn[1], up[2]*zn[0]-up[0]*zn[2], up[0]*zn[1]-up[1]*zn[0]];
+            const xn = x.map(v => v / Math.hypot(...x));
+            const y = [zn[1]*xn[2]-zn[2]*xn[1], zn[2]*xn[0]-zn[0]*xn[2], zn[0]*xn[1]-zn[1]*xn[0]];
+            return new Float32Array([
+                xn[0], y[0], zn[0], 0, xn[1], y[1], zn[1], 0, xn[2], y[2], zn[2], 0,
+                -(xn[0]*eye[0]+xn[1]*eye[1]+xn[2]*eye[2]),
+                -(y[0]*eye[0]+y[1]*eye[1]+y[2]*eye[2]),
+                -(zn[0]*eye[0]+zn[1]*eye[1]+zn[2]*eye[2]), 1
+            ]);
+        }
+
+        function createModelMatrix(ry, rx) {
+            const c1 = Math.cos(ry), s1 = Math.sin(ry), c2 = Math.cos(rx), s2 = Math.sin(rx);
+            return new Float32Array([c1, 0, s1, 0, s1*s2, c2, -c1*s2, 0, -c1*s2, s2, c1*c2, 0, 0, 0, 0, 1]);
+        }
+
+        const vertexShader = `
+            struct VertexInput {
+                @location(0) position: vec3<f32>,
+                @location(1) normal: vec3<f32>,
+                @location(2) color: vec3<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) worldPos: vec3<f32>,
+                @location(1) normal: vec3<f32>,
+                @location(2) color: vec3<f32>,
+            };
+
+            struct Uniforms {
+                model: mat4x4<f32>,
+                view: mat4x4<f32>,
+                projection: mat4x4<f32>,
+                lightPos: vec3<f32>,
+                ambientIntensity: f32,
+                shininess: f32,
+            };
+
+            @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                let modelPos = uniforms.model * vec4<f32>(input.position, 1.0);
+                let viewPos = uniforms.view * modelPos;
+                output.position = uniforms.projection * viewPos;
+                output.worldPos = modelPos.xyz;
+                let normalMatrix = mat3x3<f32>(uniforms.model);
+                output.normal = normalize(normalMatrix * input.normal);
+                output.color = input.color;
+                return output;
+            }
+        `;
+
+        const fragmentShader = `
+            struct FragmentInput {
+                @location(0) worldPos: vec3<f32>,
+                @location(1) normal: vec3<f32>,
+                @location(2) color: vec3<f32>,
+            };
+
+            struct Uniforms {
+                model: mat4x4<f32>,
+                view: mat4x4<f32>,
+                projection: mat4x4<f32>,
+                lightPos: vec3<f32>,
+                ambientIntensity: f32,
+                shininess: f32,
+            };
+
+            @group(0) @binding(0) var<uniform> uniforms: Uniforms;
+
+            @fragment
+            fn main(input: FragmentInput) -> @location(0) vec4<f32> {
+                let normal = normalize(input.normal);
+                let lightDir = normalize(uniforms.lightPos - input.worldPos);
+                let viewDir = normalize(-input.worldPos);
+                let reflectDir = reflect(-lightDir, normal);
+                
+                let ambient = input.color * uniforms.ambientIntensity;
+                let diffuse = max(dot(normal, lightDir), 0.0);
+                let diffuseColor = input.color * diffuse * 0.7;
+                let specular = pow(max(dot(viewDir, reflectDir), 0.0), uniforms.shininess);
+                let specularColor = vec3<f32>(1.0, 1.0, 1.0) * specular * 0.3;
+                
+                let finalColor = ambient + diffuseColor + specularColor;
+                return vec4<f32>(finalColor, 1.0);
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) throw new Error("不支持 WebGPU");
+                
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({ device, format });
+
+                vertexBuffer = device.createBuffer({
+                    size: vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+                vertexBuffer.unmap();
+
+                indexBuffer = device.createBuffer({
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(indexBuffer.getMappedRange()).set(indices);
+                indexBuffer.unmap();
+
+                pipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: vertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 9 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x3' },
+                                { shaderLocation: 1, offset: 3 * 4, format: 'float32x3' },
+                                { shaderLocation: 2, offset: 6 * 4, format: 'float32x3' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: fragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list', cullMode: 'back' },
+                    depthStencil: { format: 'depth24plus', depthWriteEnabled: true, depthCompare: 'less' }
+                });
+
+                const depthTexture = device.createTexture({
+                    size: [canvas.width, canvas.height],
+                    format: 'depth24plus',
+                    usage: GPUTextureUsage.RENDER_ATTACHMENT
+                });
+
+                const uniformBuffer = device.createBuffer({
+                    size: (3 + 3 + 1 + 1) * 4 + 3 * 16 * 4,
+                    usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+                });
+
+                const bindGroup = device.createBindGroup({
+                    layout: pipeline.getBindGroupLayout(0),
+                    entries: [{ binding: 0, resource: { buffer: uniformBuffer } }]
+                });
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+
+                render(uniformBuffer, bindGroup, depthTexture);
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        function render(uniformBuffer, bindGroup, depthTexture) {
+            const projection = createPerspective(Math.PI / 3, canvas.width / canvas.height, 0.1, 100);
+            const view = createViewMatrix();
+
+            function frame() {
+                rotationY += 0.01;
+                rotationX += 0.005;
+                const model = createModelMatrix(rotationY, rotationX);
+                
+                const lightPos = [3, 3, 3];
+                const uniformData = new Float32Array([
+                    ...model, ...view, ...projection,
+                    ...lightPos, ambientIntensity, shininess
+                ]);
+                device.queue.writeBuffer(uniformBuffer, 0, uniformData);
+
+                const encoder = device.createCommandEncoder();
+                const pass = encoder.beginRenderPass({
+                    colorAttachments: [{
+                        view: context.getCurrentTexture().createView(),
+                        loadOp: 'clear',
+                        storeOp: 'store',
+                        clearValue: [0.05, 0.05, 0.08, 1.0]
+                    }],
+                    depthStencilAttachment: {
+                        view: depthTexture.createView(),
+                        depthLoadOp: 'clear',
+                        depthStoreOp: 'store',
+                        depthClearValue: 1.0
+                    }
+                });
+
+                pass.setPipeline(pipeline);
+                pass.setVertexBuffer(0, vertexBuffer);
+                pass.setIndexBuffer(indexBuffer, 'uint16');
+                pass.setBindGroup(0, bindGroup);
+                pass.drawIndexed(36);
+                pass.end();
+
+                device.queue.submit([encoder.finish()]);
+                requestAnimationFrame(frame);
+            }
+
+            frame();
+        }
+
+        ambientSlider.addEventListener('input', (e) => {
+            ambientIntensity = parseFloat(e.target.value);
+            ambientVal.textContent = ambientIntensity.toFixed(1);
+        });
+
+        specularSlider.addEventListener('input', (e) => {
+            shininess = parseInt(e.target.value);
+            specularVal.textContent = shininess;
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>

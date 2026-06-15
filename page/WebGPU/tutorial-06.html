@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebGPU 教程6: 计算着色器</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e6e6e6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        header { text-align: center; margin-bottom: 3rem; }
+        h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #9b59b6, #e74c3c);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            margin-bottom: 1rem;
+        }
+        .subtitle { font-size: 1.1rem; color: #95a5a6; }
+        .nav-links {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        .nav-links a {
+            padding: 0.5rem 1rem;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 6px;
+            color: #bdc3c7;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        .nav-links a:hover {
+            background: rgba(155, 89, 182, 0.3);
+            color: white;
+        }
+        .content {
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+        }
+        @media (max-width: 900px) { .content { grid-template-columns: 1fr; } }
+        .canvas-container {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        canvas { width: 100%; height: 450px; display: block; border-radius: 8px; background: #000; }
+        .info-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .info-panel h2 { color: #9b59b6; margin-bottom: 1rem; }
+        .info-panel p { color: #95a5a6; line-height: 1.6; margin-bottom: 1rem; }
+        .info-panel ul { padding-left: 1.5rem; color: #bdc3c7; }
+        .info-panel li { margin-bottom: 0.5rem; }
+        .code-block {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.85rem;
+            overflow-x: auto;
+            margin-bottom: 1.5rem;
+            border-left: 3px solid #9b59b6;
+        }
+        .code-block code { color: #f39c12; }
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        #statusText { color: #2ecc71; font-weight: bold; }
+        .step {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 1.2rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border-left: 4px solid #9b59b6;
+        }
+        .step h3 { color: #9b59b6; margin-bottom: 0.5rem; }
+        .step p { color: #bdc3c7; font-size: 0.95rem; }
+        .result-display {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.9rem;
+            color: #2ecc71;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📊 WebGPU 教程6: 计算着色器</h1>
+            <p class="subtitle">探索 GPU 通用计算：并行计算、缓冲区读写、数据处理</p>
+            <div class="nav-links">
+                <a href="tutorials.html">📚 教程导航</a>
+                <a href="tutorial-05.html">⬅️ 上一章</a>
+                <a href="tutorial-07.html">➡️ 下一章</a>
+            </div>
+        </header>
+
+        <div class="content">
+            <div class="main-content">
+                <div class="canvas-container">
+                    <canvas id="webgpuCanvas"></canvas>
+                </div>
+
+                <div class="step">
+                    <h3>1. 计算着色器基础</h3>
+                    <p>计算着色器是 WebGPU 中用于通用 GPU 计算的核心组件。它允许我们利用 GPU 的大规模并行处理能力来加速各种计算任务。</p>
+                    <ul>
+                        <li><strong>Workgroup:</strong> 工作组，GPU 并行执行的基本单元</li>
+                        <li><strong>Invocation:</strong> 工作组内的单个线程</li>
+                        <li><strong>Storage Buffer:</strong> 可读写的缓冲区</li>
+                    </ul>
+                </div>
+
+                <div class="code-block">
+                    <code>// 计算着色器结构
+@compute @workgroup_size(8, 8, 1)
+fn main(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(local_invocation_id) local_id: vec3<u32>,
+    @builtin(workgroup_id) group_id: vec3<u32>
+) {
+    // global_id: 全局唯一标识符
+    // local_id: 工作组内的局部标识符
+    // group_id: 工作组标识符
+    
+    // 计算逻辑...
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>2. 矩阵乘法示例</h3>
+                    <p>计算着色器非常适合并行矩阵运算。每个线程可以负责计算结果矩阵的一个元素。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// 矩阵乘法计算着色器
+struct Matrix {
+    rows: u32,
+    cols: u32,
+    data: array<f32>,
+};
+
+@group(0) @binding(0) var<storage, read> A: Matrix;
+@group(0) @binding(1) var<storage, read> B: Matrix;
+@group(0) @binding(2) var<storage, read_write> C: Matrix;
+
+@compute @workgroup_size(16, 16, 1)
+fn multiplyMatrices(
+    @builtin(global_invocation_id) id: vec3<u32>
+) {
+    let row = id.y;
+    let col = id.x;
+    
+    if (row >= A.rows || col >= B.cols) { return; }
+    
+    var sum: f32 = 0.0;
+    for (var k: u32 = 0; k < A.cols; k++) {
+        sum += A.data[row * A.cols + k] * B.data[k * B.cols + col];
+    }
+    
+    C.data[row * C.cols + col] = sum;
+}</code>
+                </div>
+
+                <div class="step">
+                    <h3>3. 图像卷积示例</h3>
+                    <p>使用计算着色器进行图像处理，例如边缘检测或模糊效果。</p>
+                </div>
+
+                <div class="code-block">
+                    <code>// Sobel 边缘检测卷积
+@group(0) @binding(0) var src: texture_2d<f32>;
+@group(0) @binding(1) var dst: texture_storage_2d<rgba8unorm, write>;
+
+const sobelX = array<array<f32, 3>, 3>(
+    array<f32, 3>(-1.0, 0.0, 1.0),
+    array<f32, 3>(-2.0, 0.0, 2.0),
+    array<f32, 3>(-1.0, 0.0, 1.0)
+);
+
+@compute @workgroup_size(8, 8, 1)
+fn sobelEdge(
+    @builtin(global_invocation_id) id: vec3<u32>
+) {
+    let size = textureDimensions(src);
+    if (id.x >= size.x || id.y >= size.y) { return; }
+    
+    var gx: f32 = 0.0;
+    var gy: f32 = 0.0;
+    
+    for (var dy: i32 = -1; dy <= 1; dy++) {
+        for (var dx: i32 = -1; dx <= 1; dx++) {
+            let px = clamp(i32(id.x) + dx, 0, i32(size.x) - 1);
+            let py = clamp(i32(id.y) + dy, 0, i32(size.y) - 1);
+            let color = textureLoad(src, vec2<i32>(px, py), 0);
+            let gray = dot(color.rgb, vec3<f32>(0.299, 0.587, 0.114));
+            gx += gray * sobelX[dy + 1][dx + 1];
+            gy += gray * sobelX[dx + 1][dy + 1];
+        }
+    }
+    
+    let edge = sqrt(gx * gx + gy * gy);
+    textureStore(dst, vec2<i32>(id.x, id.y), vec4<f32>(edge, edge, edge, 1.0));
+}</code>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <div class="status">
+                    <h2>系统状态</h2>
+                    <p id="statusText">初始化中...</p>
+                    <p id="gpuInfo">GPU: 检测中...</p>
+                </div>
+
+                <h2>📖 学习要点</h2>
+                <ul>
+                    <li>理解计算着色器的执行模型</li>
+                    <li>掌握 workgroup 和 invocation 的概念</li>
+                    <li>学习使用 storage buffer 进行数据读写</li>
+                    <li>理解 GPU 并行计算的优势</li>
+                </ul>
+
+                <h2>⚙️ 关键概念</h2>
+                <p><strong>Workgroup:</strong> 并行执行的工作组</p>
+                <p><strong>Storage Buffer:</strong> 可读写的 GPU 内存</p>
+                <p><strong>Dispatch:</strong> 启动计算着色器执行</p>
+                <p><strong>Barrier:</strong> 同步机制</p>
+
+                <h2>📈 计算结果</h2>
+                <div class="result-display" id="resultDisplay">
+                    计算进行中...
+                </div>
+
+                <h2>🔧 浏览器支持</h2>
+                <p>• Chrome/Edge 113+</p>
+                <p>• Safari 17+</p>
+                <p>• Firefox Nightly</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('webgpuCanvas');
+        const statusText = document.getElementById('statusText');
+        const gpuInfo = document.getElementById('gpuInfo');
+        const resultDisplay = document.getElementById('resultDisplay');
+
+        let device, context, computePipeline, renderPipeline;
+        let inputBuffer, outputBuffer;
+
+        const computeShader = `
+            @group(0) @binding(0) var<storage, read> inputData: array<f32>;
+            @group(0) @binding(1) var<storage, read_write> outputData: array<f32>;
+
+            @compute @workgroup_size(256)
+            fn main(@builtin(global_invocation_id) id: vec3<u32>) {
+                let i = id.x;
+                if (i >= arrayLength(&inputData)) { return; }
+                
+                outputData[i] = sqrt(inputData[i]) * sin(inputData[i] * 0.1);
+            }
+        `;
+
+        const vertexShader = `
+            struct VertexInput {
+                @location(0) position: vec2<f32>,
+                @location(1) uv: vec2<f32>,
+            };
+
+            struct VertexOutput {
+                @builtin(position) position: vec4<f32>,
+                @location(0) uv: vec2<f32>,
+            };
+
+            @vertex
+            fn main(input: VertexInput) -> VertexOutput {
+                var output: VertexOutput;
+                output.position = vec4<f32>(input.position, 0.0, 1.0);
+                output.uv = input.uv;
+                return output;
+            }
+        `;
+
+        const fragmentShader = `
+            @group(0) @binding(0) var<storage, read> data: array<f32>;
+
+            @fragment
+            fn main(@location(0) uv: vec2<f32>) -> @location(0) vec4<f32> {
+                let index = u32(uv.x * 1024.0);
+                if (index >= arrayLength(&data)) { return vec4<f32>(0.0, 0.0, 0.0, 1.0); }
+                
+                let value = data[index];
+                let color = vec3<f32>(value * 0.5 + 0.5);
+                return vec4<f32>(color, 1.0);
+            }
+        `;
+
+        async function initWebGPU() {
+            try {
+                statusText.textContent = "检查 WebGPU 支持...";
+                
+                if (!navigator.gpu) throw new Error("不支持 WebGPU");
+                
+                const adapter = await navigator.gpu.requestAdapter();
+                if (!adapter) throw new Error("无法获取 GPU 适配器");
+                
+                gpuInfo.textContent = `GPU: ${adapter.info.vendor || '未知'} / ${adapter.info.architecture || '未知'}`;
+
+                device = await adapter.requestDevice();
+                context = canvas.getContext('webgpu');
+                const format = navigator.gpu.getPreferredCanvasFormat();
+                context.configure({ device, format });
+
+                const dataSize = 1024;
+                const inputData = new Float32Array(dataSize);
+                for (let i = 0; i < dataSize; i++) {
+                    inputData[i] = i * 0.1;
+                }
+
+                inputBuffer = device.createBuffer({
+                    size: inputData.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(inputBuffer.getMappedRange()).set(inputData);
+                inputBuffer.unmap();
+
+                outputBuffer = device.createBuffer({
+                    size: inputData.byteLength,
+                    usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+                });
+
+                computePipeline = device.createComputePipeline({
+                    layout: 'auto',
+                    compute: {
+                        module: device.createShaderModule({ code: computeShader }),
+                        entryPoint: 'main'
+                    }
+                });
+
+                const computeBindGroup = device.createBindGroup({
+                    layout: computePipeline.getBindGroupLayout(0),
+                    entries: [
+                        { binding: 0, resource: { buffer: inputBuffer } },
+                        { binding: 1, resource: { buffer: outputBuffer } }
+                    ]
+                });
+
+                const vertices = new Float32Array([
+                    -1, -1, 0, 0,  1, -1, 1, 0,  1, 1, 1, 1,  -1, 1, 0, 1
+                ]);
+                const vertexBuffer = device.createBuffer({
+                    size: vertices.byteLength,
+                    usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Float32Array(vertexBuffer.getMappedRange()).set(vertices);
+                vertexBuffer.unmap();
+
+                const indices = new Uint16Array([0, 1, 2, 0, 2, 3]);
+                const indexBuffer = device.createBuffer({
+                    size: indices.byteLength,
+                    usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
+                    mappedAtCreation: true
+                });
+                new Uint16Array(indexBuffer.getMappedRange()).set(indices);
+                indexBuffer.unmap();
+
+                renderPipeline = device.createRenderPipeline({
+                    layout: 'auto',
+                    vertex: {
+                        module: device.createShaderModule({ code: vertexShader }),
+                        entryPoint: 'main',
+                        buffers: [{
+                            arrayStride: 4 * 4,
+                            attributes: [
+                                { shaderLocation: 0, offset: 0, format: 'float32x2' },
+                                { shaderLocation: 1, offset: 2 * 4, format: 'float32x2' }
+                            ]
+                        }]
+                    },
+                    fragment: {
+                        module: device.createShaderModule({ code: fragmentShader }),
+                        entryPoint: 'main',
+                        targets: [{ format }]
+                    },
+                    primitive: { topology: 'triangle-list' }
+                });
+
+                const renderBindGroup = device.createBindGroup({
+                    layout: renderPipeline.getBindGroupLayout(0),
+                    entries: [{ binding: 0, resource: { buffer: outputBuffer } }]
+                });
+
+                statusText.textContent = "✅ 初始化成功！";
+                statusText.style.color = "#2ecc71";
+
+                runCompute(computeBindGroup, renderBindGroup, vertexBuffer, indexBuffer);
+            } catch (error) {
+                statusText.textContent = `❌ ${error.message}`;
+                statusText.style.color = "#e74c3c";
+                console.error(error);
+            }
+        }
+
+        async function runCompute(computeBindGroup, renderBindGroup, vertexBuffer, indexBuffer) {
+            const encoder = device.createCommandEncoder();
+            
+            const computePass = encoder.beginComputePass();
+            computePass.setPipeline(computePipeline);
+            computePass.setBindGroup(0, computeBindGroup);
+            computePass.dispatchWorkgroups(Math.ceil(1024 / 256));
+            computePass.end();
+
+            const renderPass = encoder.beginRenderPass({
+                colorAttachments: [{
+                    view: context.getCurrentTexture().createView(),
+                    loadOp: 'clear',
+                    storeOp: 'store',
+                    clearValue: [0.05, 0.05, 0.08, 1.0]
+                }]
+            });
+
+            renderPass.setPipeline(renderPipeline);
+            renderPass.setVertexBuffer(0, vertexBuffer);
+            renderPass.setIndexBuffer(indexBuffer, 'uint16');
+            renderPass.setBindGroup(0, renderBindGroup);
+            renderPass.drawIndexed(6);
+            renderPass.end();
+
+            device.queue.submit([encoder.finish()]);
+
+            const readbackBuffer = device.createBuffer({
+                size: 1024 * 4,
+                usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ
+            });
+
+            const copyEncoder = device.createCommandEncoder();
+            copyEncoder.copyBufferToBuffer(outputBuffer, 0, readbackBuffer, 0, 1024 * 4);
+            device.queue.submit([copyEncoder.finish()]);
+
+            await readbackBuffer.mapAsync(GPUMapMode.READ);
+            const result = new Float32Array(readbackBuffer.getMappedRange());
+            resultDisplay.textContent = `计算完成！\n第一个值: ${result[0].toFixed(4)}\n中间值: ${result[512].toFixed(4)}\n最后值: ${result[1023].toFixed(4)}`;
+            readbackBuffer.unmap();
+        }
+
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+        });
+
+        window.addEventListener('DOMContentLoaded', () => {
+            canvas.width = canvas.clientWidth * window.devicePixelRatio;
+            canvas.height = 450 * window.devicePixelRatio;
+            initWebGPU();
+        });
+    </script>
+</body>
+</html>
