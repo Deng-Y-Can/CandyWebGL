@@ -6,160 +6,565 @@
     <title>WebGPU 教程系列</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            background: #0a0a0f;
             color: #e6e6e6;
             min-height: 100vh;
-            padding: 2rem;
+            overflow-x: hidden;
+            position: relative;
         }
-        .container { max-width: 1000px; margin: 0 auto; }
-        header { text-align: center; margin-bottom: 3rem; }
+
+        /* 动态背景 */
+        .bg-animation {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(ellipse at 20% 80%, rgba(120, 0, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(0, 200, 255, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(255, 0, 150, 0.1) 0%, transparent 50%);
+            animation: bgPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes bgPulse {
+            0%, 100% { opacity: 0.8; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.05); }
+        }
+
+        /* 网格背景 */
+        .grid-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -2;
+            background-image: 
+                linear-gradient(rgba(100, 200, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(100, 200, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+        }
+
+        /* 浮动粒子 */
+        .particles {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: float 15s infinite;
+            box-shadow: 0 0 10px rgba(100, 200, 255, 0.5);
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+        }
+
+        .container { 
+            max-width: 1400px; 
+            margin: 0 auto; 
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* 炫酷标题 */
+        header { 
+            text-align: center; 
+            margin-bottom: 4rem;
+            position: relative;
+        }
+
         h1 {
-            font-size: 3rem;
-            background: linear-gradient(90deg, #3498db, #9b59b6, #e74c3c);
+            font-size: 4rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            position: relative;
+            display: inline-block;
+            animation: titleGlow 3s ease-in-out infinite;
+        }
+
+        h1::before {
+            content: '🚀 WebGPU 教程系列';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7b2dff, #ff2d7b, #00d4ff);
+            background-size: 300% 100%;
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
-            margin-bottom: 1rem;
+            animation: gradientFlow 4s linear infinite;
+            filter: blur(0px);
         }
-        .subtitle { font-size: 1.2rem; color: #95a5a6; }
-        .tutorial-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
+
+        h1::after {
+            content: '🚀 WebGPU 教程系列';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #7b2dff, #ff2d7b, #00d4ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradientFlow 4s linear infinite;
+            filter: blur(8px);
+            opacity: 0.7;
         }
-        .tutorial-card {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 12px;
-            padding: 1.5rem;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            transition: all 0.3s ease;
-            cursor: pointer;
+
+        h1 span {
+            position: relative;
+            z-index: 1;
+            background: linear-gradient(90deg, #00d4ff, #7b2dff, #ff2d7b, #00d4ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradientFlow 4s linear infinite;
         }
-        .tutorial-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(52, 152, 219, 0.2);
-            border-color: rgba(52, 152, 219, 0.3);
+
+        @keyframes gradientFlow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
         }
-        .tutorial-card .icon {
-            font-size: 2.5rem;
-            margin-bottom: 1rem;
+
+        @keyframes titleGlow {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.02); }
         }
-        .tutorial-card h2 {
-            color: #3498db;
-            margin-bottom: 0.5rem;
+
+        .subtitle {
             font-size: 1.3rem;
-        }
-        .tutorial-card p {
-            color: #95a5a6;
-            font-size: 0.9rem;
-            line-height: 1.5;
-        }
-        .tutorial-card .level {
-            display: inline-block;
+            color: rgba(255, 255, 255, 0.6);
             margin-top: 1rem;
-            padding: 0.3rem 0.8rem;
-            border-radius: 20px;
-            font-size: 0.8rem;
+            letter-spacing: 0.3em;
+            animation: subtitleFade 3s ease-in-out infinite;
         }
-        .level.basic { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
-        .level.intermediate { background: rgba(241, 196, 15, 0.2); color: #f1c40f; }
-        .level.advanced { background: rgba(231, 76, 60, 0.2); color: #e74c3c; }
-        footer {
-            text-align: center;
-            margin-top: 3rem;
-            color: #7f8c8d;
-            font-size: 0.9rem;
+
+        @keyframes subtitleFade {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 0.9; }
         }
+
+        /* 顶部导航 */
         .nav-links {
             display: flex;
-            gap: 1rem;
+            gap: 1.5rem;
             justify-content: center;
-            margin-bottom: 2rem;
+            margin: 2rem 0 3rem;
             flex-wrap: wrap;
         }
+
         .nav-links a {
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 6px;
-            color: #bdc3c7;
+            padding: 0.8rem 2rem;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(100, 200, 255, 0.2);
+            border-radius: 50px;
+            color: rgba(255, 255, 255, 0.8);
             text-decoration: none;
-            transition: all 0.3s ease;
+            font-size: 0.95rem;
+            letter-spacing: 0.1em;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
         }
+
+        .nav-links a::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(100, 200, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+
+        .nav-links a:hover::before {
+            left: 100%;
+        }
+
         .nav-links a:hover {
-            background: rgba(52, 152, 219, 0.3);
-            color: white;
+            background: rgba(100, 200, 255, 0.15);
+            border-color: rgba(100, 200, 255, 0.5);
+            color: #fff;
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 
+                0 10px 30px rgba(100, 200, 255, 0.3),
+                0 0 20px rgba(100, 200, 255, 0.2),
+                inset 0 0 20px rgba(100, 200, 255, 0.1);
+        }
+
+        /* 3D卡片网格 */
+        .tutorial-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 2.5rem;
+            perspective: 1000px;
+        }
+
+        .tutorial-card {
+            background: linear-gradient(135deg, rgba(20, 20, 30, 0.9), rgba(30, 30, 50, 0.8));
+            border-radius: 20px;
+            padding: 2rem;
+            border: 1px solid rgba(100, 200, 255, 0.15);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            overflow: hidden;
+        }
+
+        /* 卡片光效边框 */
+        .tutorial-card::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, 
+                #00d4ff, #7b2dff, #ff2d7b, #00d4ff,
+                #7b2dff, #ff2d7b, #00d4ff, #7b2dff);
+            background-size: 400% 400%;
+            border-radius: 22px;
+            z-index: -1;
+            animation: borderGlow 8s linear infinite;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .tutorial-card:hover::before {
+            opacity: 1;
+        }
+
+        @keyframes borderGlow {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* 卡片内部光效 */
+        .tutorial-card::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, 
+                transparent, 
+                rgba(255, 255, 255, 0.1), 
+                transparent);
+            transition: left 0.8s;
+            z-index: 1;
+        }
+
+        .tutorial-card:hover::after {
+            left: 100%;
+        }
+
+        .tutorial-card:hover {
+            transform: translateY(-15px) rotateX(5deg) rotateY(-5deg) scale(1.02);
+            border-color: transparent;
+            box-shadow: 
+                0 30px 60px rgba(0, 0, 0, 0.5),
+                0 0 40px rgba(100, 200, 255, 0.2),
+                0 0 80px rgba(100, 200, 255, 0.1);
+        }
+
+        /* 3D图标 */
+        .tutorial-card .icon {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            display: inline-block;
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            transform-style: preserve-3d;
+            position: relative;
+            z-index: 2;
+        }
+
+        .tutorial-card:hover .icon {
+            transform: rotateY(360deg) scale(1.2);
+        }
+
+        /* 卡片标题 */
+        .tutorial-card h2 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 0.8rem;
+            letter-spacing: 0.05em;
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s;
+        }
+
+        .tutorial-card:nth-child(1) h2 { color: #00d4ff; }
+        .tutorial-card:nth-child(2) h2 { color: #7b2dff; }
+        .tutorial-card:nth-child(3) h2 { color: #ff2d7b; }
+        .tutorial-card:nth-child(4) h2 { color: #2dff7b; }
+        .tutorial-card:nth-child(5) h2 { color: #ff7b2d; }
+        .tutorial-card:nth-child(6) h2 { color: #2d7bff; }
+        .tutorial-card:nth-child(7) h2 { color: #ff2d2d; }
+        .tutorial-card:nth-child(8) h2 { color: #7bff2d; }
+
+        .tutorial-card:hover h2 {
+            transform: translateX(10px);
+            filter: brightness(1.3);
+        }
+
+        /* 卡片描述 */
+        .tutorial-card p {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.95rem;
+            line-height: 1.6;
+            position: relative;
+            z-index: 2;
+            transition: color 0.3s;
+        }
+
+        .tutorial-card:hover p {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        /* 等级标签 */
+        .tutorial-card .level {
+            display: inline-block;
+            margin-top: 1.5rem;
+            padding: 0.5rem 1.2rem;
+            border-radius: 30px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.1em;
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s;
+        }
+
+        .level.basic {
+            background: linear-gradient(135deg, rgba(0, 212, 255, 0.2), rgba(0, 150, 200, 0.2));
+            color: #00d4ff;
+            border: 1px solid rgba(0, 212, 255, 0.3);
+        }
+
+        .level.intermediate {
+            background: linear-gradient(135deg, rgba(255, 200, 0, 0.2), rgba(200, 150, 0, 0.2));
+            color: #ffc800;
+            border: 1px solid rgba(255, 200, 0, 0.3);
+        }
+
+        .level.advanced {
+            background: linear-gradient(135deg, rgba(255, 45, 100, 0.2), rgba(200, 30, 80, 0.2));
+            color: #ff2d64;
+            border: 1px solid rgba(255, 45, 100, 0.3);
+        }
+
+        .tutorial-card:hover .level {
+            transform: scale(1.1);
+            box-shadow: 0 5px 20px rgba(255, 255, 255, 0.1);
+        }
+
+        /* 进度指示器 */
+        .tutorial-card .progress-ring {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            width: 40px;
+            height: 40px;
+            opacity: 0.5;
+            transition: all 0.3s;
+        }
+
+        .tutorial-card:hover .progress-ring {
+            opacity: 1;
+            transform: rotate(90deg);
+        }
+
+        .progress-ring svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+        }
+
+        .progress-ring .bg {
+            stroke: rgba(255, 255, 255, 0.1);
+        }
+
+        .progress-ring .progress {
+            stroke: currentColor;
+            stroke-dasharray: 100;
+            stroke-dashoffset: 0;
+            animation: progressAnim 2s ease-out forwards;
+        }
+
+        @keyframes progressAnim {
+            from { stroke-dashoffset: 100; }
+            to { stroke-dashoffset: 0; }
+        }
+
+        /* 底部信息 */
+        footer {
+            text-align: center;
+            margin-top: 4rem;
+            padding: 2rem;
+            position: relative;
+        }
+
+        footer p {
+            color: rgba(255, 255, 255, 0.4);
+            font-size: 0.9rem;
+            letter-spacing: 0.2em;
+        }
+
+        footer::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 200px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(100, 200, 255, 0.3), transparent);
+        }
+
+        /* 响应式 */
+        @media (max-width: 768px) {
+            h1 { font-size: 2.5rem; }
+            .tutorial-grid { gap: 1.5rem; }
+            .tutorial-card { padding: 1.5rem; }
+            .tutorial-card:hover { transform: translateY(-10px) scale(1.01); }
         }
     </style>
 </head>
 <body>
+    <!-- 动态背景 -->
+    <div class="bg-animation"></div>
+    <div class="grid-bg"></div>
+    <div class="particles" id="particles"></div>
+
     <div class="container">
         <header>
-            <h1>🚀 WebGPU 教程系列</h1>
+            <h1><span>🚀 WebGPU 教程系列</span></h1>
             <p class="subtitle">从零开始学习现代 Web 图形 API</p>
             <div class="nav-links">
-                <a href="index.html">示例1: 彩色三角形</a>
-                <a href="index2.html">示例2</a>
-                <a href="tutorials.html">教程导航</a>
+                <a href="index.html">⚡ 示例1: 彩色三角形</a>
+                <a href="index2.html">⚡ 示例2</a>
+                <a href="tutorials.html">📚 教程导航</a>
             </div>
         </header>
 
         <div class="tutorial-grid">
             <div class="tutorial-card" onclick="location.href='tutorial-01.html'">
+                <div class="progress-ring" style="color: #00d4ff;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">🔺</div>
                 <h2>教程1: 基础三角形</h2>
-                <p>学习 WebGPU 的基本概念：设备初始化、渲染管线、着色器编写、命令提交</p>
-                <span class="level basic">入门</span>
+                <p>学习 WebGPU 的基本概念：设备初始化、渲染管线、着色器编写、命令提交流程</p>
+                <span class="level basic">入门级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-02.html'">
+                <div class="progress-ring" style="color: #7b2dff;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">📦</div>
                 <h2>教程2: 3D立方体</h2>
-                <p>深入 3D 变换：模型矩阵、视图矩阵、投影矩阵、MVP 变换链</p>
-                <span class="level basic">入门</span>
+                <p>深入 3D 变换：模型矩阵、视图矩阵、投影矩阵、完整的 MVP 变换链实现</p>
+                <span class="level basic">入门级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-03.html'">
+                <div class="progress-ring" style="color: #ff2d7b;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">🎨</div>
                 <h2>教程3: 纹理映射</h2>
-                <p>学习纹理加载、采样器配置、UV 坐标、纹理绑定到着色器</p>
-                <span class="level intermediate">进阶</span>
+                <p>学习纹理加载、采样器配置、UV 坐标系统、纹理绑定到着色器的完整流程</p>
+                <span class="level intermediate">进阶级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-04.html'">
+                <div class="progress-ring" style="color: #2dff7b;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">💡</div>
                 <h2>教程4: 光照效果</h2>
-                <p>实现 Phong 光照模型：环境光、漫反射、镜面反射、法线计算</p>
-                <span class="level intermediate">进阶</span>
+                <p>实现 Phong 光照模型：环境光、漫反射、镜面反射、法线向量计算与应用</p>
+                <span class="level intermediate">进阶级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-05.html'">
+                <div class="progress-ring" style="color: #ff7b2d;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">✨</div>
                 <h2>教程5: 粒子系统</h2>
-                <p>使用计算着色器模拟粒子：发射、更新、渲染大量粒子</p>
-                <span class="level intermediate">进阶</span>
+                <p>使用计算着色器模拟粒子：发射器、物理更新、生命周期管理、大规模粒子渲染</p>
+                <span class="level intermediate">进阶级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-06.html'">
+                <div class="progress-ring" style="color: #2d7bff;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">📊</div>
                 <h2>教程6: 计算着色器</h2>
-                <p>探索 GPU 通用计算：并行计算、缓冲区读写、数据处理</p>
+                <p>探索 GPU 通用计算：并行计算模型、Storage Buffer 读写、矩阵运算与数据处理</p>
                 <span class="level advanced">高级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-07.html'">
+                <div class="progress-ring" style="color: #ff2d2d;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">🏠</div>
                 <h2>教程7: 模型加载</h2>
-                <p>加载和渲染 GLB/GLTF 3D 模型：解析二进制格式、材质处理</p>
+                <p>加载和渲染 3D 模型：OBJ/GLTF 格式解析、顶点数据提取、材质与纹理处理</p>
                 <span class="level advanced">高级</span>
             </div>
 
             <div class="tutorial-card" onclick="location.href='tutorial-08.html'">
+                <div class="progress-ring" style="color: #7bff2d;">
+                    <svg viewBox="0 0 36 36"><circle class="bg" cx="18" cy="18" r="16"/><circle class="progress" cx="18" cy="18" r="16"/></svg>
+                </div>
                 <div class="icon">🔄</div>
                 <h2>教程8: 帧缓冲与后处理</h2>
-                <p>实现屏幕后处理效果：高斯模糊、色调映射、颜色校正</p>
+                <p>实现屏幕后处理效果：离屏渲染、高斯模糊、色调映射、颜色校正与特效组合</p>
                 <span class="level advanced">高级</span>
             </div>
         </div>
@@ -168,5 +573,48 @@
             <p>WebGPU 教程系列 | 需要 Chrome/Edge 113+ 或 Safari 17+</p>
         </footer>
     </div>
+
+    <script>
+        // 创建浮动粒子
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const colors = ['#00d4ff', '#7b2dff', '#ff2d7b', '#2dff7b'];
+            
+            for (let i = 0; i < 50; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 15 + 's';
+                particle.style.animationDuration = (10 + Math.random() * 10) + 's';
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.width = (2 + Math.random() * 4) + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.boxShadow = `0 0 ${10 + Math.random() * 10}px ${particle.style.background}`;
+                container.appendChild(particle);
+            }
+        }
+
+        // 3D卡片鼠标跟随效果
+        document.querySelectorAll('.tutorial-card').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = (y - centerY) / 10;
+                const rotateY = (centerX - x) / 10;
+                
+                card.style.transform = `translateY(-15px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0) rotateX(0) rotateY(0) scale(1)';
+            });
+        });
+
+        createParticles();
+    </script>
 </body>
 </html>

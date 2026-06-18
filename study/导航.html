@@ -5,500 +5,729 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Study - 学习目录导航</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         
         body {
             font-family: 'Segoe UI', 'Microsoft YaHei', Arial, sans-serif;
-            background: linear-gradient(135deg, #0c0c1e 0%, #1a1a3e 50%, #2d1b4e 100%);
+            background: #0a0a0f;
+            color: #e6e6e6;
             min-height: 100vh;
-            padding: 20px;
+            padding: 30px;
+            overflow-x: hidden;
+            position: relative;
         }
-        
+
+        /* 动态背景 */
+        .bg-animation {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            background: 
+                radial-gradient(ellipse at 20% 80%, rgba(123, 45, 255, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 20%, rgba(0, 212, 255, 0.12) 0%, transparent 50%),
+                radial-gradient(ellipse at 50% 50%, rgba(123, 45, 255, 0.08) 0%, transparent 50%);
+            animation: bgPulse 10s ease-in-out infinite;
+        }
+        @keyframes bgPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+        /* 网格背景 */
+        .grid-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -2;
+            background-image: 
+                linear-gradient(rgba(123, 45, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(123, 45, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: gridMove 20s linear infinite;
+        }
+        @keyframes gridMove {
+            0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+            100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+        }
+
+        /* 浮动粒子 */
+        .particles {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            pointer-events: none;
+        }
+        .particle {
+            position: absolute;
+            width: 4px; height: 4px;
+            background: rgba(123, 45, 255, 0.6);
+            border-radius: 50%;
+            animation: floatUp 18s infinite;
+        }
+        @keyframes floatUp {
+            0%, 100% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 1; }
+            90% { opacity: 1; }
+            100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+        }
+
+        .container { position: relative; z-index: 1; }
+
+        /* 炫酷标题 */
         .header {
             text-align: center;
-            padding: 30px 20px;
-            margin-bottom: 30px;
+            padding: 40px 20px;
+            margin-bottom: 50px;
         }
-        
+
         .header h1 {
-            color: #9d4edd;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 0.1em;
+            position: relative;
+            display: inline-block;
+            margin-bottom: 15px;
         }
-        
+
+        .header h1 span {
+            background: linear-gradient(90deg, #7b2dff, #00d4ff, #7b2dff, #00d4ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradientFlow 4s linear infinite;
+        }
+
+        .header h1::before {
+            content: '📚 Study 学习目录';
+            position: absolute;
+            top: 3px; left: 3px;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, #7b2dff, #00d4ff, #7b2dff, #00d4ff);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: gradientFlow 4s linear infinite;
+            filter: blur(12px);
+            opacity: 0.5;
+        }
+
+        @keyframes gradientFlow { 0% { background-position: 0% 50%; } 100% { background-position: 300% 50%; } }
+
         .header p {
-            color: #a0a0a0;
-            font-size: 1.1em;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 1.1rem;
+            letter-spacing: 0.2em;
         }
-        
+
+        /* 返回按钮 */
         .back-link {
             display: inline-block;
-            margin-top: 15px;
-            padding: 10px 20px;
-            background: rgba(157, 78, 221, 0.2);
-            color: #9d4edd;
+            margin-top: 25px;
+            padding: 12px 30px;
+            background: rgba(123, 45, 255, 0.1);
+            color: #7b2dff;
             text-decoration: none;
-            border-radius: 25px;
-            border: 1px solid #9d4edd;
-            transition: all 0.3s ease;
+            border-radius: 50px;
+            border: 1px solid rgba(123, 45, 255, 0.3);
+            font-size: 0.95rem;
+            letter-spacing: 0.1em;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            position: relative;
+            overflow: hidden;
         }
-        
+
+        .back-link::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(123, 45, 255, 0.3), transparent);
+            transition: left 0.5s;
+        }
+        .back-link:hover::before { left: 100%; }
+
         .back-link:hover {
-            background: #9d4edd;
-            color: white;
+            background: rgba(123, 45, 255, 0.2);
+            border-color: rgba(123, 45, 255, 0.6);
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 15px 40px rgba(123, 45, 255, 0.3), 0 0 30px rgba(123, 45, 255, 0.2);
         }
-        
+
+        /* 分类容器 */
         .chapter {
-            max-width: 1200px;
-            margin: 0 auto 40px auto;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 15px;
-            padding: 25px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            max-width: 1400px;
+            margin: 0 auto 50px auto;
+            background: linear-gradient(135deg, rgba(20, 20, 30, 0.8), rgba(30, 30, 50, 0.6));
+            border-radius: 25px;
+            padding: 35px;
+            border: 1px solid rgba(123, 45, 255, 0.15);
+            position: relative;
+            overflow: hidden;
         }
-        
+
+        .chapter::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #7b2dff, transparent);
+            animation: lineGlow 3s ease-in-out infinite;
+        }
+        @keyframes lineGlow { 0%, 100% { opacity: 0.3; } 50% { opacity: 1; } }
+
+        /* 分类标题 */
         .chapter-title {
-            color: #9d4edd;
-            font-size: 1.5em;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid rgba(157, 78, 221, 0.3);
+            color: #7b2dff;
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 15px;
+            letter-spacing: 0.05em;
+            position: relative;
         }
-        
+
+        .chapter-title::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0;
+            width: 100%; height: 2px;
+            background: linear-gradient(90deg, #7b2dff, rgba(123, 45, 255, 0.2), transparent);
+        }
+
+        .chapter-icon {
+            font-size: 2rem;
+            display: inline-block;
+            animation: iconPulse 2s ease-in-out infinite;
+        }
+        @keyframes iconPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+
+        /* 文件网格 */
         .lesson-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 15px;
+            gap: 20px;
+            perspective: 1000px;
         }
-        
+
+        /* 3D文件卡片 */
         .lesson-item {
-            background: rgba(255, 255, 255, 0.08);
-            border-radius: 10px;
-            padding: 15px;
-            transition: all 0.3s ease;
-            border: 1px solid transparent;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 15px;
+            padding: 18px;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid rgba(123, 45, 255, 0.1);
+            position: relative;
+            transform-style: preserve-3d;
+            overflow: hidden;
         }
-        
+
+        .lesson-item::before {
+            content: '';
+            position: absolute;
+            top: -2px; left: -2px; right: -2px; bottom: -2px;
+            border-radius: 17px;
+            background: linear-gradient(45deg, #7b2dff, #00d4ff, #7b2dff, #00d4ff);
+            background-size: 400% 400%;
+            z-index: -1;
+            opacity: 0;
+            transition: opacity 0.3s;
+            animation: borderGlow 6s linear infinite;
+        }
+        @keyframes borderGlow { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+
+        .lesson-item:hover::before { opacity: 1; }
+
+        .lesson-item::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+            transition: left 0.6s;
+            z-index: 1;
+        }
+        .lesson-item:hover::after { left: 100%; }
+
         .lesson-item:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(157, 78, 221, 0.5);
-            transform: translateY(-3px);
-            box-shadow: 0 5px 20px rgba(157, 78, 221, 0.2);
+            transform: translateY(-10px) rotateX(5deg) rotateY(-3deg) scale(1.02);
+            border-color: transparent;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4), 0 0 30px rgba(123, 45, 255, 0.2);
         }
-        
+
         .lesson-item a {
             color: #ffffff;
             text-decoration: none;
             display: block;
+            position: relative;
+            z-index: 2;
         }
-        
+
         .lesson-item .lesson-name {
-            font-size: 1.1em;
+            font-size: 1.1rem;
             font-weight: 600;
             margin-bottom: 8px;
-            color: #9d4edd;
+            color: #7b2dff;
+            transition: all 0.3s;
         }
-        
+        .lesson-item:hover .lesson-name {
+            transform: translateX(8px);
+            filter: brightness(1.3);
+        }
+
         .lesson-item .lesson-path {
-            font-size: 0.85em;
-            color: #888;
+            font-size: 0.8rem;
+            color: rgba(255, 255, 255, 0.4);
             word-break: break-all;
         }
-        
+
+        .lesson-item .lesson-desc {
+            font-size: 0.85rem;
+            color: rgba(255, 255, 255, 0.6);
+            margin-top: 8px;
+            line-height: 1.4;
+            transition: color 0.3s;
+        }
+        .lesson-item:hover .lesson-desc { color: rgba(255, 255, 255, 0.85); }
+
+        /* 统计信息 */
         .stats {
             text-align: center;
-            color: #888;
-            margin-top: 30px;
-            padding: 20px;
+            color: rgba(255, 255, 255, 0.4);
+            margin-top: 50px;
+            padding: 30px;
+            position: relative;
         }
-        
+
+        .stats::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 50%;
+            transform: translateX(-50%);
+            width: 200px; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(123, 45, 255, 0.3), transparent);
+        }
+
         .stats span {
-            color: #9d4edd;
+            color: #7b2dff;
             font-weight: bold;
+            font-size: 1.2rem;
         }
-        
+
+        /* 响应式 */
         @media (max-width: 768px) {
-            .header h1 {
-                font-size: 1.8em;
-            }
-            
-            .chapter {
-                padding: 15px;
-            }
-            
-            .lesson-grid {
-                grid-template-columns: 1fr;
-            }
+            .header h1 { font-size: 2.2rem; }
+            .chapter { padding: 20px; }
+            .lesson-grid { grid-template-columns: 1fr; gap: 12px; }
+            .lesson-item:hover { transform: translateY(-8px) scale(1.01); }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>📚 Study 学习目录</h1>
-        <p>WebGL 学习教程 - 从基础到进阶</p>
-        <a href="../index.html" class="back-link">← 返回主页</a>
-    </div>
-    
-    <!-- 第一章：2D图形基础 -->
-    <div class="chapter">
-        <h2 class="chapter-title">第一章：2D图形基础</h2>
-        <div class="lesson-grid">
-            <div class="lesson-item">
-                <a href="1.1.矩形框/index.html">
-                    <div class="lesson-name">1.1 矩形框</div>
-                    <div class="lesson-path">study/1.1.矩形框/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.2.浅绿矩形/index.html">
-                    <div class="lesson-name">1.2 浅绿矩形</div>
-                    <div class="lesson-path">study/1.2.浅绿矩形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.3.随机多矩形与三角形/index.html">
-                    <div class="lesson-name">1.3 随机多矩形与三角形</div>
-                    <div class="lesson-path">study/1.3.随机多矩形与三角形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.4-渐变三角形/index.html">
-                    <div class="lesson-name">1.4 渐变三角形</div>
-                    <div class="lesson-path">study/1.4-渐变三角形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.5-双色矩形/index.html">
-                    <div class="lesson-name">1.5 双色矩形</div>
-                    <div class="lesson-path">study/1.5-双色矩形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.6-渐变双色矩形/index.html">
-                    <div class="lesson-name">1.6 渐变双色矩形</div>
-                    <div class="lesson-path">study/1.6-渐变双色矩形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.7-双色矩形-颜色存储/index.html">
-                    <div class="lesson-name">1.7 双色矩形-颜色存储</div>
-                    <div class="lesson-path">study/1.7-双色矩形-颜色存储/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.8-2D纹理/index.html">
-                    <div class="lesson-name">1.8 2D纹理</div>
-                    <div class="lesson-path">study/1.8-2D纹理/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.9-2D纹理-模糊/index.html">
-                    <div class="lesson-name">1.9 2D纹理-模糊</div>
-                    <div class="lesson-path">study/1.9-2D纹理-模糊/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.10-2D纹理-卷积/index.html">
-                    <div class="lesson-name">1.10 2D纹理-卷积</div>
-                    <div class="lesson-path">study/1.10-2D纹理-卷积/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="1.11-2D纹理-多核/index.html">
-                    <div class="lesson-name">1.11 2D纹理-多核</div>
-                    <div class="lesson-path">study/1.11-2D纹理-多核/index.html</div>
-                </a>
+    <div class="bg-animation"></div>
+    <div class="grid-bg"></div>
+    <div class="particles" id="particles"></div>
+
+    <div class="container">
+        <div class="header">
+            <h1><span>📚 Study 学习目录</span></h1>
+            <p>WebGL 学习教程 - 从基础到进阶</p>
+            <a href="../index.html" class="back-link">← 返回主页</a>
+        </div>
+
+        <!-- 第一章：2D图形基础 -->
+        <div class="chapter">
+            <h2 class="chapter-title"><span class="chapter-icon">🎨</span>第一章：2D图形基础</h2>
+            <div class="lesson-grid">
+                <div class="lesson-item">
+                    <a href="1.1.矩形框/index.html">
+                        <div class="lesson-name">1.1 矩形框</div>
+                        <div class="lesson-path">study/1.1.矩形框/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.2.浅绿矩形/index.html">
+                        <div class="lesson-name">1.2 浅绿矩形</div>
+                        <div class="lesson-path">study/1.2.浅绿矩形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.3.随机多矩形与三角形/index.html">
+                        <div class="lesson-name">1.3 随机多矩形与三角形</div>
+                        <div class="lesson-path">study/1.3.随机多矩形与三角形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.4-渐变三角形/index.html">
+                        <div class="lesson-name">1.4 渐变三角形</div>
+                        <div class="lesson-path">study/1.4-渐变三角形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.5-双色矩形/index.html">
+                        <div class="lesson-name">1.5 双色矩形</div>
+                        <div class="lesson-path">study/1.5-双色矩形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.6-渐变双色矩形/index.html">
+                        <div class="lesson-name">1.6 渐变双色矩形</div>
+                        <div class="lesson-path">study/1.6-渐变双色矩形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.7-双色矩形-颜色存储/index.html">
+                        <div class="lesson-name">1.7 双色矩形-颜色存储</div>
+                        <div class="lesson-path">study/1.7-双色矩形-颜色存储/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.8-2D纹理/index.html">
+                        <div class="lesson-name">1.8 2D纹理</div>
+                        <div class="lesson-path">study/1.8-2D纹理/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.9-2D纹理-模糊/index.html">
+                        <div class="lesson-name">1.9 2D纹理-模糊</div>
+                        <div class="lesson-path">study/1.9-2D纹理-模糊/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.10-2D纹理-卷积/index.html">
+                        <div class="lesson-name">1.10 2D纹理-卷积</div>
+                        <div class="lesson-path">study/1.10-2D纹理-卷积/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="1.11-2D纹理-多核/index.html">
+                        <div class="lesson-name">1.11 2D纹理-多核</div>
+                        <div class="lesson-path">study/1.11-2D纹理-多核/index.html</div>
+                    </a>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- 第二章：变换与3D基础 -->
-    <div class="chapter">
-        <h2 class="chapter-title">第二章：变换与3D基础</h2>
-        <div class="lesson-grid">
-            <div class="lesson-item">
-                <a href="2.1-平移旋转/index.html">
-                    <div class="lesson-name">2.1 平移旋转</div>
-                    <div class="lesson-path">study/2.1-平移旋转/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.2-平移旋转缩放/index.html">
-                    <div class="lesson-name">2.2 平移旋转缩放</div>
-                    <div class="lesson-path">study/2.2-平移旋转缩放/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.3-多个字母/index.html">
-                    <div class="lesson-name">2.3 多个字母</div>
-                    <div class="lesson-path">study/2.3-多个字母/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.4-三维-字母/index.html">
-                    <div class="lesson-name">2.4 三维-字母</div>
-                    <div class="lesson-path">study/2.4-三维-字母/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.5-三维-立体字母/index.html">
-                    <div class="lesson-name">2.5 三维-立体字母</div>
-                    <div class="lesson-path">study/2.5-三维-立体字母/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.6-三维-彩色字母/index.html">
-                    <div class="lesson-name">2.6 三维-彩色字母</div>
-                    <div class="lesson-path">study/2.6-三维-彩色字母/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="2.7-三维-透视投影/index.html">
-                    <div class="lesson-name">2.7 三维-透视投影</div>
-                    <div class="lesson-path">study/2.7-三维-透视投影/index.html</div>
-                </a>
-            </div>
-        </div>
-    </div>
-    
-    <!-- 第三章：光照与场景 -->
-    <div class="chapter">
-        <h2 class="chapter-title">第三章：光照与场景</h2>
-        <div class="lesson-grid">
-            <div class="lesson-item">
-                <a href="3.1-方向光源/index.html">
-                    <div class="lesson-name">3.1 方向光源</div>
-                    <div class="lesson-path">study/3.1-方向光源/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.2-点光源1/index.html">
-                    <div class="lesson-name">3.2 点光源1</div>
-                    <div class="lesson-path">study/3.2-点光源1/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.3-点光源2/index.html">
-                    <div class="lesson-name">3.3 点光源2</div>
-                    <div class="lesson-path">study/3.3-点光源2/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.4-聚光灯1/index.html">
-                    <div class="lesson-name">3.4 聚光灯1</div>
-                    <div class="lesson-path">study/3.4-聚光灯1/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.5-聚光灯2/index.html">
-                    <div class="lesson-name">3.5 聚光灯2</div>
-                    <div class="lesson-path">study/3.5-聚光灯2/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.6-小原子/index.html">
-                    <div class="lesson-name">3.6 小原子</div>
-                    <div class="lesson-path">study/3.6-小原子/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.7-魔术三角形/index.html">
-                    <div class="lesson-name">3.7 魔术三角形</div>
-                    <div class="lesson-path">study/3.7-魔术三角形/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.8-魔术卡片/index.html">
-                    <div class="lesson-name">3.8 魔术卡片</div>
-                    <div class="lesson-path">study/3.8-魔术卡片/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.9-三足鼎立/index.html">
-                    <div class="lesson-name">3.9 三足鼎立</div>
-                    <div class="lesson-path">study/3.9-三足鼎立/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.10-立体空间/index.html">
-                    <div class="lesson-name">3.10 立体空间</div>
-                    <div class="lesson-path">study/3.10-立体空间/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.11-场景之行星运动/index.html">
-                    <div class="lesson-name">3.11 场景之行星运动</div>
-                    <div class="lesson-path">study/3.11-场景之行星运动/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.12-小蓝人/index.html">
-                    <div class="lesson-name">3.12 小蓝人</div>
-                    <div class="lesson-path">study/3.12-小蓝人/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.13-太空飞船/index.html">
-                    <div class="lesson-name">3.13 太空飞船</div>
-                    <div class="lesson-path">study/3.13-太空飞船/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.14-粒子系统/index.html">
-                    <div class="lesson-name">3.14 粒子系统</div>
-                    <div class="lesson-path">study/3.14-粒子系统/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.15-烟雾效果/index.html">
-                    <div class="lesson-name">3.15 烟雾效果</div>
-                    <div class="lesson-path">study/3.15-烟雾效果/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.16-天空盒/index.html">
-                    <div class="lesson-name">3.16 天空盒</div>
-                    <div class="lesson-path">study/3.16-天空盒/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.17-镜子反射/index.html">
-                    <div class="lesson-name">3.17 镜子反射</div>
-                    <div class="lesson-path">study/3.17-镜子反射/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.18-阴影效果/index.html">
-                    <div class="lesson-name">3.18 阴影效果</div>
-                    <div class="lesson-path">study/3.18-阴影效果/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.19-法线贴图/index.html">
-                    <div class="lesson-name">3.19 法线贴图</div>
-                    <div class="lesson-path">study/3.19-法线贴图/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="3.20-3D文字/index.html">
-                    <div class="lesson-name">3.20 3D文字</div>
-                    <div class="lesson-path">study/3.20-3D文字/index.html</div>
-                </a>
+
+        <!-- 第二章：变换与3D基础 -->
+        <div class="chapter">
+            <h2 class="chapter-title"><span class="chapter-icon">🔄</span>第二章：变换与3D基础</h2>
+            <div class="lesson-grid">
+                <div class="lesson-item">
+                    <a href="2.1-平移旋转/index.html">
+                        <div class="lesson-name">2.1 平移旋转</div>
+                        <div class="lesson-path">study/2.1-平移旋转/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.2-平移旋转缩放/index.html">
+                        <div class="lesson-name">2.2 平移旋转缩放</div>
+                        <div class="lesson-path">study/2.2-平移旋转缩放/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.3-多个字母/index.html">
+                        <div class="lesson-name">2.3 多个字母</div>
+                        <div class="lesson-path">study/2.3-多个字母/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.4-三维-字母/index.html">
+                        <div class="lesson-name">2.4 三维-字母</div>
+                        <div class="lesson-path">study/2.4-三维-字母/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.5-三维-立体字母/index.html">
+                        <div class="lesson-name">2.5 三维-立体字母</div>
+                        <div class="lesson-path">study/2.5-三维-立体字母/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.6-三维-彩色字母/index.html">
+                        <div class="lesson-name">2.6 三维-彩色字母</div>
+                        <div class="lesson-path">study/2.6-三维-彩色字母/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="2.7-三维-透视投影/index.html">
+                        <div class="lesson-name">2.7 三维-透视投影</div>
+                        <div class="lesson-path">study/2.7-三维-透视投影/index.html</div>
+                    </a>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- 第四章：进阶技术 -->
-    <div class="chapter">
-        <h2 class="chapter-title">第四章：进阶技术</h2>
-        <div class="lesson-grid">
-            <div class="lesson-item">
-                <a href="4.1-帧缓冲/index.html">
-                    <div class="lesson-name">4.1 帧缓冲</div>
-                    <div class="lesson-path">study/4.1-帧缓冲/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.2-后期处理/index.html">
-                    <div class="lesson-name">4.2 后期处理</div>
-                    <div class="lesson-path">study/4.2-后期处理/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.3-实例化渲染/index.html">
-                    <div class="lesson-name">4.3 实例化渲染</div>
-                    <div class="lesson-path">study/4.3-实例化渲染/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.4-地形生成/index.html">
-                    <div class="lesson-name">4.4 地形生成</div>
-                    <div class="lesson-path">study/4.4-地形生成/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.5-Three.js入门/index.html">
-                    <div class="lesson-name">4.5 Three.js入门</div>
-                    <div class="lesson-path">study/4.5-Three.js入门/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.6-立方体贴图/index.html">
-                    <div class="lesson-name">4.6 立方体贴图</div>
-                    <div class="lesson-path">study/4.6-立方体贴图/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.7-VAO顶点数组对象/index.html">
-                    <div class="lesson-name">4.7 VAO顶点数组对象</div>
-                    <div class="lesson-path">study/4.7-VAO顶点数组对象/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.8-纹理数组/index.html">
-                    <div class="lesson-name">4.8 纹理数组</div>
-                    <div class="lesson-path">study/4.8-纹理数组/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.9-多重渲染目标/index.html">
-                    <div class="lesson-name">4.9 多重渲染目标</div>
-                    <div class="lesson-path">study/4.9-多重渲染目标/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.10-计算着色器/index.html">
-                    <div class="lesson-name">4.10 计算着色器</div>
-                    <div class="lesson-path">study/4.10-计算着色器/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.11-WebGL2基础/index.html">
-                    <div class="lesson-name">4.11 WebGL2基础</div>
-                    <div class="lesson-path">study/4.11-WebGL2基础/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.12-抗锯齿技术/index.html">
-                    <div class="lesson-name">4.12 抗锯齿技术</div>
-                    <div class="lesson-path">study/4.12-抗锯齿技术/index.html</div>
-                </a>
-            </div>
-            <div class="lesson-item">
-                <a href="4.13-延迟渲染/index.html">
-                    <div class="lesson-name">4.13 延迟渲染</div>
-                    <div class="lesson-path">study/4.13-延迟渲染/index.html</div>
-                </a>
+
+        <!-- 第三章：光照与场景 -->
+        <div class="chapter">
+            <h2 class="chapter-title"><span class="chapter-icon">💡</span>第三章：光照与场景</h2>
+            <div class="lesson-grid">
+                <div class="lesson-item">
+                    <a href="3.1-方向光源/index.html">
+                        <div class="lesson-name">3.1 方向光源</div>
+                        <div class="lesson-path">study/3.1-方向光源/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.2-点光源1/index.html">
+                        <div class="lesson-name">3.2 点光源1</div>
+                        <div class="lesson-path">study/3.2-点光源1/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.3-点光源2/index.html">
+                        <div class="lesson-name">3.3 点光源2</div>
+                        <div class="lesson-path">study/3.3-点光源2/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.4-聚光灯1/index.html">
+                        <div class="lesson-name">3.4 聚光灯1</div>
+                        <div class="lesson-path">study/3.4-聚光灯1/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.5-聚光灯2/index.html">
+                        <div class="lesson-name">3.5 聚光灯2</div>
+                        <div class="lesson-path">study/3.5-聚光灯2/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.6-小原子/index.html">
+                        <div class="lesson-name">3.6 小原子</div>
+                        <div class="lesson-path">study/3.6-小原子/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.7-魔术三角形/index.html">
+                        <div class="lesson-name">3.7 魔术三角形</div>
+                        <div class="lesson-path">study/3.7-魔术三角形/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.8-魔术卡片/index.html">
+                        <div class="lesson-name">3.8 魔术卡片</div>
+                        <div class="lesson-path">study/3.8-魔术卡片/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.9-三足鼎立/index.html">
+                        <div class="lesson-name">3.9 三足鼎立</div>
+                        <div class="lesson-path">study/3.9-三足鼎立/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.10-立体空间/index.html">
+                        <div class="lesson-name">3.10 立体空间</div>
+                        <div class="lesson-path">study/3.10-立体空间/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.11-场景之行星运动/index.html">
+                        <div class="lesson-name">3.11 场景之行星运动</div>
+                        <div class="lesson-path">study/3.11-场景之行星运动/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.12-小蓝人/index.html">
+                        <div class="lesson-name">3.12 小蓝人</div>
+                        <div class="lesson-path">study/3.12-小蓝人/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.13-太空飞船/index.html">
+                        <div class="lesson-name">3.13 太空飞船</div>
+                        <div class="lesson-path">study/3.13-太空飞船/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.14-粒子系统/index.html">
+                        <div class="lesson-name">3.14 粒子系统</div>
+                        <div class="lesson-path">study/3.14-粒子系统/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.15-烟雾效果/index.html">
+                        <div class="lesson-name">3.15 烟雾效果</div>
+                        <div class="lesson-path">study/3.15-烟雾效果/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.16-天空盒/index.html">
+                        <div class="lesson-name">3.16 天空盒</div>
+                        <div class="lesson-path">study/3.16-天空盒/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.17-镜子反射/index.html">
+                        <div class="lesson-name">3.17 镜子反射</div>
+                        <div class="lesson-path">study/3.17-镜子反射/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.18-阴影效果/index.html">
+                        <div class="lesson-name">3.18 阴影效果</div>
+                        <div class="lesson-path">study/3.18-阴影效果/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.19-法线贴图/index.html">
+                        <div class="lesson-name">3.19 法线贴图</div>
+                        <div class="lesson-path">study/3.19-法线贴图/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="3.20-3D文字/index.html">
+                        <div class="lesson-name">3.20 3D文字</div>
+                        <div class="lesson-path">study/3.20-3D文字/index.html</div>
+                    </a>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <!-- Three.js 专题教程 -->
-    <div class="chapter">
-        <h2 class="chapter-title">🟣 Three.js 专题教程</h2>
-        <div class="lesson-grid">
-            <div class="lesson-item">
-                <a href="threeJs/导航.html">
-                    <div class="lesson-name">🚀 Three.js 教程导航</div>
-                    <div class="lesson-path">study/threeJs/导航.html</div>
-                    <div class="lesson-desc">包含9个Three.js入门到进阶教程</div>
-                </a>
+
+        <!-- 第四章：进阶技术 -->
+        <div class="chapter">
+            <h2 class="chapter-title"><span class="chapter-icon">⚡</span>第四章：进阶技术</h2>
+            <div class="lesson-grid">
+                <div class="lesson-item">
+                    <a href="4.1-帧缓冲/index.html">
+                        <div class="lesson-name">4.1 帧缓冲</div>
+                        <div class="lesson-path">study/4.1-帧缓冲/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.2-后期处理/index.html">
+                        <div class="lesson-name">4.2 后期处理</div>
+                        <div class="lesson-path">study/4.2-后期处理/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.3-实例化渲染/index.html">
+                        <div class="lesson-name">4.3 实例化渲染</div>
+                        <div class="lesson-path">study/4.3-实例化渲染/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.4-地形生成/index.html">
+                        <div class="lesson-name">4.4 地形生成</div>
+                        <div class="lesson-path">study/4.4-地形生成/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.5-Three.js入门/index.html">
+                        <div class="lesson-name">4.5 Three.js入门</div>
+                        <div class="lesson-path">study/4.5-Three.js入门/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.6-立方体贴图/index.html">
+                        <div class="lesson-name">4.6 立方体贴图</div>
+                        <div class="lesson-path">study/4.6-立方体贴图/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.7-VAO顶点数组对象/index.html">
+                        <div class="lesson-name">4.7 VAO顶点数组对象</div>
+                        <div class="lesson-path">study/4.7-VAO顶点数组对象/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.8-纹理数组/index.html">
+                        <div class="lesson-name">4.8 纹理数组</div>
+                        <div class="lesson-path">study/4.8-纹理数组/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.9-多重渲染目标/index.html">
+                        <div class="lesson-name">4.9 多重渲染目标</div>
+                        <div class="lesson-path">study/4.9-多重渲染目标/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.10-计算着色器/index.html">
+                        <div class="lesson-name">4.10 计算着色器</div>
+                        <div class="lesson-path">study/4.10-计算着色器/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.11-WebGL2基础/index.html">
+                        <div class="lesson-name">4.11 WebGL2基础</div>
+                        <div class="lesson-path">study/4.11-WebGL2基础/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.12-抗锯齿技术/index.html">
+                        <div class="lesson-name">4.12 抗锯齿技术</div>
+                        <div class="lesson-path">study/4.12-抗锯齿技术/index.html</div>
+                    </a>
+                </div>
+                <div class="lesson-item">
+                    <a href="4.13-延迟渲染/index.html">
+                        <div class="lesson-name">4.13 延迟渲染</div>
+                        <div class="lesson-path">study/4.13-延迟渲染/index.html</div>
+                    </a>
+                </div>
             </div>
         </div>
+
+        <!-- Three.js 专题教程 -->
+        <div class="chapter">
+            <h2 class="chapter-title"><span class="chapter-icon">🟣</span>Three.js 专题教程</h2>
+            <div class="lesson-grid">
+                <div class="lesson-item">
+                    <a href="threeJs/导航.html">
+                        <div class="lesson-name">🚀 Three.js 教程导航</div>
+                        <div class="lesson-path">study/threeJs/导航.html</div>
+                        <div class="lesson-desc">包含9个Three.js入门到进阶教程</div>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats">
+            <p>共 <span>60</span> 个学习教程，分为 <span>5</span> 个章节</p>
+            <p style="margin-top:15px;color:rgba(255,255,255,0.3);">Study 学习目录导航页面</p>
+        </div>
     </div>
-    
-    <div class="stats">
-        <p>共 <span>60</span> 个学习教程，分为 <span>5</span> 个章节</p>
-        <p style="margin-top:10px;color:#666;">Study 学习目录导航页面</p>
-    </div>
+
+    <script>
+        // 创建浮动粒子
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const colors = ['#7b2dff', '#00d4ff', '#9b59b6', '#3498db'];
+            
+            for (let i = 0; i < 35; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.animationDelay = Math.random() * 18 + 's';
+                particle.style.animationDuration = (12 + Math.random() * 12) + 's';
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.width = (2 + Math.random() * 4) + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.boxShadow = `0 0 ${10 + Math.random() * 15}px ${particle.style.background}`;
+                container.appendChild(particle);
+            }
+        }
+
+        // 3D卡片鼠标跟随效果
+        document.querySelectorAll('.lesson-item').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = (y - centerY) / 20;
+                const rotateY = (centerX - x) / 20;
+                
+                card.style.transform = `translateY(-10px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+            });
+
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0) rotateX(0) rotateY(0) scale(1)';
+            });
+        });
+
+        createParticles();
+    </script>
 </body>
 </html>
